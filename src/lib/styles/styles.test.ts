@@ -27,6 +27,11 @@ describe('style catalogue', () => {
         for (let i = 0; i < pos.count; i++) {
           expect(Number.isFinite(pos.getX(i) + pos.getY(i) + pos.getZ(i))).toBe(true)
         }
+        part.geometry.computeBoundingBox()
+        const box = part.geometry.boundingBox!
+        for (const axis of ['x', 'y', 'z'] as const) {
+          expect(box.max[axis] - box.min[axis], part.label + ' stays below 20 metres').toBeLessThan(20000)
+        }
         const { volume } = analyse(part.geometry)
         expect(volume, `${part.label} encloses positive volume`).toBeGreaterThan(0)
       }
@@ -36,7 +41,17 @@ describe('style catalogue', () => {
       for (const param of style.params) {
         for (const value of [param.min, param.max]) {
           const values = { ...defaultValues(style), [param.key]: value }
-          expect(() => buildStyle(style, ART, values), `${param.key}=${value}`).not.toThrow()
+          const parts = buildStyle(style, ART, values)
+          try {
+            for (const part of parts) {
+              expect(Array.from(part.geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true)
+              part.geometry.computeBoundingBox()
+              const box = part.geometry.boundingBox!
+              for (const axis of ['x', 'y', 'z'] as const) {
+                expect(box.max[axis] - box.min[axis], part.label + ' stays below 20 metres').toBeLessThan(20000)
+              }
+            }
+          } finally { parts.forEach((p) => p.geometry.dispose()) }
         }
       }
     })

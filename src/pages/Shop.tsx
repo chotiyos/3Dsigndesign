@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { MATERIALS, READY_FILES, type ReadyFile } from '../data/shop'
-import { clearCart, credits, EXPORT_COST, setCartQty, spend, useDemo } from '../lib/account'
+import { changeCartQty, clearCart, credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { textToRegion } from '../lib/artwork'
 import { downloadBlob, partsToStl, safeName } from '../lib/exportModel'
 import { FONT_OPTIONS } from '../lib/fonts'
@@ -104,7 +104,7 @@ export function Materials() {
               <td>{m.spec}</td>
               <td className="num tabular">{baht(m.price)} บาท/{m.unit}</td>
               <td className="num">
-                <Stepper value={qty(m.id)} onChange={(n) => setCartQty(m.id, n)} label={m.name} />
+                <Stepper value={qty(m.id)} onStep={(d) => changeCartQty(m.id, d)} label={m.name} />
               </td>
             </tr>
           ))}
@@ -152,7 +152,7 @@ export function Cart() {
               {lines.map((l) => (
                 <tr key={l.id}>
                   <td>{l.item.name}<small>{l.item.spec}</small></td>
-                  <td className="num"><Stepper value={l.qty} onChange={(n) => setCartQty(l.id, n)} label={l.item.name} /></td>
+                  <td className="num"><Stepper value={l.qty} onStep={(d) => changeCartQty(l.id, d)} label={l.item.name} /></td>
                   <td className="num tabular">{baht(l.item.price * l.qty)} บาท</td>
                 </tr>
               ))}
@@ -174,12 +174,12 @@ export function Cart() {
   )
 }
 
-function Stepper({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
+function Stepper({ value, onStep, label }: { value: number; onStep: (delta: number) => void; label: string }) {
   return (
     <span className="stepper">
-      <button type="button" aria-label={`ลด ${label}`} disabled={value <= 0} onClick={() => onChange(value - 1)}><Icon name="minus" size={14} /></button>
+      <button type="button" aria-label={`ลด ${label}`} disabled={value <= 0} onClick={() => onStep(-1)}><Icon name="minus" size={14} /></button>
       <span className="tabular" aria-live="polite">{value}</span>
-      <button type="button" aria-label={`เพิ่ม ${label}`} disabled={value >= 99} onClick={() => onChange(value + 1)}><Icon name="plus" size={14} /></button>
+      <button type="button" aria-label={`เพิ่ม ${label}`} disabled={value >= 99} onClick={() => onStep(1)}><Icon name="plus" size={14} /></button>
     </span>
   )
 }

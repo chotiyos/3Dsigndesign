@@ -129,6 +129,12 @@ export function setCartQty(id: string, qty: number) {
   save({ ...state, cart: qty > 0 ? [...rest, { id, qty: Math.min(99, Math.round(qty)) }] : rest })
 }
 
+/** Adds `delta` to the stored quantity, so rapid repeated clicks all count. */
+export function changeCartQty(id: string, delta: number) {
+  const current = state.cart.find((l) => l.id === id)?.qty ?? 0
+  setCartQty(id, current + delta)
+}
+
 export function clearCart() {
   save({ ...state, cart: [] })
 }

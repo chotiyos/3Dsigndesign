@@ -218,7 +218,7 @@ export const BOX_STYLES: StyleDef[] = [
       const h = box.h + v.margin * 2
       const outline = roundRect(0, 0, w, h, 12)
       const face = offset(outline, -v.wall - 0.2)
-      const hooks = union(ring(circle(-w / 4, h / 2 + 10, 9, 24), 4), ring(circle(w / 4, h / 2 + 10, 9, 24), 4))
+      const hooks = union(ring(circle(-w / 4, h / 2 + 7, 9, 24), 4), ring(circle(w / 4, h / 2 + 7, 9, 24), 4))
       return new Parts()
         .slab('หน้าหลังโปร่งแสง', 'opal', face, v.front, 0, -1)
         .slab('ตัวอักษรด้านหลัง', 'accent', mirrorX(art), v.raise, -v.raise, -1.4)
@@ -303,7 +303,8 @@ export const DECO_STYLES: StyleDef[] = [
     params: [common.depth(10), p('border', 'ความกว้างขอบ', 4, 1.5, 20), p('cell', 'ขนาดช่องลาย', 12, 4, 60), p('bar', 'ความหนาเส้นลาย', 2.4, 0.8, 10, 0.2)],
     build: ({ art, box, v }) => {
       const cells: Region = []
-      const s = v.cell
+      // Increase pitch on large signs rather than generating millions of cells.
+      const s = Math.max(v.cell, Math.sqrt(box.w * box.h / 1200))
       for (let y = box.minY - s; y < box.maxY + s; y += s) {
         for (let x = box.minX - s; x < box.maxX + s; x += s) {
           const r = s / 2 - v.bar / 1.414
@@ -461,12 +462,17 @@ export const GIFT_STYLES: StyleDef[] = [
       const window = rect(0, textH / 2, v.photoW - 6, v.photoH - 6)
       const k = Math.min(1, (v.photoW + v.border) / Math.max(box.w, 1))
       const name = art.map((poly) => poly.map(([x, y]) => [x * k, y * k - h / 2 + v.border / 2 + textH / 2] as [number, number]))
-      const leg = stroke([[0, -h / 2 + 4], [0, h * 0.15]], 10, false, true)
+      const footY = h * 0.15 - (h * 0.65) / Math.cos(Math.PI / 6)
+      const leg = stroke([[0, footY], [0, h * 0.15]], 10, false, true)
+      const stand = extrude(leg, 3, -3)
+      stand.translate(0, -h * 0.15, 0)
+      stand.rotateX(Math.PI / 6)
+      stand.translate(0, h * 0.15, 0)
       return new Parts()
         .slab('แผ่นหลังมีร่อง', 'print', diff(outer, rect(0, h / 2 - 2, v.photoW + 1, 6)), 2, 0, -0.8)
         .slab('กรอบหน้า', 'print', diff(outer, window), v.thick, 2, 0)
         .slab('ชื่อนูน', 'accent', name, 2, 2 + v.thick, 0.8)
-        .slab('ขาตั้ง', 'print', leg, 3, -3, -1.6)
+        .solid('ขาตั้ง', 'print', stand, -1.6)
         .done()
     },
   },

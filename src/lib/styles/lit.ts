@@ -1,4 +1,4 @@
-import { band, bounds, circle, diff, intersect, offset, ring, union, type Region } from '../geo2d'
+import { band, bounds, circle, diff, offset, ring, union, type Region } from '../geo2d'
 import { chamfer, extrude, merge, revolve } from '../solid'
 import { common, p, Parts } from './kit'
 import type { StyleDef } from './types'
@@ -7,12 +7,26 @@ import type { StyleDef } from './types'
 export function holeGrid(region: Region, pitch: number, radius: number, limit = 600) {
   const safe = offset(region, -radius - 0.6)
   const b = bounds(safe)
+  const contours = safe.map((poly) => ({ poly, box: bounds([poly]) }))
+  const contains = (x: number, y: number) => {
+    let inside = false
+    for (const { poly, box } of contours) {
+      if (x < box.minX || x > box.maxX || y < box.minY || y > box.maxY) continue
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i]
+        const [xj, yj] = poly[j]
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside
+      }
+    }
+    return inside
+  }
   const centres: [number, number][] = []
+  // Bound candidate probes too: sparse artwork may never fill the output limit.
+  pitch = Math.max(pitch, 0.1, b.w / 4000, b.h / 4000, Math.sqrt(Math.max(0, b.w * b.h) / 4000))
   const rowH = pitch * 0.866
   for (let row = 0, y = b.minY; y <= b.maxY && centres.length < limit; row++, y += rowH) {
     for (let x = b.minX + (row % 2 ? pitch / 2 : 0); x <= b.maxX && centres.length < limit; x += pitch) {
-      const probe = circle(x, y, 0.2, 6)
-      if (intersect(safe, probe).length > 0) centres.push([x, y])
+      if (contains(x, y)) centres.push([x, y])
     }
   }
   return centres
@@ -183,18 +197,18 @@ export const LIT_STYLES: StyleDef[] = [
     usesArt: true,
     params: [common.depth(30), common.wall(2.4), common.lip(5), common.front(3), common.back(3), common.gap()],
     build: ({ art, v }) => {
-      const z = top(v)
+      const z = 2 + v.back + v.depth
       const inner = offset(art, -v.wall - v.gap)
       const lip = band(art, v.wall - 0.01, v.lip)
       return new Parts()
         .slab('แผ่นหลัง', 'print', art, 2, 0, -1.2)
         .slab('กระจกเงาหลัง', 'mirror', inner, v.back, 2, -0.8)
-        .slab('ผนังตัวอักษร', 'print', ring(art, v.wall), v.depth + 2, 0)
+        .slab('ผนังตัวอักษร', 'print', ring(art, v.wall), z, 0)
         .slab('บ่าหลัง', 'print', lip, 2, 2 + v.back)
-        .slab('บ่าล็อกไฟ', 'print', lip, 2, 2 + v.depth / 2)
-        .slab('บ่าหน้า', 'print', lip, 2, z - v.front)
-        .slab('กระจกสะท้อนหน้า', 'acrylic', inner, v.front, z - v.front + 2, 1)
-        .slab('ไฟ LED รอบใน', 'led', band(art, v.wall + 0.2, 2), 4, 2 + v.depth / 2 + 2, 0.3)
+        .slab('บ่าล็อกไฟ', 'print', lip, 2, 2 + v.back + v.depth / 2)
+        .slab('บ่าหน้า', 'print', lip, 2, z - v.front - 2)
+        .slab('กระจกสะท้อนหน้า', 'acrylic', inner, v.front, z - v.front, 1)
+        .slab('ไฟ LED รอบใน', 'led', band(art, v.wall + 0.2, 2), 4, 2 + v.back + v.depth / 2 + 2, 0.3)
         .done()
     },
   },
@@ -268,7 +282,7 @@ export const LIT_STYLES: StyleDef[] = [
         .slab('แผ่นหลัง', 'print', art, v.back, 0, -1)
         .slab('ผนังตัวอักษร', 'print', ring(art, v.wall), v.depth - v.browT, v.back)
         .slab('คิ้วหน้า', 'accent', ring(offset(art, v.brow), v.brow + v.wall + 3), v.browT, z - v.browT, 0.5)
-        .slab('อะคริลิกหน้า', 'opal', offset(art, -v.wall - 2.8), v.front, z - v.front, 1)
+        .slab('อะคริลิกหน้า', 'opal', offset(art, -v.wall - 3.2), v.front, z - v.front, 1)
         .slab('แถบไฟ LED', 'led', band(art, v.wall + 4, 5), 2, v.back, -0.4)
         .done()
     },
@@ -310,7 +324,7 @@ export const LIT_STYLES: StyleDef[] = [
     build: ({ art, v }) => {
       const z = v.stand + v.depth
       const pins = holeGrid(offset(art, -v.wall - 4), 140, 4, 12)
-      const pinGeo = merge(pins.map(([x, y]) => extrude(circle(x, y, 3, 20), v.stand + 2, 0)))
+      const pinGeo = merge(pins.map(([x, y]) => extrude(circle(x, y, 3, 20), z - v.front + 2, 0)))
       return new Parts()
         .solid('หมุดยึดผนัง', 'metal', pinGeo, -1)
         .slab('ผนังโลหะ', 'metal', ring(art, v.wall), v.depth - v.front, v.stand)
@@ -348,7 +362,7 @@ export const LIT_STYLES: StyleDef[] = [
       return new Parts()
         .slab('แผ่นหลัง', 'print', art, v.back, 0, -1)
         .slab('ผนังตัวอักษร', 'print', ring(art, v.wall), v.depth, v.back)
-        .slab('หน้าเจาะรู', 'accent', diff(offset(art, -0.01), holes), v.front, z - v.front, 0.6)
+        .slab('หน้าเจาะรู', 'accent', diff(offset(art, -v.wall - 0.2), holes), v.front, z - v.front, 0.6)
         .solid('ครอบไฟกลม', 'opal', bulbs, 1.2)
         .done()
     },
@@ -364,13 +378,13 @@ export const LIT_STYLES: StyleDef[] = [
     params: [common.depth(), common.wall(), p('dot', 'ขนาดรู', 4, 1.5, 15), p('pitch', 'ระยะห่างรู', 8, 3, 40), common.front(2), common.back()],
     build: ({ art, v }) => {
       const z = top(v)
-      const centres = holeGrid(offset(art, -v.wall), v.pitch, v.dot / 2, 2500)
+      const centres = holeGrid(offset(art, -v.wall), v.pitch, v.dot / 2, 600)
       const holes = union(...centres.map(([x, y]) => circle(x, y, v.dot / 2, 12)))
       return new Parts()
         .slab('แผ่นหลัง', 'print', art, v.back, 0, -1)
         .slab('ผนังตัวอักษร', 'print', ring(art, v.wall), v.depth, v.back)
         .slab('แผ่นกระจายแสง', 'opal', offset(art, -v.wall - 0.2), 1.5, z - v.front - 1.5, 0.5)
-        .slab('หน้าเจาะรู', 'accent', diff(art, holes), v.front, z - v.front, 1)
+        .slab('หน้าเจาะรู', 'accent', diff(offset(art, -v.wall - 0.2), holes), v.front, z - v.front, 1)
         .done()
     },
   },

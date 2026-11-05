@@ -106,7 +106,7 @@ export default function Editor() {
   const [draft, setDraft] = useState<Draft>(() => initialDraft(query))
   const [step, setStep] = useState<Step>(query.get('style') ? 3 : 1)
   const [customFont, setCustomFont] = useState<{ name: string; font: LoadedFont } | null>(null)
-  const [font, setFont] = useState<LoadedFont | null>(null)
+  const [loadedFont, setLoadedFont] = useState<{ id: string; font: LoadedFont } | null>(null)
   const [image, setImage] = useState<ImageData | null>(null)
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [explode, setExplode] = useState(0)
@@ -138,13 +138,13 @@ export default function Editor() {
 
   useEffect(() => {
     if (draft.fontId === CUSTOM_FONT_ID) {
-      setFont(customFont?.font ?? null)
+      setLoadedFont(customFont ? { id: CUSTOM_FONT_ID, font: customFont.font } : null)
       return
     }
     let cancelled = false
     const option = FONT_OPTIONS.find((f) => f.id === draft.fontId) ?? FONT_OPTIONS[0]
     loadFont(option.url)
-      .then((f) => !cancelled && setFont(f))
+      .then((f) => !cancelled && setLoadedFont({ id: draft.fontId, font: f }))
       .catch(() => !cancelled && setMessage({ tone: 'error', text: 'โหลดฟอนต์ไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง' }))
     return () => {
       cancelled = true
@@ -152,6 +152,7 @@ export default function Editor() {
   }, [draft.fontId, customFont])
 
   const deferred = useDeferredValue(draft)
+  const font = loadedFont?.id === deferred.fontId ? loadedFont.font : null
 
   const { art, artError } = useMemo((): { art: Region; artError: string | null } => {
     try {
@@ -213,27 +214,39 @@ export default function Editor() {
     return true
   }
 
+  function exportFile(cost: number, extension: string, mime: string, build: () => Uint8Array | string) {
+    if (busy || buildError || artError || (draft.source === 'text' && !font && style.usesArt)) return
+    try {
+      const data = build()
+      if (!charge(cost, `${extension.toUpperCase()} ${style.code} ${baseName}`)) return
+      downloadBlob(data, `${baseName}-${style.code}.${extension}`, mime)
+    } catch (err) {
+      setMessage({ tone: 'error', text: `ส่งออกไฟล์ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` })
+    }
+  }
+
   function exportStl() {
     const visible = parts.filter((p) => !hidden.has(p.code))
-    if (visible.length === 0 || !charge(EXPORT_COST.stl, `STL ${style.code} ${baseName}`)) return
-    downloadBlob(partsToStl(visible), `${baseName}-${style.code}.stl`, 'model/stl')
+    if (visible.length === 0) return
+    exportFile(EXPORT_COST.stl, 'stl', 'model/stl', () => partsToStl(visible))
   }
 
   function exportDxf() {
     const cuts = parts.filter((p) => p.cut && !hidden.has(p.code))
     if (cuts.length === 0) return setMessage({ tone: 'error', text: 'แบบนี้ไม่มีชิ้นส่วนแบนที่ตัดด้วยเลเซอร์หรือ CNC ได้' })
-    if (!charge(EXPORT_COST.dxf, `DXF ${style.code} ${baseName}`)) return
-    downloadBlob(buildDxf(cuts.map((p) => ({ layer: p.code, region: p.cut! }))), `${baseName}-${style.code}.dxf`, 'application/dxf')
+    exportFile(EXPORT_COST.dxf, 'dxf', 'application/dxf', () => buildDxf(cuts.map((p) => ({ layer: p.code, region: p.cut! }))))
   }
 
   function exportZip() {
     const visible = parts.filter((p) => !hidden.has(p.code))
-    if (visible.length === 0 || !charge(EXPORT_COST.zip, `ZIP ${style.code} ${baseName}`)) return
-    const list = partStats(visible)
-      .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
-      .join('\n')
-    const readme = `JJDesign — ${style.code} ${style.name}\nข้อความ: ${draft.text}\nขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} × ${size.d.toFixed(1)} มม.\n\n${list}\n\nไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้าป้าย\n`
-    downloadBlob(buildZip({ baseName, parts: visible, readme }), `${baseName}-${style.code}.zip`, 'application/zip')
+    if (visible.length === 0) return
+    exportFile(EXPORT_COST.zip, 'zip', 'application/zip', () => {
+      const list = partStats(visible)
+        .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
+        .join('\n')
+      const readme = `JJDesign — ${style.code} ${style.name}\nข้อความ: ${draft.text}\nขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} × ${size.d.toFixed(1)} มม.\n\n${list}\n\nไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้าป้าย\n`
+      return buildZip({ baseName, parts: visible, readme })
+    })
   }
 
   function saveProject() {
@@ -416,7 +429,7 @@ export default function Editor() {
                   type="color"
                   aria-label={`สีของ ${part.label}`}
                   value={draft.colors[part.code] ?? MATERIAL_COLORS[part.material]}
-                  onChange={(e) => update({ colors: { ...draft.colors, [part.code]: e.target.value } })}
+                  onChange={(e) => { const color = e.target.value; setDraft((d) => ({ ...d, colors: { ...d.colors, [part.code]: color } })) }}
                 />
               </li>
             )
@@ -605,7 +618,7 @@ export default function Editor() {
               </table>
               <label className="field field-inline">
                 <span className="field-label">ราคาวัสดุพิมพ์ (บาท/กก.)</span>
-                <input type="number" min={0} max={100000} value={pricePerKg} onChange={(e) => setPricePerKg(Math.max(0, Number(e.target.value) || 0))} />
+                <input type="number" min={0} max={100000} value={pricePerKg} onChange={(e) => setPricePerKg(Math.min(100000, Math.max(0, Number(e.target.value) || 0)))} />
               </label>
               <p className="estimate">
                 ค่าวัสดุโดยประมาณ <strong className="tabular">{Math.round((totalGrams / 1000) * pricePerKg).toLocaleString('th-TH')}</strong> บาท

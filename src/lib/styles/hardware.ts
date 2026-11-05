@@ -256,8 +256,8 @@ export const HARDWARE_STYLES: StyleDef[] = [
       const screw = threaded(4, 3.2, 1.6, v.open + v.bar + 10, 0)
       const handle = radial(8, 1, 32, () => 9, undefined, v.open + v.bar + 10)
       const s = merge([screw, handle])
-      rotX(s, Math.PI / 2)
-      s.translate(0, h / 2 + 12, v.thick / 2)
+      rotX(s, -Math.PI / 2)
+      s.translate(0, -v.open / 2 + 4, v.thick / 2)
       return new Parts()
         .slab('โครงตัวซี', 'accent', body, v.thick, 0)
         .solid('สกรูอัด', 'metal', s, 0.6)
@@ -328,8 +328,8 @@ export const HARDWARE_STYLES: StyleDef[] = [
       const n = Math.round(v.knuckles) | 1
       const seg = v.length / n
       const kr = v.thick
-      const leafA = extrude(rect(-v.leaf / 2 - kr, 0, v.leaf, v.length), v.thick, 0)
-      const leafB = extrude(rect(v.leaf / 2 + kr, 0, v.leaf, v.length), v.thick, 0)
+      const leafA = extrude(rect(-v.leaf / 2 - kr - 0.2, 0, v.leaf, v.length), v.thick, 0)
+      const leafB = extrude(rect(v.leaf / 2 + kr + 0.2, 0, v.leaf, v.length), v.thick, 0)
       const knA: THREE.BufferGeometry[] = []
       const knB: THREE.BufferGeometry[] = []
       for (let i = 0; i < n; i++) {
@@ -337,7 +337,9 @@ export const HARDWARE_STYLES: StyleDef[] = [
         rotX(g, Math.PI / 2)
         g.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI))
         g.translate(0, 0, kr)
-        ;(i % 2 ? knB : knA).push(g)
+        // Join only this leaf's knuckles; a continuous bridge would lock both leaves.
+        const tab = extrude(rect((i % 2 ? 1 : -1) * kr, -v.length / 2 + (i + 0.5) * seg, kr, seg - 0.4), v.thick, 0)
+        ;(i % 2 ? knB : knA).push(g, tab)
       }
       const pin = radial(v.length, 1, 24, () => kr * 0.45 - 0.25, undefined, -v.length / 2)
       rotX(pin, Math.PI / 2)
