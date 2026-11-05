@@ -2160,8 +2160,6 @@ input[type='range'] {
   }
   .ed-tools {
     max-width: calc(100% - 24px);
-    bottom: auto;
-    top: 56px;
   }
   .ed-tools .tool span {
     display: none;
@@ -2237,8 +2235,16 @@ input[type='range'] {
     gap: 6px;
     padding: 0 8px;
   }
-  .ed-brand .brand-word {
+  .ed-brand {
     display: none;
+  }
+  .ed-steps {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ed-steps button {
+    padding: 0 8px;
   }
   .credit-chip {
     font-size: 0;

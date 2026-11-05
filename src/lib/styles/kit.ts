@@ -4,14 +4,19 @@ import { extrude } from '../solid'
 import type { MaterialId, ParamDef, SignPart } from './types'
 
 const CODES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+const SHEET = new Set<MaterialId>(['acrylic', 'opal', 'plaswood', 'mirror', 'metal'])
 
 /** Collects parts and hands out catalogue letters in order. */
 export class Parts {
   private list: SignPart[] = []
 
-  /** An extruded flat part that can also be cut from sheet. */
+  /**
+   * An extruded flat part. Thin sheet-material parts also carry their outline
+   * for laser or CNC cutting; deep printed walls do not.
+   */
   slab(label: string, material: MaterialId, region: Region, depth: number, z: number, explode = 0) {
-    return this.solid(label, material, extrude(region, depth, z), explode, region)
+    const cuttable = material !== 'led' && depth <= 12 && (SHEET.has(material) || depth <= 6)
+    return this.solid(label, material, extrude(region, depth, z), explode, cuttable ? region : undefined)
   }
 
   solid(label: string, material: MaterialId, geometry: THREE.BufferGeometry, explode = 0, cut?: Region) {

@@ -35,8 +35,8 @@ export function makeMaterial(material: MaterialId, color: string, night: boolean
         roughness: 0.35,
         transparent: true,
         opacity: night ? 0.95 : 0.88,
-        emissive: night ? new THREE.Color('#fff4dc') : new THREE.Color(0),
-        emissiveIntensity: night ? 1.6 : 0,
+        emissive: night ? new THREE.Color('#fff1d2') : new THREE.Color(0),
+        emissiveIntensity: night ? 0.95 : 0,
       })
     case 'acrylic':
       return new THREE.MeshStandardMaterial({
@@ -53,7 +53,7 @@ export function makeMaterial(material: MaterialId, color: string, night: boolean
       return new THREE.MeshStandardMaterial({
         color: c,
         emissive: c,
-        emissiveIntensity: night ? 4 : 0.35,
+        emissiveIntensity: night ? 2.2 : 0.35,
         roughness: 0.4,
       })
     case 'metal':

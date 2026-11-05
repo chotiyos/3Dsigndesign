@@ -50,6 +50,7 @@ interface SceneState {
   hemi: THREE.HemisphereLight
   key: THREE.DirectionalLight
   backdrop: THREE.Texture | null
+  framedKey?: string
 }
 
 export function Viewer(props: ViewerProps) {
@@ -58,7 +59,6 @@ export function Viewer(props: ViewerProps) {
   const stateRef = useRef<SceneState | null>(null)
   const latest = useRef(props)
   latest.current = props
-  const framedKey = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     const host = hostRef.current
@@ -104,7 +104,9 @@ export function Viewer(props: ViewerProps) {
 
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.9, 0.55, 0.62)
+    // Bloom only picks up what is brighter than the threshold, so at night the
+    // glowing faces and LED strips halo while the dark body stays crisp.
+    const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.35, 0.85)
     composer.addPass(bloom)
     composer.addPass(new OutputPass())
 
@@ -219,13 +221,15 @@ export function Viewer(props: ViewerProps) {
     state.grid.scale.setScalar(span * 1.6)
     state.grid.position.y = -size.y / 2 - Math.max(2, span * 0.01)
 
-    if (framedKey.current !== frameKey) {
-      framedKey.current = frameKey
+    // The framed key lives on the scene, so a rebuilt scene (remount, or React
+    // StrictMode's double effect run) always frames its own fresh camera.
+    if (state.framedKey !== frameKey) {
+      state.framedKey = frameKey
       const { camera, controls } = state
       const fov = (camera.fov * Math.PI) / 180
       const fitH = size.y / 2 / Math.tan(fov / 2)
       const fitW = size.x / 2 / (Math.tan(fov / 2) * Math.max(camera.aspect, 0.5))
-      const dist = Math.max(fitH, fitW, size.z) * 1.12 + size.z * 0.5
+      const dist = Math.max(fitH, fitW, size.z) * 1.28 + size.z * 0.5
       camera.position.set(dist * 0.18, dist * 0.16, dist)
       camera.near = dist / 200
       camera.far = dist * 20
@@ -259,7 +263,8 @@ export function Viewer(props: ViewerProps) {
     }
     state.grid.visible = grid && !backdrop
     state.scene.background = state.backdrop ?? (night ? NIGHT_BG : DAY_BG)
-    state.hemi.intensity = night ? 0.18 : 1.1
+    state.hemi.intensity = night ? 0.12 : 1.1
+    state.scene.environmentIntensity = night ? 0.06 : 1
     state.key.intensity = night ? 0.25 : 2.2
     state.renderer.toneMappingExposure = night ? 0.9 : 1
     state.controls.autoRotate = autoRotate

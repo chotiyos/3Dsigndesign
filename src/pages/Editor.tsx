@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { Box3 } from 'three'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
 import { buildDxf } from '../lib/exportDxf'
@@ -184,17 +185,19 @@ export default function Editor() {
   }, [deferredStyle, art, valuesKey])
 
   const stats = useMemo(() => (step === 4 ? partStats(parts) : []), [parts, step])
+  // Overall size comes from the finished parts, not the artwork: frames, bases,
+  // and hardware styles are larger than (or unrelated to) the typed text.
   const size = useMemo(() => {
-    const b = bounds(art)
-    let depth = 0
+    const box = new Box3()
     for (const part of parts) {
       part.geometry.computeBoundingBox()
-      const bb = part.geometry.boundingBox
-      if (bb) depth = Math.max(depth, bb.max.z)
+      if (part.geometry.boundingBox) box.union(part.geometry.boundingBox)
     }
-    let minZ = 0
-    for (const part of parts) minZ = Math.min(minZ, part.geometry.boundingBox?.min.z ?? 0)
-    return { w: b.w, h: b.h, d: depth - minZ }
+    if (box.isEmpty()) {
+      const b = bounds(art)
+      return { w: b.w, h: b.h, d: 0 }
+    }
+    return { w: box.max.x - box.min.x, h: box.max.y - box.min.y, d: box.max.z - box.min.z }
   }, [art, parts])
 
   const busy = deferred !== draft
@@ -345,7 +348,7 @@ export default function Editor() {
           grid={grid}
           edges={edges}
           backdrop={backdrop}
-          frameKey={`${style.id}|${draft.source}|${Math.round(size.w / 50)}|${Math.round(size.h / 50)}`}
+          frameKey={`${deferredStyle.id}|${draft.source}|${Math.round(Math.log2(Math.max(size.w, size.h, 1)) * 2)}`}
           className="ed-viewer"
         />
         <div className="ed-readout" aria-live="polite">

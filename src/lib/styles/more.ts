@@ -433,7 +433,7 @@ export const GIFT_STYLES: StyleDef[] = [
       const glyph = art.map((poly) => poly.map(([x, y]) => [x * k, y * k] as [number, number]))
       const cap = roundRect(0, 0, v.size, v.size, 2)
       const shell = merge([
-        chamfer(cap, v.height - 1.2, 2.6, 0, 6),
+        chamfer(cap, v.height - 1.2, 2.6, 0, 14),
         extrude(offset(cap, -2.6), 1.2, v.height - 1.2),
       ])
       const stem = diff(circle(0, 0, 2.75, 32), union(rect(0, 0, 4.1, 1.35), rect(0, 0, 1.25, 4.1)))
