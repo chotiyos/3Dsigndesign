@@ -55,30 +55,34 @@ export function thumbnail(key: string, make: () => SignPart[], width = 480, heig
 }
 
 function draw(parts: SignPart[], width: number, height: number): string {
-  setup(width, height)
   const group = new THREE.Group()
   const materials: THREE.Material[] = []
-  for (const part of parts) {
-    const material = makeMaterial(part.material, MATERIAL_COLORS[part.material], false)
-    materials.push(material)
-    group.add(new THREE.Mesh(part.geometry, material))
+  try {
+    setup(width, height)
+    for (const part of parts) {
+      const material = makeMaterial(part.material, MATERIAL_COLORS[part.material], false)
+      materials.push(material)
+      group.add(new THREE.Mesh(part.geometry, material))
+    }
+    scene!.add(group)
+    const box = new THREE.Box3().setFromObject(group)
+    const size = box.getSize(new THREE.Vector3())
+    const centre = box.getCenter(new THREE.Vector3())
+    group.position.sub(centre)
+    const fov = (camera!.fov * Math.PI) / 180
+    const fit = Math.max(size.y / 2 / Math.tan(fov / 2), size.x / 2 / (Math.tan(fov / 2) * camera!.aspect))
+    const dist = Math.max(20, fit * 1.25 + size.z)
+    camera!.position.set(dist * 0.42, dist * 0.3, dist)
+    camera!.lookAt(0, 0, 0)
+    camera!.near = dist / 100
+    camera!.far = dist * 10
+    camera!.updateProjectionMatrix()
+    renderer!.render(scene!, camera!)
+    const url = renderer!.domElement.toDataURL('image/png')
+    return url
+  } finally {
+    scene?.remove(group)
+    materials.forEach((m) => m.dispose())
+    parts.forEach((part) => part.geometry.dispose())
   }
-  scene!.add(group)
-  const box = new THREE.Box3().setFromObject(group)
-  const size = box.getSize(new THREE.Vector3())
-  const centre = box.getCenter(new THREE.Vector3())
-  group.position.sub(centre)
-  const fov = (camera!.fov * Math.PI) / 180
-  const fit = Math.max(size.y / 2 / Math.tan(fov / 2), size.x / 2 / (Math.tan(fov / 2) * camera!.aspect))
-  const dist = fit * 1.25 + size.z
-  camera!.position.set(dist * 0.42, dist * 0.3, dist)
-  camera!.lookAt(0, 0, 0)
-  camera!.near = dist / 100
-  camera!.far = dist * 10
-  camera!.updateProjectionMatrix()
-  renderer!.render(scene!, camera!)
-  const url = renderer!.domElement.toDataURL('image/png')
-  scene!.remove(group)
-  materials.forEach((m) => m.dispose())
-  return url
 }

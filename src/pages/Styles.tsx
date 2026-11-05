@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { textToRegion } from '../lib/artwork'
 import { buildStyle, defaultValues, GROUPS, STYLES, type StyleGroup } from '../lib/styles'
 import { useFont } from '../lib/useFont'
@@ -81,6 +81,7 @@ export function StyleDetail({ id }: { id: string }) {
       return []
     }
   }, [style, font, text])
+  useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
   if (!style) return <NotFoundBody />
   const group = GROUPS.find((g) => g.id === style.group)!
   const index = STYLES.indexOf(style)

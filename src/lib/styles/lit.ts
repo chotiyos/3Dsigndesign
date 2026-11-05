@@ -110,13 +110,14 @@ export const LIT_STYLES: StyleDef[] = [
     params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), common.front(), common.back(), common.gap()],
     build: ({ art, v }) => {
       const z = top(v)
-      const lower = (v.depth - v.glow) / 2
+      const glow = Math.min(v.glow, v.depth)
+      const lower = (v.depth - glow) / 2
       const wall = ring(art, v.wall)
       return new Parts()
         .slab('แผ่นหลัง', 'print', art, v.back, 0, -1)
         .slab('ผนังล่าง', 'print', wall, lower, v.back)
-        .slab('แถบไฟรอบตัว', 'opal', wall, v.glow, v.back + lower, 0.3)
-        .slab('ผนังบน', 'print', wall, v.depth - lower - v.glow, v.back + lower + v.glow, 0.6)
+        .slab('แถบไฟรอบตัว', 'opal', wall, glow, v.back + lower, 0.3)
+        .slab('ผนังบน', 'print', wall, v.depth - lower - glow, v.back + lower + glow, 0.6)
         .slab('บ่ารับอะคริลิก', 'print', band(art, v.wall - 0.01, 3), 2, z - v.front - 2, 0.6)
         .slab('อะคริลิกหน้า', 'opal', offset(art, -v.wall - v.gap), v.front, z - v.front, 1.2)
         .slab('แถบไฟ LED', 'led', band(art, v.wall + 4, 5), 2, v.back, -0.4)
@@ -134,14 +135,15 @@ export const LIT_STYLES: StyleDef[] = [
     params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), p('edge', 'ความกว้างขอบสี', 4, 1, 20), common.front(), common.back(), common.gap()],
     build: ({ art, v }) => {
       const z = top(v)
-      const lower = (v.depth - v.glow) / 2
+      const glow = Math.min(v.glow, v.depth)
+      const lower = (v.depth - glow) / 2
       const wall = ring(art, v.wall)
       const face = offset(art, -v.wall - v.gap)
       return new Parts()
         .slab('แผ่นหลัง', 'print', art, v.back, 0, -1)
         .slab('ผนังล่าง', 'print', wall, lower, v.back)
-        .slab('แถบไฟรอบตัว', 'opal', wall, v.glow, v.back + lower, 0.3)
-        .slab('ผนังบน', 'print', wall, v.depth - lower - v.glow, v.back + lower + v.glow, 0.6)
+        .slab('แถบไฟรอบตัว', 'opal', wall, glow, v.back + lower, 0.3)
+        .slab('ผนังบน', 'print', wall, v.depth - lower - glow, v.back + lower + glow, 0.6)
         .slab('บ่ารับหน้า', 'print', band(art, v.wall - 0.01, 3), 2, z - v.front - 2, 0.6)
         .slab('หน้าส่วนขอบสี', 'accent', ring(face, v.edge), v.front, z - v.front, 1.2)
         .slab('หน้าส่วนไส้', 'opal', offset(face, -v.edge), v.front, z - v.front, 1.2)

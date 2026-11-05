@@ -21,7 +21,12 @@ export function parseSvgToShapes(svgText: string): SvgShapesResult {
   const loader = new SVGLoader()
   const { paths } = loader.parse(svgText)
 
-  const rawShapes = paths.flatMap((path) => path.toShapes())
+  const rawShapes = paths
+    .filter((path) => {
+      const style = path.userData?.style as { fill?: string; fillOpacity?: number; opacity?: number } | undefined
+      return style?.fill !== 'none' && style?.fillOpacity !== 0 && style?.opacity !== 0
+    })
+    .flatMap((path) => SVGLoader.createShapes(path))
   if (rawShapes.length === 0) {
     throw new Error('ไม่พบเส้นทางที่วาดเป็นรูปปิดได้ในไฟล์ SVG นี้')
   }
@@ -35,7 +40,7 @@ export function parseSvgToShapes(svgText: string): SvgShapesResult {
 
   return {
     shapes,
-    upem: Math.max(bbox.max.y - bbox.min.y, 1),
+    upem: bbox.max.y > bbox.min.y ? bbox.max.y - bbox.min.y : 1,
     width: bbox.max.x - bbox.min.x,
   }
 }

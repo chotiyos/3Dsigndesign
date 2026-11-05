@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import type { BufferGeometry } from 'three'
 import { revolve, merge, extrude } from '../lib/solid'
 import { circle, ring, union } from '../lib/geo2d'
@@ -83,6 +83,7 @@ export default function Gen() {
   const [explained, setExplained] = useState(false)
   const sample = SAMPLES.find((s) => s.id === picked) ?? SAMPLES[0]
   const parts = useMemo(() => sample.build(), [sample])
+  useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
 
   const onImage = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

@@ -167,15 +167,26 @@ export function Viewer(props: ViewerProps) {
       for (const { mesh, edges } of state.meshes) {
         ;(mesh.material as THREE.Material).dispose()
         edges?.geometry.dispose()
+        if (edges) (edges.material as THREE.Material).dispose()
       }
       scene.environment?.dispose()
       state.backdrop?.dispose()
+      gridHelper.geometry.dispose()
+      ;(gridHelper.material as THREE.Material).dispose()
+      composer.passes.forEach((pass) => pass.dispose())
       composer.dispose()
       renderer.dispose()
+      renderer.forceContextLoss()
       renderer.domElement.remove()
       stateRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    const canvas = stateRef.current?.renderer.domElement
+    const name = hostRef.current?.getAttribute('aria-label')
+    if (canvas && name) canvas.setAttribute('aria-label', name)
+  }, [label])
 
   // Rebuild meshes when the parts change.
   useEffect(() => {
@@ -185,6 +196,7 @@ export function Viewer(props: ViewerProps) {
       state.model.remove(mesh)
       ;(mesh.material as THREE.Material).dispose()
       edges?.geometry.dispose()
+      if (edges) (edges.material as THREE.Material).dispose()
     }
     state.meshes = []
     for (const part of parts) {
@@ -194,6 +206,8 @@ export function Viewer(props: ViewerProps) {
       state.meshes.push({ part, mesh })
     }
 
+    state.model.position.set(0, 0, 0)
+    state.model.updateMatrixWorld(true)
     const box = new THREE.Box3()
     for (const { mesh } of state.meshes) box.expandByObject(mesh)
     if (box.isEmpty()) return

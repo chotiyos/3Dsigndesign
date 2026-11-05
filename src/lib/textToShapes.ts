@@ -38,6 +38,7 @@ export function shapeTextToShapes(
   const shapes: THREE.Shape[] = []
   let cursorX = 0
   let cursorY = 0
+  let clusterAdvance = 0
 
   for (let i = 0; i < infos.length; i++) {
     const pos = positions[i]
@@ -48,8 +49,13 @@ export function shapeTextToShapes(
     const commands = font.hbFont.glyphToJson(gid) as PathCommand[]
     shapes.push(...glyphCommandsToShapes(commands, originX, originY))
 
-    // Thai marks have zero advance; tracking only widens the gap after base glyphs.
-    cursorX += pos.xAdvance + (pos.xAdvance !== 0 ? tracking : 0)
+    // Keep marks attached to their base: add tracking after the entire cluster.
+    cursorX += pos.xAdvance
+    clusterAdvance += pos.xAdvance
+    if (infos[i + 1]?.cluster !== infos[i].cluster) {
+      if (clusterAdvance !== 0) cursorX += tracking
+      clusterAdvance = 0
+    }
     cursorY += pos.yAdvance
   }
 

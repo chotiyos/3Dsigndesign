@@ -35,6 +35,28 @@ interface Draft {
 
 const DRAFT_KEY = 'jjdesign-draft-v1'
 
+function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
+  if (!input || typeof input !== 'object') return {}
+  const out: Partial<Draft> = {}
+  for (const key of ['text', 'fontId', 'styleId', 'svgText'] as const) {
+    if (typeof input[key] === 'string') out[key] = input[key]
+  }
+  if (out.text) out.text = out.text.slice(0, 200)
+  for (const [key, min, max, fallback] of [
+    ['heightMM', 10, 1500, 200], ['spacingMM', -30, 150, 0],
+    ['lineGap', 0.8, 2.5, 1.15], ['threshold', 20, 235, 128],
+  ] as const) {
+    const value = input[key]
+    out[key] = typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
+  }
+  out.source = input.source === 'svg' ? 'svg' : 'text'
+  out.align = input.align === 'left' || input.align === 'right' ? input.align : 'center'
+  out.invert = input.invert === true
+  out.values = input.values && typeof input.values === 'object' ? input.values : {}
+  out.colors = input.colors && typeof input.colors === 'object' ? input.colors : {}
+  return out
+}
+
 function initialDraft(query: URLSearchParams): Draft {
   let saved: Partial<Draft> = {}
   try {
@@ -55,7 +77,7 @@ function initialDraft(query: URLSearchParams): Draft {
     colors: {},
     threshold: 128,
     invert: false,
-    ...saved,
+    ...cleanDraft(saved),
   }
   if (base.fontId === CUSTOM_FONT_ID) base.fontId = FONT_OPTIONS[0].id
   if (base.source === 'image') base.source = 'text'
@@ -224,7 +246,7 @@ export default function Editor() {
     try {
       const parsed = JSON.parse(await file.text()) as { app?: string; draft?: Partial<Draft> }
       if (parsed.app !== 'jjdesign' || !parsed.draft) throw new Error('ไม่ใช่ไฟล์งานของ JJDesign')
-      setDraft((d) => ({ ...d, ...parsed.draft, source: parsed.draft?.source === 'image' ? 'text' : (parsed.draft?.source ?? 'text') }))
+      setDraft((d) => ({ ...d, ...cleanDraft(parsed.draft) }))
       setMessage({ tone: 'ok', text: `เปิดไฟล์ ${file.name} แล้ว` })
     } catch (err) {
       setMessage({ tone: 'error', text: `เปิดไฟล์ไม่ได้: ${err instanceof Error ? err.message : 'ไฟล์เสีย'}` })
@@ -272,9 +294,12 @@ export default function Editor() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (backdrop) URL.revokeObjectURL(backdrop)
     setBackdrop(URL.createObjectURL(file))
   }
+
+  useEffect(() => () => { if (backdrop) URL.revokeObjectURL(backdrop) }, [backdrop])
+
+  useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
 
   const setValue = (key: string, value: number) =>
     setDraft((d) => ({ ...d, values: { ...d.values, [style.id]: { ...cleanValues(style, d.values[style.id]), [key]: value } } }))
@@ -617,7 +642,11 @@ function Range({ label, unit, value, min, max, step, hint, onChange }: { label: 
   }, [value])
   const commit = (raw: string) => {
     const n = Number(raw)
-    if (raw.trim() !== '' && Number.isFinite(n)) onChange(Math.min(max, Math.max(min, n)))
+    if (raw.trim() !== '' && Number.isFinite(n)) {
+      const clamped = Math.min(max, Math.max(min, n))
+      setText(String(clamped))
+      onChange(clamped)
+    }
     else setText(String(value))
   }
   return (

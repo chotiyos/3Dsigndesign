@@ -5,7 +5,7 @@ import { bounds, intersect, offset, rect, regionToShapes, type Region } from './
 /** Extrudes a region upward from `z` by `depth`. Non-indexed, position and normal only. */
 export function extrude(region: Region, depth: number, z = 0): THREE.BufferGeometry {
   const shapes = regionToShapes(region)
-  if (shapes.length === 0 || depth <= 0) return new THREE.BufferGeometry()
+  if (shapes.length === 0 || !Number.isFinite(depth) || !Number.isFinite(z) || depth <= 0) return new THREE.BufferGeometry()
   const geometry = new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: false, curveSegments: 1 })
   geometry.deleteAttribute('uv')
   geometry.translate(0, 0, z)
@@ -254,10 +254,12 @@ export function analyse(geometry: THREE.BufferGeometry): { volume: number; water
   }
   let watertight = edges.size > 0
   for (const count of edges.values()) {
-    if (count % 2 !== 0) {
+    if (count !== 2) {
       watertight = false
       break
     }
   }
+  welded.dispose()
+  bare.dispose()
   return { volume, watertight }
 }

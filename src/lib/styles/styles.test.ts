@@ -42,3 +42,15 @@ describe('style catalogue', () => {
     })
   }
 })
+
+for (const id of ['two-tier-light', 'two-tier-full-colour']) {
+  it(id + ' keeps the side light within the body at minimum depth', () => {
+    const style = STYLES.find((s) => s.id === id)!
+    const values: Record<string, number> = { ...defaultValues(style), depth: 5, glow: 60 }
+    const parts = buildStyle(style, ART, values)
+    const light = parts.find((p) => p.material === 'opal')!
+    light.geometry.computeBoundingBox()
+    expect(light.geometry.boundingBox!.min.z).toBeGreaterThanOrEqual(values.back)
+    expect(light.geometry.boundingBox!.max.z).toBeLessThanOrEqual(values.back + values.depth)
+  })
+}

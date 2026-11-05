@@ -32,7 +32,7 @@ export default function App() {
   let page
   if (path === '/') page = <Home />
   else if (path === '/styles') page = <StylesIndex />
-  else if (path.startsWith('/styles/')) page = <StyleDetail id={decodeURIComponent(path.slice('/styles/'.length))} />
+  else if (path.startsWith('/styles/')) page = <StyleDetail id={path.slice('/styles/'.length)} />
   else if (path === '/files') page = <Files />
   else if (path === '/materials') page = <Materials />
   else if (path === '/materials/cart') page = <Cart />

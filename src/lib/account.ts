@@ -33,9 +33,10 @@ function load(): State {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<State>
       return {
-        account: parsed.account ?? null,
-        guestCredits: typeof parsed.guestCredits === 'number' ? parsed.guestCredits : STARTING_CREDITS,
-        cart: Array.isArray(parsed.cart) ? parsed.cart.filter((l) => l && typeof l.id === 'string' && l.qty > 0) : [],
+        account: parsed.account && typeof parsed.account.name === 'string' && typeof parsed.account.email === 'string' && Number.isFinite(parsed.account.credits) && parsed.account.credits >= 0 && Array.isArray(parsed.account.history)
+          ? { ...parsed.account, history: parsed.account.history.filter((h) => h && Number.isFinite(h.at) && typeof h.text === 'string' && Number.isFinite(h.delta)) } : null,
+        guestCredits: typeof parsed.guestCredits === 'number' && Number.isFinite(parsed.guestCredits) && parsed.guestCredits >= 0 ? parsed.guestCredits : STARTING_CREDITS,
+        cart: Array.isArray(parsed.cart) ? parsed.cart.filter((l) => l && typeof l.id === 'string' && Number.isInteger(l.qty) && l.qty > 0 && l.qty <= 99) : [],
       }
     }
   } catch {
@@ -59,7 +60,7 @@ function save(next: State) {
 function subscribe(fn: () => void) {
   listeners.add(fn)
   const onStorage = (e: StorageEvent) => {
-    if (e.key === KEY) {
+    if (e.key === KEY || e.key === null) {
       state = load()
       fn()
     }
@@ -93,7 +94,7 @@ export function signOut() {
 
 /** Returns false (and charges nothing) when the balance is too low. */
 export function spend(amount: number, text: string): boolean {
-  if (credits() < amount) return false
+  if (!Number.isFinite(amount) || amount < 0 || credits() < amount) return false
   if (state.account) {
     const account = {
       ...state.account,
@@ -108,6 +109,7 @@ export function spend(amount: number, text: string): boolean {
 }
 
 export function topUp(amount: number, text: string) {
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(credits() + amount)) return
   if (state.account) {
     const account = {
       ...state.account,
@@ -121,6 +123,8 @@ export function topUp(amount: number, text: string) {
 }
 
 export function setCartQty(id: string, qty: number) {
+  if (!Number.isFinite(qty)) return
+  qty = Math.min(99, Math.max(0, Math.round(qty)))
   const rest = state.cart.filter((l) => l.id !== id)
   save({ ...state, cart: qty > 0 ? [...rest, { id, qty: Math.min(99, Math.round(qty)) }] : rest })
 }

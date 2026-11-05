@@ -33,7 +33,7 @@ export function Link({ href = '/', onClick, ...rest }: AnchorHTMLAttributes<HTML
   const handle = (e: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(e)
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-    if (!href.startsWith('/') || rest.target === '_blank') return
+    if (!href.startsWith('/') || href.startsWith('//') || rest.download != null || (rest.target && rest.target !== '_self')) return
     e.preventDefault()
     navigate(href)
   }

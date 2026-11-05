@@ -43,6 +43,7 @@ function HeroPlate() {
       return []
     }
   }, [font, deferredText, style])
+  useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
 
   const size = useMemo(() => {
     const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }
