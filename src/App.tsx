@@ -4,7 +4,7 @@ import { Account, Login } from './pages/Account'
 import { Contact, HowTo, Legal, Plugin, Pricing } from './pages/Info'
 import { Cart, Files, Materials } from './pages/Shop'
 import { NotFoundBody, StyleDetail, StylesIndex } from './pages/Styles'
-import { useLocation } from './router'
+import { useLocation, useNavigationScroll } from './router'
 import { SiteShell } from './ui/SiteShell'
 
 const Editor = lazy(() => import('./pages/Editor'))
@@ -19,12 +19,13 @@ function Loading() {
 }
 
 export default function App() {
-  const { path } = useLocation()
+  const { path, search } = useLocation()
+  useNavigationScroll()
 
   if (path === '/app') {
     return (
       <Suspense fallback={<Loading />}>
-        <Editor />
+        <Editor key={search} />
       </Suspense>
     )
   }

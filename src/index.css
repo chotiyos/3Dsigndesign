@@ -398,11 +398,7 @@ input[type='range'] {
   color: var(--on-navy);
   padding: clamp(28px, 5vw, 64px) var(--gutter) clamp(36px, 6vw, 80px);
   padding-right: calc(var(--gutter) + 56px);
-  background-image:
-    linear-gradient(var(--rule-navy) 1px, transparent 1px),
-    linear-gradient(90deg, var(--rule-navy) 1px, transparent 1px);
-  background-size: 48px 48px;
-  background-position: -1px -1px;
+  border-bottom: 6px solid var(--signal);
 }
 
 .cover-copy h1 {
@@ -451,7 +447,8 @@ input[type='range'] {
 }
 
 .cover-field input:focus {
-  outline: none;
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
   border-color: var(--signal);
 }
 
@@ -544,6 +541,7 @@ input[type='range'] {
 }
 
 .plate-callouts g {
+  opacity: 0;
   transition: opacity 200ms;
 }
 
@@ -1079,6 +1077,8 @@ input[type='range'] {
 
 .search:focus-within {
   border-color: var(--navy-700);
+  outline: 2px solid var(--navy-600);
+  outline-offset: 2px;
 }
 
 .search input {
@@ -1108,7 +1108,7 @@ input[type='range'] {
   border-color: var(--navy-700);
 }
 
-.chips button[aria-checked='true'] {
+.chips button[aria-pressed='true'] {
   background: var(--navy-900);
   border-color: var(--navy-900);
   color: var(--on-navy);
@@ -1480,8 +1480,7 @@ input[type='range'] {
   color: var(--ink-2);
 }
 
-.seg button[aria-selected='true'],
-.seg button[aria-checked='true'] {
+.seg button[aria-pressed='true'] {
   background: var(--navy-900);
   color: var(--on-navy);
 }
@@ -1525,6 +1524,7 @@ input[type='range'] {
   text-underline-offset: 3px;
 }
 
+.tool:focus-within,
 .file-btn:focus-within {
   outline: 2px solid var(--navy-600);
   outline-offset: 2px;

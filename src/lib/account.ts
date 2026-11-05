@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { MATERIALS } from '../data/shop'
 
 /**
  * Browser-only demo account. Nothing leaves the visitor's browser: there is no
@@ -26,23 +27,39 @@ interface State {
 const KEY = 'jjdesign-demo-v1'
 export const STARTING_CREDITS = 100
 const listeners = new Set<() => void>()
+const materialIds = new Set(MATERIALS.map((m) => m.id))
 
-function load(): State {
+export function parseDemoState(raw: string | null): State {
   try {
-    const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<State>
+      const cart = new Map<string, number>()
+      if (Array.isArray(parsed.cart)) {
+        for (const line of parsed.cart) {
+          if (line && materialIds.has(line.id) && Number.isInteger(line.qty) && line.qty > 0 && line.qty <= 99) {
+            cart.set(line.id, Math.min(99, (cart.get(line.id) ?? 0) + line.qty))
+          }
+        }
+      }
       return {
         account: parsed.account && typeof parsed.account.name === 'string' && typeof parsed.account.email === 'string' && Number.isFinite(parsed.account.credits) && parsed.account.credits >= 0 && Array.isArray(parsed.account.history)
-          ? { ...parsed.account, history: parsed.account.history.filter((h) => h && Number.isFinite(h.at) && typeof h.text === 'string' && Number.isFinite(h.delta)) } : null,
+          ? { name: parsed.account.name, email: parsed.account.email, credits: parsed.account.credits, history: parsed.account.history.filter((h) => h && Number.isFinite(h.at) && Math.abs(h.at) <= 8.64e15 && typeof h.text === 'string' && Number.isFinite(h.delta)).slice(0, 50) } : null,
         guestCredits: typeof parsed.guestCredits === 'number' && Number.isFinite(parsed.guestCredits) && parsed.guestCredits >= 0 ? parsed.guestCredits : STARTING_CREDITS,
-        cart: Array.isArray(parsed.cart) ? parsed.cart.filter((l) => l && typeof l.id === 'string' && Number.isInteger(l.qty) && l.qty > 0 && l.qty <= 99) : [],
+        cart: Array.from(cart, ([id, qty]) => ({ id, qty })),
       }
     }
   } catch {
     // Storage blocked or corrupted: fall back to a fresh demo state.
   }
   return { account: null, guestCredits: STARTING_CREDITS, cart: [] }
+}
+
+function load(): State {
+  try {
+    return parseDemoState(localStorage.getItem(KEY))
+  } catch {
+    return parseDemoState(null)
+  }
 }
 
 let state = load()
@@ -123,7 +140,7 @@ export function topUp(amount: number, text: string) {
 }
 
 export function setCartQty(id: string, qty: number) {
-  if (!Number.isFinite(qty)) return
+  if (!materialIds.has(id) || !Number.isFinite(qty)) return
   qty = Math.min(99, Math.max(0, Math.round(qty)))
   const rest = state.cart.filter((l) => l.id !== id)
   save({ ...state, cart: qty > 0 ? [...rest, { id, qty: Math.min(99, Math.round(qty)) }] : rest })

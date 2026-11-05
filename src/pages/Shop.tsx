@@ -83,10 +83,10 @@ export function Materials() {
         <h1>ร้านวัสดุ</h1>
         <p>เส้นพิมพ์ แผ่นอะคริลิก พลาสวูด และไฟ LED ที่ใช้กับแบบในแคตตาล็อก ราคาและสินค้าในหน้านี้เป็นตัวอย่าง ยังสั่งซื้อจริงไม่ได้</p>
       </header>
-      <div className="chips" role="radiogroup" aria-label="หมวดสินค้า">
-        <button type="button" role="radio" aria-checked={cat === 'all'} onClick={() => setCat('all')}>ทั้งหมด</button>
+      <div className="chips" role="group" aria-label="หมวดสินค้า">
+        <button type="button" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>ทั้งหมด</button>
         {categories.map((c) => (
-          <button key={c} type="button" role="radio" aria-checked={cat === c} onClick={() => setCat(c)}>{c}</button>
+          <button key={c} type="button" aria-pressed={cat === c} onClick={() => setCat(c)}>{c}</button>
         ))}
       </div>
       <table className="spec spec-wide price-list">

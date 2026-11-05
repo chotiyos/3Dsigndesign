@@ -23,7 +23,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="site">
-      <a className="skip" href="#content">ข้ามไปที่เนื้อหา</a>
+      <Link className="skip" href="#content">ข้ามไปที่เนื้อหา</Link>
       <header className="masthead">
         <div className="masthead-inner">
           <Link href="/" className="masthead-brand" aria-label="JJDesign หน้าแรก">
@@ -58,7 +58,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <div id="content">{children}</div>
+      <main id="content" tabIndex={-1}>{children}</main>
       <footer className="colophon">
         <div className="colophon-inner">
           <div className="colophon-brand">

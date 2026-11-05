@@ -28,10 +28,10 @@ export function StylesIndex() {
           <Icon name="search" size={16} />
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา เช่น ไฟสองชั้น, กล่องไฟ, เฟือง" aria-label="ค้นหาแบบป้าย" />
         </label>
-        <div className="chips" role="radiogroup" aria-label="หมวด">
-          <button type="button" role="radio" aria-checked={group === 'all'} onClick={() => setGroup('all')}>ทั้งหมด</button>
+        <div className="chips" role="group" aria-label="หมวด">
+          <button type="button" aria-pressed={group === 'all'} onClick={() => setGroup('all')}>ทั้งหมด</button>
           {GROUPS.map((g) => (
-            <button key={g.id} type="button" role="radio" aria-checked={group === g.id} onClick={() => setGroup(g.id)}>
+            <button key={g.id} type="button" aria-pressed={group === g.id} onClick={() => setGroup(g.id)}>
               {g.letter} {g.name}
             </button>
           ))}

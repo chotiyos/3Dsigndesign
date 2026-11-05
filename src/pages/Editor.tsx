@@ -84,7 +84,7 @@ function initialDraft(query: URLSearchParams): Draft {
   if (base.source === 'image') base.source = 'text'
   const text = query.get('text')
   const style = query.get('style')
-  if (text) {
+  if (text !== null) {
     base.text = text.slice(0, 200)
     base.source = 'text'
   }
@@ -215,7 +215,7 @@ export default function Editor() {
   }
 
   function exportFile(cost: number, extension: string, mime: string, build: () => Uint8Array | string) {
-    if (busy || buildError || artError || (draft.source === 'text' && !font && style.usesArt)) return
+    if (busy || buildError || (style.usesArt && (artError || (draft.source === 'text' && !font)))) return
     try {
       const data = build()
       if (!charge(cost, `${extension.toUpperCase()} ${style.code} ${baseName}`)) return
@@ -260,8 +260,8 @@ export default function Editor() {
     e.target.value = ''
     if (!file) return
     try {
-      const parsed = JSON.parse(await file.text()) as { app?: string; draft?: Partial<Draft> }
-      if (parsed.app !== 'jjdesign' || !parsed.draft) throw new Error('ไม่ใช่ไฟล์งานของ JJDesign')
+      const parsed = JSON.parse(await file.text()) as { app?: string; version?: number; draft?: Partial<Draft> }
+      if (!parsed || parsed.app !== 'jjdesign' || parsed.version !== 1 || !parsed.draft || typeof parsed.draft !== 'object' || Array.isArray(parsed.draft)) throw new Error('ไม่ใช่ไฟล์งานของ JJDesign รุ่นที่รองรับ')
       setDraft((d) => ({ ...d, ...cleanDraft(parsed.draft) }))
       setMessage({ tone: 'ok', text: `เปิดไฟล์ ${file.name} แล้ว` })
     } catch (err) {
@@ -274,8 +274,14 @@ export default function Editor() {
     e.target.value = ''
     if (!file) return
     if (file.size > 3_000_000) return setMessage({ tone: 'error', text: 'ไฟล์ SVG ใหญ่เกิน 3 MB' })
-    update({ svgText: await file.text(), source: 'svg' })
-    setMessage({ tone: 'ok', text: `โหลด ${file.name} แล้ว` })
+    try {
+      const svgText = await file.text()
+      if (!svgToRegion(svgText, draft.heightMM).length) throw new Error('empty SVG')
+      update({ svgText, source: 'svg' })
+      setMessage({ tone: 'ok', text: `โหลด ${file.name} แล้ว` })
+    } catch {
+      setMessage({ tone: 'error', text: 'อ่านไฟล์ SVG ไม่ได้ ใช้ไฟล์ที่มีเส้นปิดและเติมสีแล้ว' })
+    }
   }
 
   async function onImage(e: ChangeEvent<HTMLInputElement>) {
@@ -297,7 +303,8 @@ export default function Editor() {
     if (!file) return
     try {
       const loaded = fontFromArrayBuffer(await file.arrayBuffer())
-      if (!loaded.upem) throw new Error('bad font')
+      const glyphs = loaded.hbFace.referenceTable('maxp')
+      if (!loaded.upem || !glyphs || glyphs.length < 6 || new DataView(glyphs.buffer, glyphs.byteOffset, glyphs.byteLength).getUint16(4) === 0 || !loaded.hbFace.collectUnicodes().length) throw new Error('bad font')
       setCustomFont({ name: file.name, font: loaded })
       update({ fontId: CUSTOM_FONT_ID })
       setMessage({ tone: 'ok', text: `ใช้ฟอนต์ ${file.name} แล้ว ฟอนต์นี้อยู่ในเบราว์เซอร์ของคุณเท่านั้น` })
@@ -324,8 +331,10 @@ export default function Editor() {
     (s) => (filter === 'all' || s.group === filter) && (!search.trim() || `${s.code} ${s.name} ${s.blurb}`.toLowerCase().includes(search.trim().toLowerCase())),
   )
 
-  const error = artError ?? buildError
-  const totalGrams = stats.reduce((sum, s) => sum + s.grams, 0)
+  const error = (style.usesArt ? artError : null) ?? buildError
+  const totalGrams = stats.reduce((sum, s) => sum + (hidden.has(s.part.code) ? 0 : s.grams), 0)
+  const exportBlocked = busy || Boolean(error) || (style.usesArt && draft.source === 'text' && !font)
+  const hasVisibleParts = parts.some((p) => !hidden.has(p.code))
 
   return (
     <div className="ed" data-night={night || undefined}>
@@ -335,7 +344,7 @@ export default function Editor() {
         </Link>
         <nav className="ed-steps" aria-label="ขั้นตอน">
           {STEPS.map((s) => (
-            <button key={s.n} type="button" aria-current={step === s.n ? 'step' : undefined} onClick={() => { setStep(s.n); setPanelOpen(true) }}>
+            <button key={s.n} type="button" aria-label={`ขั้นที่ ${s.n}: ${s.label}`} aria-current={step === s.n ? 'step' : undefined} onClick={() => { setStep(s.n); setPanelOpen(true) }}>
               <span className="ed-step-n">{s.n}</span>
               <span className="ed-step-label">{s.label}</span>
             </button>
@@ -377,26 +386,26 @@ export default function Editor() {
         {error && <p className="ed-error" role="alert">{error}</p>}
         {!error && parts.length === 0 && !busy && draft.source === 'text' && !font && <p className="ed-hint">กำลังโหลดฟอนต์…</p>}
 
-        <div className="ed-tools" role="toolbar" aria-label="มุมมอง">
-          <button type="button" className="tool" aria-pressed={night} onClick={() => setNight(!night)} title="ดูตอนเปิดไฟกลางคืน">
+        <div className="ed-tools" role="group" aria-label="มุมมอง">
+          <button type="button" className="tool" aria-label="ดูตอนเปิดไฟกลางคืน" aria-pressed={night} onClick={() => setNight(!night)} title="ดูตอนเปิดไฟกลางคืน">
             <Icon name={night ? 'moon' : 'sun'} />
             <span>{night ? 'กลางคืน' : 'กลางวัน'}</span>
           </button>
-          <button type="button" className="tool" aria-pressed={edges} onClick={() => setEdges(!edges)} title="แสดงเส้นขอบ">
+          <button type="button" className="tool" aria-label="แสดงเส้นขอบ" aria-pressed={edges} onClick={() => setEdges(!edges)} title="แสดงเส้นขอบ">
             <Icon name="edges" />
             <span>เส้นขอบ</span>
           </button>
-          <button type="button" className="tool" aria-pressed={grid} onClick={() => setGrid(!grid)} title="แสดงตาราง">
+          <button type="button" className="tool" aria-label="แสดงตาราง" aria-pressed={grid} onClick={() => setGrid(!grid)} title="แสดงตาราง">
             <Icon name="grid" />
             <span>ตาราง</span>
           </button>
           <label className="tool" title="วางป้ายบนรูปหน้าร้านจริง">
             <Icon name="camera" />
             <span>รูปหน้างาน</span>
-            <input type="file" accept="image/*" onChange={onBackdrop} className="sr-only" />
+            <input type="file" accept="image/*" onChange={onBackdrop} className="sr-only" aria-label="เลือกรูปหน้างาน" />
           </label>
           {backdrop && (
-            <button type="button" className="tool" onClick={() => { URL.revokeObjectURL(backdrop); setBackdrop(null) }}>
+            <button type="button" className="tool" aria-label="เอารูปหน้างานออก" onClick={() => { URL.revokeObjectURL(backdrop); setBackdrop(null) }}>
               <Icon name="close" />
               <span>เอารูปออก</span>
             </button>
@@ -438,10 +447,10 @@ export default function Editor() {
       </main>
 
       <aside className="ed-panel" data-open={panelOpen || undefined}>
-        <button type="button" className="ed-panel-toggle" onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen}>
+        <button type="button" className="ed-panel-toggle" onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen} aria-controls="editor-panel-body">
           {panelOpen ? 'ย่อแผง' : `ขั้นที่ ${step}: ${STEPS[step - 1].label}`}
         </button>
-        <div className="ed-panel-body">
+        <div className="ed-panel-body" id="editor-panel-body">
           <h1 className="ed-panel-title">
             <span className="tabular">{step}</span> {STEPS[step - 1].label}
           </h1>
@@ -455,9 +464,9 @@ export default function Editor() {
 
           {step === 1 && (
             <div className="ed-sec">
-              <div className="seg" role="tablist" aria-label="แหล่งข้อมูล">
+              <div className="seg" role="group" aria-label="แหล่งข้อมูล">
                 {(['text', 'svg', 'image'] as Source[]).map((s) => (
-                  <button key={s} type="button" role="tab" aria-selected={draft.source === s} onClick={() => update({ source: s })}>
+                  <button key={s} type="button" aria-pressed={draft.source === s} onClick={() => update({ source: s })}>
                     {s === 'text' ? 'พิมพ์ข้อความ' : s === 'svg' ? 'ไฟล์ SVG' : 'รูปภาพ'}
                   </button>
                 ))}
@@ -484,9 +493,9 @@ export default function Editor() {
                   </label>
                   <Range label="ระยะห่างตัวอักษร" unit="มม." value={draft.spacingMM} min={-30} max={150} step={1} onChange={(v) => update({ spacingMM: v })} />
                   <Range label="ระยะห่างบรรทัด" unit="เท่า" value={draft.lineGap} min={0.8} max={2.5} step={0.05} onChange={(v) => update({ lineGap: v })} />
-                  <div className="seg seg-small" role="radiogroup" aria-label="จัดแนวบรรทัด">
+                  <div className="seg seg-small" role="group" aria-label="จัดแนวบรรทัด">
                     {(['left', 'center', 'right'] as const).map((a) => (
-                      <button key={a} type="button" role="radio" aria-checked={draft.align === a} onClick={() => update({ align: a })}>
+                      <button key={a} type="button" aria-pressed={draft.align === a} onClick={() => update({ align: a })}>
                         {a === 'left' ? 'ชิดซ้าย' : a === 'center' ? 'กึ่งกลาง' : 'ชิดขวา'}
                       </button>
                     ))}
@@ -540,10 +549,10 @@ export default function Editor() {
                 <Icon name="search" size={16} />
                 <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาแบบ เช่น ไฟสองชั้น, พวงกุญแจ" aria-label="ค้นหาแบบป้าย" />
               </label>
-              <div className="chips" role="radiogroup" aria-label="หมวด">
-                <button type="button" role="radio" aria-checked={filter === 'all'} onClick={() => setFilter('all')}>ทั้งหมด {STYLES.length}</button>
+              <div className="chips" role="group" aria-label="หมวด">
+                <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>ทั้งหมด {STYLES.length}</button>
                 {GROUPS.map((g) => (
-                  <button key={g.id} type="button" role="radio" aria-checked={filter === g.id} onClick={() => setFilter(g.id)}>
+                  <button key={g.id} type="button" aria-pressed={filter === g.id} onClick={() => setFilter(g.id)}>
                     {g.letter} {g.name}
                   </button>
                 ))}
@@ -622,16 +631,16 @@ export default function Editor() {
               </label>
               <p className="estimate">
                 ค่าวัสดุโดยประมาณ <strong className="tabular">{Math.round((totalGrams / 1000) * pricePerKg).toLocaleString('th-TH')}</strong> บาท
-                <small> จากน้ำหนักรวม {totalGrams.toFixed(0)} กรัม ยังไม่รวมไฟ ค่าแรง และค่าเครื่อง</small>
+                <small> จากน้ำหนักชิ้นส่วนที่แสดง {totalGrams.toFixed(0)} กรัม ยังไม่รวมไฟ ค่าแรง และค่าเครื่อง</small>
               </p>
               <div className="export-list">
-                <button type="button" className="btn btn-primary btn-block" disabled={!parts.length} onClick={exportZip}>
+                <button type="button" className="btn btn-primary btn-block" disabled={exportBlocked || !hasVisibleParts} onClick={exportZip}>
                   <Icon name="download" size={16} /> ดาวน์โหลดครบชุด ZIP <span className="cost">{EXPORT_COST.zip} เครดิต</span>
                 </button>
-                <button type="button" className="btn btn-ghost btn-block" disabled={!parts.length} onClick={exportStl}>
+                <button type="button" className="btn btn-ghost btn-block" disabled={exportBlocked || !hasVisibleParts} onClick={exportStl}>
                   STL รวมทุกชิ้น สำหรับพิมพ์ 3D <span className="cost">{EXPORT_COST.stl} เครดิต</span>
                 </button>
-                <button type="button" className="btn btn-ghost btn-block" disabled={!parts.some((p) => p.cut)} onClick={exportDxf}>
+                <button type="button" className="btn btn-ghost btn-block" disabled={exportBlocked || !parts.some((p) => p.cut && !hidden.has(p.code))} onClick={exportDxf}>
                   DXF เส้นตัดเลเซอร์ / CNC <span className="cost">{EXPORT_COST.dxf} เครดิต</span>
                 </button>
                 <button type="button" className="btn btn-ghost btn-block" onClick={saveProject}>

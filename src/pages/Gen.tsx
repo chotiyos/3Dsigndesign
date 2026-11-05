@@ -107,9 +107,9 @@ export default function Gen() {
             setExplained(true)
           }}
         >
-          <div className="seg" role="tablist" aria-label="ประเภทข้อมูล">
-            <button type="button" role="tab" aria-selected={mode === 'text'} onClick={() => setMode('text')}>คำบรรยาย</button>
-            <button type="button" role="tab" aria-selected={mode === 'image'} onClick={() => setMode('image')}>รูปภาพ</button>
+          <div className="seg" role="group" aria-label="ประเภทข้อมูล">
+            <button type="button" aria-pressed={mode === 'text'} onClick={() => setMode('text')}>คำบรรยาย</button>
+            <button type="button" aria-pressed={mode === 'image'} onClick={() => setMode('image')}>รูปภาพ</button>
           </div>
           {mode === 'text' ? (
             <label className="field">
