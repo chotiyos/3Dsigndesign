@@ -469,7 +469,7 @@ export const GIFT_STYLES: StyleDef[] = [
       stand.rotateX(Math.PI / 6)
       stand.translate(0, h * 0.15, 0)
       return new Parts()
-        .slab('แผ่นหลังมีร่อง', 'print', diff(outer, rect(0, h / 2 - 2, v.photoW + 1, 6)), 2, 0, -0.8)
+        .slab('แผ่นหลังมีร่อง', 'opal',diff(outer, rect(0, h / 2 - 2, v.photoW + 1, 6)), 2, 0, -0.8)
         .slab('กรอบหน้า', 'print', diff(outer, window), v.thick, 2, 0)
         .slab('ชื่อนูน', 'accent', name, 2, 2 + v.thick, 0.8)
         .solid('ขาตั้ง', 'print', stand, -1.6)
