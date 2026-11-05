@@ -12,7 +12,7 @@ export interface ReadyFile {
 }
 
 export const READY_FILES: ReadyFile[] = [
-  { id: 'open-sign', styleId: 'front-lit-lip', text: 'OPEN', title: 'ป้ายไฟ OPEN หน้าร้าน', note: 'สูง 200 มม. ไฟหน้า มีบ่ารับอะคริลิก' },
+  { id: 'open-sign', styleId: 'front-lit-lip', text: 'OPEN', title: 'ป้ายไฟ OPEN หน้าร้าน', note: 'ขนาดตัวอักษร 150 มม. ไฟหน้า มีบ่ารับอะคริลิก' },
   { id: 'cafe-halo', styleId: 'halo-back-lit', text: 'CAFE', title: 'ป้ายไฟออกหลัง CAFE', note: 'อักษรทึบ ไฟส่องผนัง ติดหมุดลอย' },
   { id: 'welcome-desk', styleId: 'desk-block', text: 'ยินดีต้อนรับ', title: 'ป้ายยินดีต้อนรับตั้งโต๊ะ', note: 'แท่นฐานพิมพ์ชิ้นเดียว' },
   { id: 'wifi-curl', styleId: 'desk-curl', text: 'WiFi', title: 'ป้าย WiFi แผ่นโค้ง', note: 'ตั้งบนเคาน์เตอร์ แผ่นโค้งเป็นขาในตัว' },

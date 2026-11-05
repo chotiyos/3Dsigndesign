@@ -212,16 +212,6 @@ export function bend(geometry: THREE.BufferGeometry, radius: number, axis: 'x' |
   return geometry
 }
 
-export function transformed(geometry: THREE.BufferGeometry, matrix: THREE.Matrix4) {
-  geometry.applyMatrix4(matrix)
-  return geometry
-}
-
-export function moved(geometry: THREE.BufferGeometry, x: number, y: number, z: number) {
-  geometry.translate(x, y, z)
-  return geometry
-}
-
 /** Signed volume in mm³ and whether every edge is shared by exactly two faces. */
 export function analyse(geometry: THREE.BufferGeometry): { volume: number; watertight: boolean } {
   const pos = geometry.getAttribute('position')
@@ -229,7 +219,7 @@ export function analyse(geometry: THREE.BufferGeometry): { volume: number; water
   const bare = new THREE.BufferGeometry()
   bare.setAttribute('position', pos)
   if (geometry.index) bare.setIndex(geometry.index)
-  const welded = mergeVertices(bare.index ? bare : bare, 1e-3)
+  const welded = mergeVertices(bare, 1e-3)
   const p = welded.getAttribute('position')
   const index = welded.index
   if (!index) return { volume: 0, watertight: false }

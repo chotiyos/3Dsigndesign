@@ -16,8 +16,6 @@ export const STYLES: StyleDef[] = [
   ...HARDWARE_STYLES,
 ]
 
-export const DEFAULT_STYLE_ID = STYLES[0].id
-
 export function findStyle(id: string | null | undefined): StyleDef {
   return STYLES.find((s) => s.id === id) ?? STYLES[0]
 }

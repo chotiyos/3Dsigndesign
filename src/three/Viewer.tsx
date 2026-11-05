@@ -276,10 +276,8 @@ export function Viewer(props: ViewerProps) {
     if (!state) return
     state.backdrop?.dispose()
     state.backdrop = null
-    if (!backdrop) {
-      state.scene.background = night ? NIGHT_BG : DAY_BG
-      return
-    }
+    state.scene.background = latest.current.night ? NIGHT_BG : DAY_BG
+    if (!backdrop) return
     let cancelled = false
     new THREE.TextureLoader().load(backdrop, (texture) => {
       if (cancelled || !stateRef.current) return texture.dispose()
@@ -290,7 +288,7 @@ export function Viewer(props: ViewerProps) {
     return () => {
       cancelled = true
     }
-  }, [backdrop, night])
+  }, [backdrop])
 
   return (
     <div ref={hostRef} className={className ?? 'viewer'} aria-label={label ?? 'มุมมองโมเดล 3 มิติ ลากเพื่อหมุน เลื่อนล้อเพื่อซูม'}>

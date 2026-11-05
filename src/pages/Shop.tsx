@@ -27,8 +27,17 @@ export function Files() {
       const font = await loadFont(FONT_OPTIONS[0].url)
       const art = style.usesArt ? textToRegion(font, file.text, 150, 0) : []
       const parts = buildStyle(style, art, { ...defaultValues(style), ...file.values })
-      if (!spend(EXPORT_COST.file, `ไฟล์สำเร็จรูป ${file.title}`)) return
-      downloadBlob(partsToStl(parts), `${safeName(file.title)}.stl`, 'model/stl')
+      let data: Uint8Array
+      try {
+        data = partsToStl(parts)
+      } finally {
+        parts.forEach((part) => part.geometry.dispose())
+      }
+      if (!spend(EXPORT_COST.file, `ไฟล์สำเร็จรูป ${file.title}`)) {
+        setNote(`เครดิตทดลองไม่พอ ต้องใช้ ${EXPORT_COST.file} เครดิต`)
+        return
+      }
+      downloadBlob(data, `${safeName(file.title)}.stl`, 'model/stl')
       setNote(`ดาวน์โหลด ${file.title} แล้ว หัก ${EXPORT_COST.file} เครดิตทดลอง`)
     } catch {
       setNote('สร้างไฟล์ไม่สำเร็จ ลองอีกครั้ง')
