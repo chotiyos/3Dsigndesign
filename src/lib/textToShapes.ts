@@ -24,6 +24,8 @@ export interface TextShapesResult {
 export function shapeTextToShapes(
   font: LoadedFont,
   text: string,
+  /** Extra space added after each base glyph, in font design units. */
+  tracking = 0,
 ): TextShapesResult {
   const buffer = new hb.Buffer()
   buffer.addText(text)
@@ -46,7 +48,8 @@ export function shapeTextToShapes(
     const commands = font.hbFont.glyphToJson(gid) as PathCommand[]
     shapes.push(...glyphCommandsToShapes(commands, originX, originY))
 
-    cursorX += pos.xAdvance
+    // Thai marks have zero advance; tracking only widens the gap after base glyphs.
+    cursorX += pos.xAdvance + (pos.xAdvance !== 0 ? tracking : 0)
     cursorY += pos.yAdvance
   }
 

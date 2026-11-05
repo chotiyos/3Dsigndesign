@@ -1,200 +1,281 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import type { SignPart, SignPartId } from '../lib/signParts'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import type { SignPart } from '../lib/styles'
+import { MATERIAL_COLORS, makeMaterial, studioEnvironment } from './materials'
+
+export interface Callout {
+  code: string
+  x: number
+  y: number
+  visible: boolean
+}
 
 export interface ViewerProps {
   parts: SignPart[]
-  /** Font design units per em. */
-  upem: number
-  /** Desired letter (cap) height in millimetres. */
-  heightMM: number
-  /** How far apart (mm) to pull the layers apart along the depth axis. */
   explodeMM: number
-  /** Which part ids are currently shown. */
-  visibility: Record<SignPartId, boolean>
+  hidden?: ReadonlySet<string>
+  colors?: Readonly<Record<string, string>>
+  night?: boolean
+  grid?: boolean
+  edges?: boolean
+  /** Re-frames the camera whenever this changes. Parameter edits keep the view. */
+  frameKey?: string
+  autoRotate?: boolean
+  /** Photo shown behind the model, for placing a sign on a real storefront. */
+  backdrop?: string | null
+  /** Called every frame with each part's anchor projected to canvas pixels. */
+  onCallouts?: (callouts: Callout[]) => void
+  className?: string
+  label?: string
 }
 
-/** -1 pulls a layer back, 0 keeps it put, +1 pulls it forward. */
-const EXPLODE_DIRECTION: Record<SignPartId, number> = { back: -1, wall: 0, front: 1 }
+const DAY_BG = new THREE.Color('#e8edf6')
+const NIGHT_BG = new THREE.Color('#071027')
 
-export function Viewer({ parts, upem, heightMM, explodeMM, visibility }: ViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const sceneState = useRef<{
-    scene: THREE.Scene
-    camera: THREE.PerspectiveCamera
-    renderer: THREE.WebGLRenderer
-    controls: OrbitControls
-    group: THREE.Group
-    meshes: Map<SignPartId, THREE.Mesh>
-  } | null>(null)
+interface SceneState {
+  renderer: THREE.WebGLRenderer
+  scene: THREE.Scene
+  camera: THREE.PerspectiveCamera
+  controls: OrbitControls
+  composer: EffectComposer
+  bloom: UnrealBloomPass
+  model: THREE.Group
+  grid: THREE.GridHelper
+  meshes: { part: SignPart; mesh: THREE.Mesh; edges?: THREE.LineSegments }[]
+  hemi: THREE.HemisphereLight
+  key: THREE.DirectionalLight
+  backdrop: THREE.Texture | null
+}
 
-  // Mirrors the latest props so the (expensive) geometry-rebuild effect can
-  // apply the current explode/visibility state to freshly created meshes
-  // without depending on — and re-running for — every explode/visibility tick.
-  const latest = useRef({ explodeMM, visibility })
-  latest.current = { explodeMM, visibility }
+export function Viewer(props: ViewerProps) {
+  const { parts, explodeMM, hidden, colors, night = false, grid = true, edges = false, frameKey, autoRotate = false, backdrop, className, label } = props
+  const hostRef = useRef<HTMLDivElement>(null)
+  const stateRef = useRef<SceneState | null>(null)
+  const latest = useRef(props)
+  latest.current = props
+  const framedKey = useRef<string | undefined>(undefined)
 
-  const applyExplodeAndVisibility = () => {
-    const state = sceneState.current
-    if (!state) return
-    const { explodeMM, visibility } = latest.current
-    for (const [id, mesh] of state.meshes) {
-      mesh.visible = visibility[id]
-      const baseZ = mesh.userData.baseZ as number
-      mesh.position.z = baseZ + EXPLODE_DIRECTION[id] * explodeMM
-    }
-  }
-
-  // One-time scene setup.
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
+    const host = hostRef.current
+    if (!host) return
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false })
+    } catch {
+      host.dataset.failed = 'true'
+      return
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.outputColorSpace = THREE.SRGBColorSpace
+    host.appendChild(renderer.domElement)
+    renderer.domElement.setAttribute('role', 'img')
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x111318)
-
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      container.clientWidth / container.clientHeight,
-      1,
-      10000,
-    )
-    camera.position.set(0, 150, 400)
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true })
-    renderer.setPixelRatio(window.devicePixelRatio)
-    renderer.setSize(container.clientWidth, container.clientHeight)
-    container.appendChild(renderer.domElement)
-
+    scene.environment = studioEnvironment(renderer)
+    const camera = new THREE.PerspectiveCamera(35, 1, 1, 20000)
+    camera.position.set(0, 120, 600)
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
+    controls.dampingFactor = 0.08
+    controls.autoRotateSpeed = 0.6
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6))
-    const key = new THREE.DirectionalLight(0xffffff, 1.2)
-    key.position.set(200, 300, 400)
+    const hemi = new THREE.HemisphereLight('#ffffff', '#3a4a70', 1.1)
+    scene.add(hemi)
+    const key = new THREE.DirectionalLight('#ffffff', 2.2)
+    key.position.set(0.6, 0.9, 1)
     scene.add(key)
-    const rim = new THREE.DirectionalLight(0x88aaff, 0.5)
-    rim.position.set(-300, -100, -200)
+    const rim = new THREE.DirectionalLight('#9fb8ff', 0.8)
+    rim.position.set(-1, -0.3, -0.8)
     scene.add(rim)
 
-    scene.add(new THREE.GridHelper(400, 20, 0x444455, 0x2a2c35))
+    const gridHelper = new THREE.GridHelper(1, 20, '#7c8db5', '#b7c3db')
+    ;(gridHelper.material as THREE.Material).transparent = true
+    ;(gridHelper.material as THREE.Material).opacity = 0.55
+    scene.add(gridHelper)
 
-    const group = new THREE.Group()
-    scene.add(group)
+    const model = new THREE.Group()
+    scene.add(model)
 
-    sceneState.current = { scene, camera, renderer, controls, group, meshes: new Map() }
+    const composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.9, 0.55, 0.62)
+    composer.addPass(bloom)
+    composer.addPass(new OutputPass())
 
-    let frameId: number
-    const animate = () => {
-      frameId = requestAnimationFrame(animate)
-      controls.update()
-      renderer.render(scene, camera)
-    }
-    animate()
+    const state: SceneState = { renderer, scene, camera, controls, composer, bloom, model, grid: gridHelper, meshes: [], hemi, key, backdrop: null }
+    stateRef.current = state
 
-    const onResize = () => {
-      if (!container) return
-      camera.aspect = container.clientWidth / container.clientHeight
+    const resize = () => {
+      const w = Math.max(1, host.clientWidth)
+      const h = Math.max(1, host.clientHeight)
+      renderer.setSize(w, h, false)
+      composer.setSize(w, h)
+      bloom.resolution.set(w / 2, h / 2)
+      camera.aspect = w / h
       camera.updateProjectionMatrix()
-      renderer.setSize(container.clientWidth, container.clientHeight)
     }
-    window.addEventListener('resize', onResize)
+    const observer = new ResizeObserver(resize)
+    observer.observe(host)
+    resize()
+
+    const v = new THREE.Vector3()
+    const box = new THREE.Box3()
+    let frame = 0
+    let visible = true
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting
+    })
+    io.observe(host)
+
+    const tick = () => {
+      frame = requestAnimationFrame(tick)
+      if (!visible) return
+      controls.update()
+      if (latest.current.night) composer.render()
+      else renderer.render(scene, camera)
+      const onCallouts = latest.current.onCallouts
+      if (onCallouts) {
+        const w = host.clientWidth
+        const h = host.clientHeight
+        const n = state.meshes.length
+        onCallouts(
+          state.meshes.map(({ part, mesh }, i) => {
+            // Anchor each callout at a different point along the part's top edge
+            // so leader lines fan out instead of meeting at one corner.
+            box.setFromObject(mesh)
+            const t = 0.55 + (0.4 * (i + 0.5)) / Math.max(n, 1)
+            v.set(box.min.x + (box.max.x - box.min.x) * t, box.max.y - (box.max.y - box.min.y) * 0.08, box.max.z)
+            v.project(camera)
+            return { code: part.code, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, visible: mesh.visible && v.z < 1 }
+          }),
+        )
+      }
+    }
+    tick()
 
     return () => {
-      cancelAnimationFrame(frameId)
-      window.removeEventListener('resize', onResize)
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      io.disconnect()
       controls.dispose()
+      for (const { mesh, edges } of state.meshes) {
+        ;(mesh.material as THREE.Material).dispose()
+        edges?.geometry.dispose()
+      }
+      scene.environment?.dispose()
+      state.backdrop?.dispose()
+      composer.dispose()
       renderer.dispose()
-      container.removeChild(renderer.domElement)
-      sceneState.current = null
+      renderer.domElement.remove()
+      stateRef.current = null
     }
   }, [])
 
-  // Rebuild geometry whenever the parts/params change (expensive: re-extrudes).
+  // Rebuild meshes when the parts change.
   useEffect(() => {
-    const state = sceneState.current
+    const state = stateRef.current
     if (!state) return
-    const { group, camera, controls, meshes } = state
-
-    while (group.children.length > 0) {
-      const child = group.children[0]
-      group.remove(child)
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose()
-        ;(child.material as THREE.Material).dispose()
-      }
+    for (const { mesh, edges } of state.meshes) {
+      state.model.remove(mesh)
+      ;(mesh.material as THREE.Material).dispose()
+      edges?.geometry.dispose()
     }
-    meshes.clear()
-
-    if (parts.length === 0 || upem === 0) return
-
-    const scale = heightMM / upem
-
-    // Shared X/Y footprint (font units) — parts share the same origin, so
-    // any non-empty part's shapes give the same bounding footprint.
-    const footprint = new THREE.Box2()
+    state.meshes = []
     for (const part of parts) {
-      for (const shape of part.shapes) {
-        for (const p of shape.getPoints(4)) footprint.expandByPoint(p)
-      }
-    }
-    const footprintCenter = new THREE.Vector2()
-    footprint.getCenter(footprintCenter)
-
-    const minZ = 0
-    const maxZ = Math.max(...parts.map((p) => p.zOffsetMM + p.depthFontUnits * scale))
-    const centerZ = (minZ + maxZ) / 2
-
-    for (const part of parts) {
-      if (part.shapes.length === 0) continue
-      const geometry = new THREE.ExtrudeGeometry(part.shapes, {
-        depth: part.depthFontUnits,
-        bevelEnabled: false,
-        curveSegments: 16,
-      })
-      const isFront = part.id === 'front'
-      const material = new THREE.MeshPhysicalMaterial({
-        color: part.color,
-        metalness: isFront ? 0 : 0.15,
-        roughness: isFront ? 0.15 : 0.45,
-        transmission: isFront ? 0.55 : 0,
-        transparent: isFront,
-        opacity: isFront ? 0.9 : 1,
-      })
-      const mesh = new THREE.Mesh(geometry, material)
-      mesh.name = part.id
-      mesh.userData.baseZ = part.zOffsetMM - centerZ
-      mesh.scale.setScalar(scale)
-      mesh.position.set(-footprintCenter.x * scale, -footprintCenter.y * scale, mesh.userData.baseZ)
-      group.add(mesh)
-      meshes.set(part.id, mesh)
+      const mesh = new THREE.Mesh(part.geometry, makeMaterial(part.material, MATERIAL_COLORS[part.material], false))
+      mesh.renderOrder = part.material === 'acrylic' || part.material === 'opal' ? 2 : 1
+      state.model.add(mesh)
+      state.meshes.push({ part, mesh })
     }
 
-    // Frame the camera on the new content.
-    const size = new THREE.Vector3(
-      footprint.max.x - footprint.min.x,
-      footprint.max.y - footprint.min.y,
-      maxZ - minZ,
-    ).multiplyScalar(scale)
-    size.z = maxZ - minZ
-    const maxDim = Math.max(size.x, size.y, size.z, 1)
-    const dist = maxDim * 2.4
-    camera.position.set(0, maxDim * 0.3, dist)
-    camera.near = dist / 100
-    camera.far = dist * 20
-    camera.updateProjectionMatrix()
-    controls.target.set(0, 0, 0)
-    controls.update()
+    const box = new THREE.Box3()
+    for (const { mesh } of state.meshes) box.expandByObject(mesh)
+    if (box.isEmpty()) return
+    const size = box.getSize(new THREE.Vector3())
+    const centre = box.getCenter(new THREE.Vector3())
+    state.model.position.set(-centre.x, -centre.y, -centre.z)
 
-    applyExplodeAndVisibility()
-  }, [parts, upem, heightMM])
+    const span = Math.max(size.x, size.y, 20)
+    state.grid.scale.setScalar(span * 1.6)
+    state.grid.position.y = -size.y / 2 - Math.max(2, span * 0.01)
 
-  // Cheap update: explode offset + layer visibility, no geometry rebuild
-  // so dragging the explode slider (or toggling a layer) stays smooth.
+    if (framedKey.current !== frameKey) {
+      framedKey.current = frameKey
+      const { camera, controls } = state
+      const fov = (camera.fov * Math.PI) / 180
+      const fitH = size.y / 2 / Math.tan(fov / 2)
+      const fitW = size.x / 2 / (Math.tan(fov / 2) * Math.max(camera.aspect, 0.5))
+      const dist = Math.max(fitH, fitW, size.z) * 1.12 + size.z * 0.5
+      camera.position.set(dist * 0.18, dist * 0.16, dist)
+      camera.near = dist / 200
+      camera.far = dist * 20
+      camera.updateProjectionMatrix()
+      controls.target.set(0, 0, 0)
+      controls.minDistance = dist * 0.15
+      controls.maxDistance = dist * 6
+      controls.update()
+    }
+  }, [parts, frameKey])
+
+  // Cheap updates: explode, visibility, colour, night, grid, edges.
   useEffect(() => {
-    applyExplodeAndVisibility()
-  }, [explodeMM, visibility])
+    const state = stateRef.current
+    if (!state) return
+    for (const entry of state.meshes) {
+      const { part, mesh } = entry
+      mesh.visible = !hidden?.has(part.code)
+      mesh.position.z = part.explode * explodeMM
+      const color = colors?.[part.code] ?? MATERIAL_COLORS[part.material]
+      ;(mesh.material as THREE.Material).dispose()
+      mesh.material = makeMaterial(part.material, color, night)
+      if (edges && !entry.edges) {
+        entry.edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(part.geometry, 35),
+          new THREE.LineBasicMaterial({ color: '#0d2147', transparent: true, opacity: 0.55 }),
+        )
+        mesh.add(entry.edges)
+      }
+      if (entry.edges) entry.edges.visible = edges
+    }
+    state.grid.visible = grid && !backdrop
+    state.scene.background = state.backdrop ?? (night ? NIGHT_BG : DAY_BG)
+    state.hemi.intensity = night ? 0.18 : 1.1
+    state.key.intensity = night ? 0.25 : 2.2
+    state.renderer.toneMappingExposure = night ? 0.9 : 1
+    state.controls.autoRotate = autoRotate
+  }, [parts, explodeMM, hidden, colors, night, grid, edges, autoRotate, backdrop])
 
-  return <div ref={containerRef} className="h-full w-full" />
+  // Optional photo behind the sign.
+  useEffect(() => {
+    const state = stateRef.current
+    if (!state) return
+    state.backdrop?.dispose()
+    state.backdrop = null
+    if (!backdrop) {
+      state.scene.background = night ? NIGHT_BG : DAY_BG
+      return
+    }
+    let cancelled = false
+    new THREE.TextureLoader().load(backdrop, (texture) => {
+      if (cancelled || !stateRef.current) return texture.dispose()
+      texture.colorSpace = THREE.SRGBColorSpace
+      stateRef.current.backdrop = texture
+      stateRef.current.scene.background = texture
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [backdrop, night])
+
+  return (
+    <div ref={hostRef} className={className ?? 'viewer'} aria-label={label ?? 'มุมมองโมเดล 3 มิติ ลากเพื่อหมุน เลื่อนล้อเพื่อซูม'}>
+      <noscript>ต้องเปิด JavaScript เพื่อดูโมเดล 3 มิติ</noscript>
+    </div>
+  )
 }
