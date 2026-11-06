@@ -4,6 +4,7 @@ import { containModalFocus } from '../ui/modalFocus'
 import { READY_FILES } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
+import { belowOffset, cleanBlocks, MAX_BLOCKS, placeBlock, type TextBlock } from '../lib/blocks'
 import { bridgeArt, floatingCount, type BridgeMode } from '../lib/bridges'
 import { artMeasures, baht, cleanRates, costSheet, type Rates } from '../lib/estimate'
 import { jobSheetHtml } from '../lib/jobSheet'
@@ -12,18 +13,20 @@ import { decodeShare, encodeShare, SHARE_LIMIT } from '../lib/share'
 import { buildDxf } from '../lib/exportDxf'
 import { buildZip, downloadBlob, dxfLayer, MATERIAL_INFO, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
-import { bounds, type Region } from '../lib/geo2d'
+import { bounds, union, type Region } from '../lib/geo2d'
 import { planModules, powerFor, PSU_LOAD } from '../lib/ledPlan'
 import { fontFromArrayBuffer, loadFont, type LoadedFont } from '../lib/hb'
 import { applyMaterials, buildStyle, cleanValues, findStyle, GROUPS, lipHost, PLASTIC, STYLES, type MaterialId, type SignPart, type StyleGroup } from '../lib/styles'
 import { Link, useLocation, useTitle } from '../router'
 import { MATERIAL_COLORS, MATERIAL_NAMES } from '../three/materials'
 import { Viewer } from '../three/Viewer'
+import { MOUNT_HEIGHT, MOUNTS, sceneActive, type SceneOptions } from '../three/scene'
 import { Icon } from '../ui/Icon'
 import { Brand } from '../ui/Brand'
 import { StyleThumb } from '../ui/StyleThumb'
 import { Range } from '../ui/Range'
 import { Tour, type TourStep } from '../ui/Tour'
+import { LayoutBoard } from '../ui/LayoutBoard'
 
 export { Range }
 
@@ -52,6 +55,8 @@ interface Draft {
   /** Bars that tie floating pieces on: 0 off, 1 marks only, 2 everything. Width in mm. */
   bridge: BridgeMode
   bridgeW: number
+  /** Extra lines of text, each with its own font and size, placed around the main artwork. */
+  blocks: TextBlock[]
 }
 
 const DRAFT_KEY = 'jjdesign-draft-v1'
@@ -95,6 +100,7 @@ export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
     ;(out as Record<string, number>)[key] = typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
   }
   out.bridge = Math.round(out.bridge ?? 0) as BridgeMode
+  out.blocks = cleanBlocks(input.blocks, FONT_OPTIONS.map((f) => f.id))
   out.source = input.source === 'svg' ? 'svg' : 'text'
   out.align = input.align === 'left' || input.align === 'right' ? input.align : 'center'
   out.invert = input.invert === true
@@ -136,6 +142,7 @@ function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = nu
     ledWatt: 0.72,
     bridge: 0,
     bridgeW: 2,
+    blocks: [],
     ...cleanDraft(saved),
   }
   if (shared) {
@@ -150,6 +157,7 @@ function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = nu
     Object.assign(base, {
       source: 'text', text: readyFile.text, styleId: readyFile.styleId,
       fontId: FONT_OPTIONS[0].id, heightMM: 150, spacingMM: 0, lineGap: 1.15, align: 'center',
+      blocks: [],
       // Reset only this style's settings; the customer's work on other styles stays.
       values: { ...base.values, [readyFile.styleId]: readyFile.values ?? {} },
       materials: Object.fromEntries(Object.entries(base.materials).filter(([id]) => id !== readyFile.styleId)),
@@ -225,6 +233,10 @@ export default function Editor() {
       // Without storage the tour simply shows again next visit.
     }
   }
+  const [blockFonts, setBlockFonts] = useState<Record<string, LoadedFont>>({})
+  const [selectedBlock, setSelectedBlock] = useState<string | null>(null)
+  const [surround, setSurround] = useState<SceneOptions>({ mount: 'none', person: false, heightMM: MOUNT_HEIGHT.wall })
+  const [sceneOpen, setSceneOpen] = useState(false)
 
   const style = findStyle(draft.styleId)
   const values = cleanValues(style, draft.values[style.id])
@@ -281,15 +293,6 @@ export default function Editor() {
     return () => clearTimeout(id)
   }, [draft, deferred, art])
 
-  // Floating marks (Thai vowels, tone marks, dots) and the optional bars that tie them on.
-  const floating = useMemo(() => floatingCount(art), [art])
-  const joined = useMemo(() => {
-    try {
-      return bridgeArt(art, deferred.bridge, deferred.bridgeW)
-    } catch {
-      return { region: art, bars: 0 }
-    }
-  }, [art, deferred.bridge, deferred.bridgeW])
 
   useEffect(() => {
     try {
@@ -308,6 +311,54 @@ export default function Editor() {
       ? { tone: 'ok', text: 'เปิดแบบจากลิงก์แชร์แล้ว แก้ต่อได้เลย แบบเดิมของผู้ส่งไม่เปลี่ยน' }
       : { tone: 'error', text: 'ลิงก์แชร์นี้ไม่สมบูรณ์ อาจถูกตัดตอนคัดลอก ขอลิงก์ใหม่จากผู้ส่ง' })
   }, [shared])
+
+  // Fonts used by the extra text blocks (the main text loads its own above).
+  const blockFontKey = [...new Set(draft.blocks.map((b) => b.fontId))].filter((id) => id !== CUSTOM_FONT_ID).sort().join(',')
+  useEffect(() => {
+    let cancelled = false
+    for (const id of blockFontKey ? blockFontKey.split(',') : []) {
+      const option = FONT_OPTIONS.find((f) => f.id === id)
+      if (!option) continue
+      loadFont(option.url)
+        .then((f) => !cancelled && setBlockFonts((fonts) => (fonts[id] === f ? fonts : { ...fonts, [id]: f })))
+        .catch(() => !cancelled && setMessage({ tone: 'error', text: 'โหลดฟอนต์ไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง' }))
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [blockFontKey])
+
+  // Extra text blocks: outlines depend on text, font and size; placing them
+  // around the main artwork is cheap, so dragging does not reshape the text.
+  const blockShapeKey = JSON.stringify(deferred.blocks.map(({ text, fontId, heightMM, spacingMM }) => [text, fontId, heightMM, spacingMM]))
+  const blockShapes = useMemo(() => deferred.blocks.map((b): Region => {
+    const f = b.fontId === CUSTOM_FONT_ID ? customFont?.font : blockFonts[b.fontId]
+    if (!f || !b.text.trim()) return []
+    try {
+      return textToRegion(f, b.text, b.heightMM, b.spacingMM, 1.15, 'center')
+    } catch {
+      return []
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [blockShapeKey, blockFonts, customFont])
+  const blockPlaceKey = JSON.stringify(deferred.blocks.map(({ x, y }) => [x, y]))
+  // The whole layout: main artwork plus every placed block.
+  const layout = useMemo(() => {
+    if (!art.length || !blockShapes.some((r) => r.length)) return art
+    const main = bounds(art)
+    const places = JSON.parse(blockPlaceKey) as [number, number][]
+    return union(art, ...blockShapes.map((r, i) => (places[i] ? placeBlock(r, { x: places[i][0], y: places[i][1] }, main) : [])))
+  }, [art, blockShapes, blockPlaceKey])
+
+  // Floating marks (Thai vowels, tone marks, dots) and the optional bars that tie them on.
+  const floating = useMemo(() => floatingCount(layout), [layout])
+  const joined = useMemo(() => {
+    try {
+      return bridgeArt(layout, deferred.bridge, deferred.bridgeW)
+    } catch {
+      return { region: layout, bars: 0 }
+    }
+  }, [layout, deferred.bridge, deferred.bridgeW])
 
   const deferredStyle = findStyle(deferred.styleId)
   const deferredValues = cleanValues(deferredStyle, deferred.values[deferredStyle.id])
@@ -349,11 +400,11 @@ export default function Editor() {
       if (part.geometry.boundingBox) box.union(part.geometry.boundingBox)
     }
     if (box.isEmpty()) {
-      const b = bounds(art)
+      const b = bounds(layout)
       return { w: b.w, h: b.h, d: 0 }
     }
     return { w: box.max.x - box.min.x, h: box.max.y - box.min.y, d: box.max.z - box.min.z }
-  }, [art, parts])
+  }, [layout, parts])
 
   const busy = deferred !== draft
   const balance = credits(demo)
@@ -615,6 +666,22 @@ export default function Editor() {
     }
     return height
   }
+  // Extra text blocks.
+  const shapeById = new Map(deferred.blocks.map((b, i) => [b.id, blockShapes[i] ?? []]))
+  const updateBlock = (id: string, patch: Partial<TextBlock>) =>
+    setDraft((d) => ({ ...d, blocks: d.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }))
+  const removeBlock = (id: string) => {
+    setDraft((d) => ({ ...d, blocks: d.blocks.filter((b) => b.id !== id) }))
+    if (selectedBlock === id) setSelectedBlock(null)
+  }
+  const addBlock = () => {
+    if (!artReady || draft.blocks.length >= MAX_BLOCKS) return
+    const heightMM = Math.max(5, Math.round(draft.heightMM * 0.4))
+    const id = `b${Date.now().toString(36).slice(-7)}`
+    const fontId = draft.fontId
+    setDraft((d) => ({ ...d, blocks: [...d.blocks, { id, text: 'ข้อความรอง', fontId, heightMM, spacingMM: 0, ...belowOffset(artBox, bounds(layout), heightMM) }] }))
+    setSelectedBlock(id)
+  }
   const sizeLabel = draft.source === 'text' ? 'ขนาดตัวอักษร (ขนาดฟอนต์)' : 'ความสูงชิ้นงาน'
   const exact = (label: string, axis: 'w' | 'h') => (
     <Range
@@ -694,7 +761,8 @@ export default function Editor() {
           grid={grid}
           edges={edges}
           backdrop={backdrop}
-          frameKey={`${deferredStyle.id}|${draft.source}|${Math.round(Math.log2(Math.max(size.w, size.h, 1)) * 2)}`}
+          scene={surround}
+          frameKey={`${deferredStyle.id}|${draft.source}|${Math.round(Math.log2(Math.max(size.w, size.h, 1)) * 2)}|${sceneActive(surround) ? `${surround.mount}${surround.person}` : ''}`}
           captureRef={capture}
           className="ed-viewer"
         />
@@ -714,6 +782,31 @@ export default function Editor() {
         {error && <p className="ed-error" role="alert">{error}</p>}
         {!error && parts.length === 0 && !busy && draft.source === 'text' && !font && <p className="ed-hint">กำลังโหลดฟอนต์…</p>}
 
+        {sceneOpen && (
+          <section id="scene-panel" className="ed-scene" aria-label="ฉากติดตั้งจริง" onKeyDown={(e) => e.key === 'Escape' && setSceneOpen(false)}>
+            <div className="ed-scene-head">
+              <span className="option-title">ฉากติดตั้งจริง</span>
+              <button type="button" className="ed-scene-close" aria-label="ปิดแผงฉาก" onClick={() => setSceneOpen(false)}><Icon name="close" size={16} /></button>
+            </div>
+            <div className="seg seg-small" role="group" aria-label="วิธีติดตั้ง">
+              {MOUNTS.map((m) => (
+                <button key={m.id} type="button" aria-pressed={surround.mount === m.id} onClick={() => setSurround((s) => ({ ...s, mount: m.id, heightMM: m.id === 'none' ? s.heightMM : MOUNT_HEIGHT[m.id] }))}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <label className="check">
+              <input type="checkbox" checked={surround.person} onChange={(e) => setSurround((s) => ({ ...s, person: e.target.checked }))} />
+              คนยืนเทียบขนาด (สูง 1.70 ม.)
+            </label>
+            {surround.mount !== 'none' && (
+              <Range label="พื้นถึงขอบล่างป้าย" unit="มม." value={surround.heightMM} min={300} max={8000} step={50} onChange={(v) => setSurround((s) => ({ ...s, heightMM: v }))} />
+            )}
+            <small className="range-hint">
+              {surround.mount === 'standoff' ? `ขาลอยห่างผนัง 25 มม. ` : ''}ฉาก ผนัง และอุปกรณ์ยึดใช้ดูภาพเท่านั้น ไม่รวมในไฟล์ที่ส่งออก
+            </small>
+          </section>
+        )}
         <div className="ed-tools" role="group" aria-label="มุมมอง">
           <button type="button" className="tool" aria-label="ดูตอนเปิดไฟกลางคืน" aria-pressed={night} onClick={() => setNight(!night)} title="ดูตอนเปิดไฟกลางคืน">
             <Icon name={night ? 'moon' : 'sun'} />
@@ -726,6 +819,10 @@ export default function Editor() {
           <button type="button" className="tool" aria-label="แสดงตาราง" aria-pressed={grid} onClick={() => setGrid(!grid)} title="แสดงตาราง">
             <Icon name="grid" />
             <span>ตาราง</span>
+          </button>
+          <button type="button" className="tool" aria-pressed={sceneActive(surround)} aria-expanded={sceneOpen} aria-controls="scene-panel" onClick={() => setSceneOpen(!sceneOpen)} title="ดูป้ายในที่ติดตั้งจริง">
+            <Icon name="box" />
+            <span>ฉากจริง</span>
           </button>
           <label className="tool" title="วางป้ายบนรูปหน้าร้านจริง">
             <Icon name="camera" />
@@ -859,6 +956,56 @@ export default function Editor() {
                   </label>
                   {sizeBox}
                 </>
+              )}
+
+              {style.usesArt && (
+                <section className="blocks-sec" aria-label="ข้อความเพิ่มเติม">
+                  <div className="blocks-head">
+                    <span className="option-title">ข้อความเพิ่มเติม</span>
+                    <small className="range-hint">เช่น สโลแกน เบอร์โทร เวลาเปิดร้าน ใช้ฟอนต์และขนาดต่างจากข้อความหลักได้ สูงสุด {MAX_BLOCKS} ชุด</small>
+                  </div>
+                  {draft.blocks.length > 0 && artReady && (
+                    <>
+                      <LayoutBoard
+                        main={art}
+                        blocks={draft.blocks.map((b, i) => ({ id: b.id, label: `ข้อความ ${i + 2}`, shape: shapeById.get(b.id) ?? [], x: b.x, y: b.y }))}
+                        selected={selectedBlock}
+                        onSelect={setSelectedBlock}
+                        onMove={(id, x, y) => updateBlock(id, { x, y })}
+                      />
+                      <small className="range-hint">ลากข้อความสีส้มเพื่อจัดวาง จะดูดเข้าแนวกึ่งกลางและขอบของข้อความหลัก หรือคลิกแล้วกดลูกศรเพื่อขยับทีละ 1 มม.</small>
+                    </>
+                  )}
+                  {draft.blocks.map((b, i) => (
+                    <fieldset key={b.id} className="block-card" data-selected={selectedBlock === b.id || undefined} onFocus={() => setSelectedBlock(b.id)}>
+                      <legend>ข้อความ {i + 2}</legend>
+                      <label className="field">
+                        <span className="field-label">ข้อความ <small>ขึ้นบรรทัดใหม่ได้</small></span>
+                        <textarea rows={2} maxLength={120} value={b.text} onChange={(e) => updateBlock(b.id, { text: e.target.value })} />
+                      </label>
+                      <label className="field">
+                        <span className="field-label">แบบอักษร</span>
+                        <select value={b.fontId} onChange={(e) => updateBlock(b.id, { fontId: e.target.value })}>
+                          {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label} — {f.note}</option>)}
+                          {customFont && <option value={CUSTOM_FONT_ID}>ฟอนต์ของคุณ: {customFont.name}</option>}
+                        </select>
+                      </label>
+                      <Range label="ขนาดตัวอักษร" unit="มม." value={b.heightMM} min={5} max={1500} step={1} onChange={(v) => updateBlock(b.id, { heightMM: v })} />
+                      <Range label="ระยะห่างตัวอักษร" unit="มม." value={b.spacingMM} min={-30} max={150} step={1} onChange={(v) => updateBlock(b.id, { spacingMM: v })} />
+                      <div className="row">
+                        <button type="button" className="btn btn-ghost" onClick={() => updateBlock(b.id, { x: 0 })}>จัดกึ่งกลาง</button>
+                        <button type="button" className="btn btn-ghost" onClick={() => removeBlock(b.id)}>
+                          <Icon name="close" size={16} /> ลบข้อความนี้
+                        </button>
+                      </div>
+                    </fieldset>
+                  ))}
+                  {draft.blocks.length < MAX_BLOCKS && (
+                    <button type="button" className="btn btn-ghost btn-block" disabled={!artReady || busy} onClick={addBlock}>
+                      <Icon name="plus" size={16} /> เพิ่มข้อความอีกชุด
+                    </button>
+                  )}
+                </section>
               )}
 
               <label className="file-btn">

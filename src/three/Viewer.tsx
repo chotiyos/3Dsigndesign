@@ -7,6 +7,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { SignPart } from '../lib/styles'
 import { MATERIAL_COLORS, makeMaterial, studioEnvironment } from './materials'
+import { buildScene, disposeScene, sceneActive, type SceneOptions } from './scene'
 
 export interface Callout {
   code: string
@@ -28,6 +29,8 @@ export interface ViewerProps {
   autoRotate?: boolean
   /** Photo shown behind the model, for placing a sign on a real storefront. */
   backdrop?: string | null
+  /** Wall, floor, mounting hardware and a person for scale. Preview only. */
+  scene?: SceneOptions | null
   /** Set to a function that renders one frame and returns it as a PNG data URL. */
   captureRef?: { current: (() => string | null) | null }
   /** Called every frame with each part's anchor projected to canvas pixels. */
@@ -52,13 +55,15 @@ interface SceneState {
   hemi: THREE.HemisphereLight
   key: THREE.DirectionalLight
   backdrop: THREE.Texture | null
+  surroundings: THREE.Group | null
   framedKey?: string
 }
 
 export function Viewer(props: ViewerProps) {
-  const { parts, explodeMM, hidden, colors, night = false, grid = true, edges = false, frameKey, autoRotate = false, backdrop, captureRef, className, label } = props
+  const { parts, explodeMM, hidden, colors, night = false, grid = true, edges = false, frameKey, autoRotate = false, backdrop, scene: surround, captureRef, className, label } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const stateRef = useRef<SceneState | null>(null)
+  const sceneKey = sceneActive(surround) ? JSON.stringify(surround) : ''
   const latest = useRef(props)
   latest.current = props
 
@@ -112,7 +117,7 @@ export function Viewer(props: ViewerProps) {
     composer.addPass(bloom)
     composer.addPass(new OutputPass())
 
-    const state: SceneState = { renderer, scene, camera, controls, composer, bloom, model, grid: gridHelper, meshes: [], hemi, key, backdrop: null }
+    const state: SceneState = { renderer, scene, camera, controls, composer, bloom, model, grid: gridHelper, meshes: [], hemi, key, backdrop: null, surroundings: null }
     stateRef.current = state
 
     const resize = () => {
@@ -173,6 +178,7 @@ export function Viewer(props: ViewerProps) {
         edges?.geometry.dispose()
         if (edges) (edges.material as THREE.Material).dispose()
       }
+      if (state.surroundings) disposeScene(state.surroundings)
       scene.environment?.dispose()
       state.backdrop?.dispose()
       gridHelper.geometry.dispose()
@@ -214,6 +220,15 @@ export function Viewer(props: ViewerProps) {
     state.model.updateMatrixWorld(true)
     const box = new THREE.Box3()
     for (const { mesh } of state.meshes) box.expandByObject(mesh)
+    // Surroundings (wall, floor, hardware, person) sized from the sign itself.
+    if (state.surroundings) disposeScene(state.surroundings)
+    state.surroundings = null
+    if (sceneKey && !box.isEmpty()) {
+      state.surroundings = buildScene(parts, box.clone(), JSON.parse(sceneKey) as SceneOptions)
+      state.model.add(state.surroundings)
+      state.model.updateMatrixWorld(true)
+      box.union(state.surroundings.userData.focus as THREE.Box3)
+    }
     if (box.isEmpty()) return
     const size = box.getSize(new THREE.Vector3())
     const centre = box.getCenter(new THREE.Vector3())
@@ -241,7 +256,7 @@ export function Viewer(props: ViewerProps) {
       controls.maxDistance = dist * 6
       controls.update()
     }
-  }, [parts, frameKey])
+  }, [parts, frameKey, sceneKey])
 
   // Cheap updates: explode, visibility, colour, night, grid, edges.
   useEffect(() => {
@@ -263,14 +278,14 @@ export function Viewer(props: ViewerProps) {
       }
       if (entry.edges) entry.edges.visible = edges
     }
-    state.grid.visible = grid && !backdrop
+    state.grid.visible = grid && !backdrop && !state.surroundings
     state.scene.background = state.backdrop ?? (night ? NIGHT_BG : DAY_BG)
     state.hemi.intensity = night ? 0.12 : 1.1
     state.scene.environmentIntensity = night ? 0.06 : 1
     state.key.intensity = night ? 0.25 : 2.2
     state.renderer.toneMappingExposure = night ? 0.9 : 1
     state.controls.autoRotate = autoRotate
-  }, [parts, explodeMM, hidden, colors, night, grid, edges, autoRotate, backdrop])
+  }, [parts, explodeMM, hidden, colors, night, grid, edges, autoRotate, backdrop, sceneKey])
 
   // Snapshot for the job sheet: render now, read back before the buffer clears.
   useEffect(() => {

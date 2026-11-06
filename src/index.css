@@ -2801,3 +2801,145 @@ input[type='range'] {
     transition: none;
   }
 }
+
+/* Extra text blocks and the layout board (editor step 1) */
+.blocks-sec {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.blocks-head {
+  display: grid;
+  gap: 2px;
+}
+
+.layout-board {
+  display: block;
+  width: 100%;
+  height: 190px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  touch-action: none;
+}
+
+.board-main {
+  fill: var(--navy-700);
+}
+
+.board-block path {
+  fill: var(--signal);
+}
+
+.board-hit {
+  fill: transparent;
+  stroke: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.board-block {
+  cursor: grab;
+  outline: none;
+}
+
+.board-block[data-dragging] {
+  cursor: grabbing;
+}
+
+.board-block[data-selected] .board-hit,
+.board-block:focus-visible .board-hit {
+  stroke: var(--navy-600);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.board-guide {
+  stroke: var(--danger);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.block-card {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.block-card[data-selected] {
+  border-color: var(--navy-600);
+  background: var(--paper);
+}
+
+.block-card legend {
+  padding: 0 4px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/* Real-size scene panel, above the view tools */
+.ed-scene {
+  position: absolute;
+  left: 12px;
+  bottom: 64px;
+  z-index: 5;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100% - 24px));
+  padding: 12px 14px 14px;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(6 20 48 / 0.18);
+}
+
+.ed-scene-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ed-scene-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.ed-scene-close:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.ed-scene .seg button {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .ed-scene {
+    top: 8px;
+    bottom: auto;
+    left: 8px;
+    width: calc(100% - 16px);
+    max-height: calc(100% - 64px);
+    overflow-y: auto;
+    gap: 6px;
+    padding: 8px 10px 10px;
+  }
+
+  .ed-scene .range-hint {
+    display: none;
+  }
+}
