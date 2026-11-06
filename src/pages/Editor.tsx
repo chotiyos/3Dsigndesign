@@ -468,7 +468,7 @@ export default function Editor() {
           ))}
         </nav>
         <div className="ed-top-end">
-          <Link href="/pricing" className="credit-chip" title="เครดิตทดลอง ไม่ใช่เงินจริง">
+          <Link href="/account" className="credit-chip" title="เครดิตทดลอง ไม่ใช่เงินจริง">
             <span className="tabular">{balance}</span> เครดิตทดลอง
           </Link>
           <Link href={demo.account ? '/account' : '/login'} className="icon-link" aria-label={demo.account ? 'บัญชีของฉัน' : 'เข้าสู่ระบบ'}>
@@ -821,7 +821,7 @@ export default function Editor() {
               </div>
               <p className="note">
                 ระบบเครดิตบนเว็บนี้เป็นการสาธิต ไม่มีการเก็บเงินจริง ชิ้นส่วนที่ซ่อนอยู่จะไม่ถูกส่งออก ตรวจขนาดในโปรแกรม slicer ก่อนสั่งผลิตทุกครั้ง{' '}
-                <Link href="/pricing">เติมเครดิตทดลอง</Link>
+                <Link href="/account">เติมเครดิตทดลอง</Link>
               </p>
             </div>
           )}

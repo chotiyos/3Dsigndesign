@@ -1,61 +1,7 @@
-import { PACKS } from '../data/shop'
-import { credits, EXPORT_COST, STARTING_CREDITS, topUp, useDemo } from '../lib/account'
 import { GROUPS, STYLES } from '../lib/styles'
 import { Link, useTitle } from '../router'
 import { Icon } from '../ui/Icon'
 
-const baht = (n: number) => n.toLocaleString('th-TH')
-
-export function Pricing() {
-  useTitle('ราคาและเครดิต')
-  const demo = useDemo()
-  return (
-    <div className="page">
-      <header className="page-head">
-        <h1>ออกแบบฟรี จ่ายเครดิตตอนดาวน์โหลด</h1>
-        <p>
-          หมุนดู ปรับขนาด และลองทุกแบบได้ไม่จำกัด เครดิตใช้เฉพาะตอนดาวน์โหลดไฟล์ผลิต ตอนนี้มีเครดิตทดลอง{' '}
-          <strong className="tabular">{credits(demo)}</strong> เครดิต
-        </p>
-      </header>
-      <table className="spec spec-wide">
-        <caption>ค่าเครดิตต่อการดาวน์โหลด</caption>
-        <tbody>
-          <tr><td>ครบชุด ZIP (STL ทุกชิ้น + DXF + รายการชิ้นส่วน)</td><td className="num tabular">{EXPORT_COST.zip} เครดิต</td></tr>
-          <tr><td>STL รวมทุกชิ้น</td><td className="num tabular">{EXPORT_COST.stl} เครดิต</td></tr>
-          <tr><td>DXF เส้นตัด</td><td className="num tabular">{EXPORT_COST.dxf} เครดิต</td></tr>
-          <tr><td>ไฟล์ 3D สำเร็จรูป</td><td className="num tabular">{EXPORT_COST.file} เครดิต</td></tr>
-          <tr><td>บันทึกไฟล์งาน .jjd</td><td className="num">ฟรี</td></tr>
-        </tbody>
-      </table>
-      <h2 className="section-title">แพ็กเครดิต (ราคาตัวอย่าง)</h2>
-      <table className="spec spec-wide packs">
-        <thead>
-          <tr><th>แพ็ก</th><th className="num">เครดิต</th><th className="num">ราคา</th><th className="num">ต่อเครดิต</th><th><span className="sr-only">เติม</span></th></tr>
-        </thead>
-        <tbody>
-          {PACKS.map((pack) => (
-            <tr key={pack.id}>
-              <td>{pack.note}</td>
-              <td className="num tabular">{baht(pack.credits)}</td>
-              <td className="num tabular">{baht(pack.price)} บาท</td>
-              <td className="num tabular">{(pack.price / pack.credits).toFixed(2)} บาท</td>
-              <td className="num">
-                <button type="button" className="btn btn-ghost" onClick={() => topUp(pack.credits, `เติมเครดิตทดลอง ${pack.credits}`)}>
-                  เติมทดลอง
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="note">
-        ปุ่มเติมทดลองเพิ่มเครดิตในเบราว์เซอร์นี้ทันทีโดยไม่เก็บเงิน ราคาแพ็กเป็นตัวอย่างที่ร้านต้องกำหนดเองก่อนเปิดขายจริง
-        ผู้ใช้ใหม่เริ่มที่ {STARTING_CREDITS} เครดิตทดลอง
-      </p>
-    </div>
-  )
-}
 
 const GUIDES = [
   {
@@ -211,7 +157,7 @@ export function Legal({ kind }: { kind: 'terms' | 'privacy' }) {
         ) : (
           <>
             <p>เวอร์ชันทดลองนี้ไม่มีเซิร์ฟเวอร์เก็บข้อมูล ข้อความ ไฟล์ SVG รูปภาพ ฟอนต์ และไฟล์งานที่คุณใช้ ประมวลผลในเบราว์เซอร์ของคุณเท่านั้น</p>
-            <p>ชื่อ อีเมล เครดิต และตะกร้าทดลองถูกเก็บใน localStorage ของเบราว์เซอร์นี้ การออกจากระบบจะลบข้อมูลบัญชีและประวัติเครดิต หากต้องการลบข้อมูลทั้งหมด ให้ล้างข้อมูลเว็บไซต์ในเบราว์เซอร์</p>
+            <p>ชื่อ อีเมล และเครดิตทดลองถูกเก็บใน localStorage ของเบราว์เซอร์นี้ การออกจากระบบจะลบข้อมูลบัญชีและประวัติเครดิต หากต้องการลบข้อมูลทั้งหมด ให้ล้างข้อมูลเว็บไซต์ในเบราว์เซอร์</p>
             <p>หน้าเว็บโหลดฟอนต์ตัวอักษรของหน้าเว็บจาก Google Fonts ซึ่งอาจบันทึกข้อมูลการเข้าถึงตามนโยบายของ Google</p>
           </>
         )}

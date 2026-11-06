@@ -50,9 +50,3 @@ export const MATERIALS: Material[] = [
   { id: 'psu-12v', category: 'ไฟ LED', name: 'หม้อแปลง 12V 5A', spec: 'สำหรับป้ายขนาดกลาง', unit: 'ตัว', price: 290, swatch: '#9aa4b2' },
   { id: 'standoff', category: 'อุปกรณ์ติดตั้ง', name: 'หมุดลอยสแตนเลส 12 × 20 มม.', spec: 'แพ็ก 10 ชุด', unit: 'แพ็ก', price: 220, swatch: '#c0c7d1' },
 ]
-
-export const PACKS = [
-  { id: 'starter', credits: 100, price: 99, note: 'ลองงานแรก' },
-  { id: 'shop', credits: 600, price: 490, note: 'ร้านป้ายทั่วไป' },
-  { id: 'factory', credits: 1500, price: 990, note: 'งานต่อเนื่องทั้งเดือน' },
-]

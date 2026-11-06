@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { credits, signIn, signOut, useDemo } from '../lib/account'
+import { credits, signIn, signOut, STARTING_CREDITS, topUp, useDemo } from '../lib/account'
 import { Link, navigate, useTitle } from '../router'
 
 export function Login() {
@@ -46,8 +46,13 @@ export function Account() {
     return (
       <div className="page page-narrow">
         <h1>บัญชีของฉัน</h1>
-        <p>ยังไม่ได้เข้าสู่ระบบ ตอนนี้ใช้เครดิตทดลองแบบไม่ระบุชื่อ เหลือ {credits(demo)} เครดิต</p>
-        <Link href="/login" className="btn btn-primary">เข้าสู่ระบบทดลอง</Link>
+        <p>ยังไม่ได้เข้าสู่ระบบ ตอนนี้ใช้เครดิตทดลองแบบไม่ระบุชื่อ เหลือ <span className="tabular">{credits(demo)}</span> เครดิต</p>
+        <div className="row">
+          <Link href="/login" className="btn btn-primary">เข้าสู่ระบบทดลอง</Link>
+          <button type="button" className="btn btn-ghost" onClick={() => topUp(STARTING_CREDITS, `เติมเครดิตทดลอง ${STARTING_CREDITS}`)}>
+            เติมเครดิตทดลอง +{STARTING_CREDITS} <span className="cost">ไม่เก็บเงิน</span>
+          </button>
+        </div>
       </div>
     )
   }
@@ -57,8 +62,11 @@ export function Account() {
       <h1>{account.name}</h1>
       <p>{account.email} · บัญชีทดลองในเบราว์เซอร์นี้</p>
       <p className="balance">
-        <span className="tabular">{account.credits}</span> เครดิตทดลอง <Link href="/pricing">เติมเครดิต</Link>
+        <span className="tabular">{account.credits}</span> เครดิตทดลอง
       </p>
+      <button type="button" className="btn btn-ghost" onClick={() => topUp(STARTING_CREDITS, `เติมเครดิตทดลอง ${STARTING_CREDITS}`)}>
+        เติมเครดิตทดลอง +{STARTING_CREDITS} <span className="cost">ไม่เก็บเงิน</span>
+      </button>
       <table className="spec spec-wide">
         <caption>ประวัติล่าสุด</caption>
         <tbody>

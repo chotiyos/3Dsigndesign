@@ -7,17 +7,14 @@ import { Icon } from './Icon'
 const NAV = [
   { href: '/styles', label: 'แคตตาล็อกแบบป้าย' },
   { href: '/files', label: 'ไฟล์ 3D สำเร็จรูป' },
-  { href: '/materials', label: 'ร้านวัสดุ' },
   { href: '/gen', label: 'โมเดลจาก AI' },
   { href: '/how-to', label: 'วิธีใช้' },
-  { href: '/pricing', label: 'ราคา' },
 ]
 
 export function SiteShell({ children }: { children: ReactNode }) {
   const { path } = useLocation()
   const demo = useDemo()
   const [open, setOpen] = useState(false)
-  const cartCount = demo.cart.reduce((n, l) => n + l.qty, 0)
 
   useEffect(() => setOpen(false), [path])
 
@@ -38,10 +35,6 @@ export function SiteShell({ children }: { children: ReactNode }) {
             <Link href="/plugin" className="masthead-minor" aria-current={path === '/plugin' ? 'page' : undefined}>ปลั๊กอิน</Link>
           </nav>
           <div className="masthead-end">
-            <Link href="/materials/cart" className="icon-link" aria-label={`ตะกร้าสินค้า ${cartCount} ชิ้น`}>
-              <Icon name="cart" />
-              {cartCount > 0 && <span className="badge tabular">{cartCount}</span>}
-            </Link>
             <Link href={demo.account ? '/account' : '/login'} className="masthead-account">
               {demo.account ? (
                 <>
@@ -71,13 +64,8 @@ export function SiteShell({ children }: { children: ReactNode }) {
               <Link href="/app">ตัวออกแบบ</Link>
               <Link href="/styles">แคตตาล็อกแบบป้าย</Link>
               <Link href="/gen">โมเดลจาก AI</Link>
-              <Link href="/plugin">ปลั๊กอิน</Link>
-            </div>
-            <div>
-              <h2>ร้านค้า</h2>
               <Link href="/files">ไฟล์ 3D สำเร็จรูป</Link>
-              <Link href="/materials">ร้านวัสดุ</Link>
-              <Link href="/pricing">แพ็กเครดิต</Link>
+              <Link href="/plugin">ปลั๊กอิน</Link>
             </div>
             <div>
               <h2>ช่วยเหลือ</h2>
@@ -89,8 +77,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
         <p className="colophon-note">
-          เว็บนี้เป็นเวอร์ชันทดลอง บัญชี เครดิต ตะกร้า และการชำระเงินทำงานในเบราว์เซอร์ของคุณเท่านั้น ไม่มีการเก็บเงินจริง
-          ราคาและสินค้าเป็นตัวอย่าง
+          เว็บนี้เป็นเวอร์ชันทดลอง บัญชีและเครดิตทำงานในเบราว์เซอร์ของคุณเท่านั้น ไม่มีการเก็บเงินจริง
         </p>
       </footer>
     </div>

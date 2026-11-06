@@ -1,8 +1,8 @@
 import { lazy, Suspense } from 'react'
 import Home from './pages/Home'
 import { Account, Login } from './pages/Account'
-import { Contact, HowTo, Legal, Plugin, Pricing } from './pages/Info'
-import { Cart, Files, Materials } from './pages/Shop'
+import { Contact, HowTo, Legal, Plugin } from './pages/Info'
+import { Files } from './pages/Shop'
 import { NotFoundBody, StyleDetail, StylesIndex } from './pages/Styles'
 import { useLocation, useNavigationScroll } from './router'
 import { SiteShell } from './ui/SiteShell'
@@ -35,10 +35,7 @@ export default function App() {
   else if (path === '/styles') page = <StylesIndex />
   else if (path.startsWith('/styles/')) page = <StyleDetail id={path.slice('/styles/'.length)} />
   else if (path === '/files') page = <Files />
-  else if (path === '/materials') page = <Materials />
-  else if (path === '/materials/cart') page = <Cart />
   else if (path === '/gen') page = <Gen />
-  else if (path === '/pricing') page = <Pricing />
   else if (path === '/how-to') page = <HowTo />
   else if (path === '/plugin') page = <Plugin />
   else if (path === '/contact') page = <Contact />
