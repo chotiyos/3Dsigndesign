@@ -16,7 +16,7 @@ import {
 } from '../geo2d'
 import { bend, chamfer, extrude, merge, revolve, slats } from '../solid'
 import { holeGrid } from './lit'
-import { common, p, Parts } from './kit'
+import { common, p, Parts, silhouette } from './kit'
 import type { StyleDef } from './types'
 
 /** Extrudes the two halves of a region (split at x = 0) separately so each can be reshaped. */
@@ -172,7 +172,7 @@ export const BOX_STYLES: StyleDef[] = [
     usesArt: true,
     params: [common.depth(60), p('margin', 'ขอบเผื่อรอบรูป', 15, 4, 80), common.wall(2), common.front(3), common.back(3), p('raise', 'ตัวอักษรนูนบนหน้า', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
-      const shape = offset(union(art, offset(art, v.margin)), 0)
+      const shape = silhouette(art, v.margin)
       const z = v.back + v.depth
       return new Parts()
         .back('แผ่นหลัง', 'plaswood', shape, v.back, 0, -1, offset(shape, -v.wall))
@@ -408,11 +408,16 @@ export const GIFT_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรนูนบนพื้นที่ขยายตามรูปข้อความ มีห่วงร้อยกุญแจ พิมพ์สองสีชิ้นเดียว',
     make: 'print',
     usesArt: true,
-    params: [p('base', 'ความหนาพื้น', 2.4, 1, 6, 0.2), p('raise', 'ตัวอักษรนูน', 1.6, 0.4, 6, 0.2), p('outline', 'ขอบรอบตัวอักษร', 3, 1, 12), p('hole', 'ขนาดรูห่วง', 4, 2, 10)],
-    build: ({ art, box, v }) => {
-      const loopX = box.minX - v.outline - v.hole / 2 - 1
-      const loop = circle(loopX, box.cy, v.hole / 2 + 2.6, 32)
-      const base = diff(union(offset(art, v.outline), loop), circle(loopX, box.cy, v.hole / 2, 24))
+    params: [p('base', 'ความหนาพื้น', 2.4, 1, 30, 0.2), p('raise', 'ตัวอักษรนูน', 1.6, 0.4, 30, 0.2), p('outline', 'ขอบรอบตัวอักษร', 3, 1, 120), p('hole', 'ขนาดรูห่วง', 4, 2, 40)],
+    build: ({ art, v }) => {
+      // One base under every letter, and the loop on its leftmost point so it never floats.
+      const plate = silhouette(art, v.outline)
+      let left: [number, number] = [Infinity, 0]
+      for (const poly of plate) for (const pt of poly) if (pt[0] < left[0]) left = pt
+      const rim = Math.max(2.6, v.hole * 0.3)
+      const loopX = left[0] - v.hole / 2 - 1
+      const loop = circle(loopX, left[1], v.hole / 2 + rim, 32)
+      const base = diff(union(plate, loop), circle(loopX, left[1], v.hole / 2, 24))
       return new Parts().slab('พื้นพวงกุญแจ', 'print', base, v.base, 0, -0.4).slab('ตัวอักษรนูน', 'accent', art, v.raise, v.base, 0.6).done()
     },
   },
@@ -424,7 +429,7 @@ export const GIFT_STYLES: StyleDef[] = [
     blurb: 'ป้ายสี่เหลี่ยมขอบมนฉลุตัวอักษรทะลุ ใส่สีพื้นหลังด้วยการพิมพ์ชั้นล่างอีกสี',
     make: 'print',
     usesArt: true,
-    params: [p('thick', 'ความหนาป้าย', 3, 1.2, 8, 0.2), p('backing', 'ชั้นรองสี', 0.8, 0, 3, 0.2), p('margin', 'ขอบรอบข้อความ', 5, 2, 20), p('hole', 'ขนาดรูห่วง', 4, 2, 10)],
+    params: [p('thick', 'ความหนาป้าย', 3, 1.2, 30, 0.2), p('backing', 'ชั้นรองสี', 0.8, 0, 10, 0.2), p('margin', 'ขอบรอบข้อความ', 5, 2, 120), p('hole', 'ขนาดรูห่วง', 4, 2, 40)],
     build: ({ art, box, v }) => {
       const w = box.w + v.margin * 2 + v.hole + 6
       const tag = roundRect(-(v.hole + 6) / 2, 0, w, box.h + v.margin * 2, 6)

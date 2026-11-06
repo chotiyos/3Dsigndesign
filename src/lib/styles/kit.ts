@@ -1,5 +1,5 @@
 import type * as THREE from 'three'
-import { band, type Region } from '../geo2d'
+import { band, bounds, hull, islands, offset, type Region } from '../geo2d'
 import { extrude } from '../solid'
 import type { MaterialId, ParamDef, SignPart } from './types'
 
@@ -172,4 +172,22 @@ export const common = {
     { ...p('baseH', 'ความสูงแท่น', 15, 6, 60), when: 'deskBase' },
     { ...p('baseOver', 'แท่นยื่นหน้าและหลัง', 25, 8, 120, 1), when: 'deskBase' },
   ],
+}
+
+/**
+ * The artwork grown by `grow` mm into one connected outline, for parts that
+ * must be a single piece (a keychain base, a box that follows the text).
+ * Gaps between letters are closed a little at a time, scaled to the text
+ * height; artwork that still falls apart gets its outer hull.
+ */
+export function silhouette(art: Region, grow: number): Region {
+  const grown = offset(art, grow)
+  if (islands(grown).length <= 1) return grown
+  const h = Math.max(1, bounds(art).h)
+  for (const k of [0.08, 0.15, 0.25, 0.4, 0.6]) {
+    const close = h * k
+    const closed = offset(offset(art, grow + close), -close)
+    if (islands(closed).length === 1) return closed
+  }
+  return offset(hull(art), grow)
 }
