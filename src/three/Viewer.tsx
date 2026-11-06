@@ -240,8 +240,9 @@ export function Viewer(props: ViewerProps) {
 
     // The framed key lives on the scene, so a rebuilt scene (remount, or React
     // StrictMode's double effect run) always frames its own fresh camera.
-    if (state.framedKey !== frameKey) {
-      state.framedKey = frameKey
+    const nextFrameKey = JSON.stringify([frameKey, sceneKey])
+    if (state.framedKey !== nextFrameKey) {
+      state.framedKey = nextFrameKey
       const { camera, controls } = state
       const fov = (camera.fov * Math.PI) / 180
       const fitH = size.y / 2 / Math.tan(fov / 2)
@@ -302,7 +303,7 @@ export function Viewer(props: ViewerProps) {
       const canvas = state.renderer.domElement
       const box = new THREE.Box3()
       for (const { mesh } of state.meshes) if (mesh.visible) box.expandByObject(mesh)
-      if (box.isEmpty()) return canvas.toDataURL('image/png')
+      if (state.surroundings || box.isEmpty()) return canvas.toDataURL('image/png')
       let minX = Infinity
       let minY = Infinity
       let maxX = -Infinity

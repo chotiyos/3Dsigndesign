@@ -31,7 +31,8 @@ export function cleanBlocks(input: unknown, fontIds: readonly string[]): TextBlo
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
     const b = raw as Partial<TextBlock>
     let id = typeof b.id === 'string' && /^[a-z0-9]{1,12}$/.test(b.id) ? b.id : `b${out.length + 1}`
-    while (seen.has(id)) id = `${id}x`.slice(-12)
+    let suffix = 1
+    while (seen.has(id)) id = `b${out.length + 1}x${suffix++}`
     seen.add(id)
     out.push({
       id,

@@ -406,6 +406,9 @@ export default function Editor() {
     return { w: box.max.x - box.min.x, h: box.max.y - box.min.y, d: box.max.z - box.min.z }
   }, [layout, parts])
 
+  const blocksPending = deferred.blocks.some((b) => b.text.trim() && !(b.fontId === CUSTOM_FONT_ID ? customFont?.font : blockFonts[b.fontId]))
+  const blockError = deferred.blocks.some((b, i) => b.text.trim() && !blocksPending && !blockShapes[i]?.length)
+    ? 'สร้างข้อความเพิ่มเติมไม่สำเร็จ ลองเปลี่ยนข้อความหรือฟอนต์' : null
   const busy = deferred !== draft
   const balance = credits(demo)
   const baseName = safeName(draft.source === 'text' ? draft.text.split('\n')[0] : 'jjdesign')
@@ -420,7 +423,7 @@ export default function Editor() {
   }
 
   function exportFile(cost: number, extension: string, mime: string, build: () => Uint8Array | string) {
-    if (busy || buildError || (style.usesArt && (artError || (draft.source === 'text' && !font)))) return
+    if (busy || buildError || (style.usesArt && (blocksPending || blockError || artError || (draft.source === 'text' && !font)))) return
     try {
       const data = build()
       if (!charge(cost, `${extension.toUpperCase()} ${style.code} ${baseName}`)) return
@@ -480,7 +483,7 @@ export default function Editor() {
     }
     const url = `${window.location.origin}/app#d=${code}`
     setShareUrl(url)
-    const font = draft.fontId === CUSTOM_FONT_ID ? ' ฟอนต์ของคุณไม่ได้ไปกับลิงก์ ผู้รับจะเห็นฟอนต์มาตรฐานแทน' : ''
+    const font = draft.fontId === CUSTOM_FONT_ID || draft.blocks.some((b) => b.fontId === CUSTOM_FONT_ID) ? ' ฟอนต์ของคุณไม่ได้ไปกับลิงก์ ผู้รับจะเห็นฟอนต์มาตรฐานแทน' : ''
     try {
       await navigator.clipboard.writeText(url)
       setMessage({ tone: 'ok', text: `คัดลอกลิงก์แล้ว ส่งให้ลูกค้าหรือเพื่อนเปิดดูและแก้ต่อได้${font}` })
@@ -573,8 +576,8 @@ export default function Editor() {
     (s) => (filter === 'all' || s.group === filter) && (!search.trim() || `${s.code} ${s.name} ${s.blurb}`.toLowerCase().includes(search.trim().toLowerCase())),
   )
 
-  const error = (style.usesArt ? artError : null) ?? buildError
-  const exportBlocked = busy || Boolean(error) || (style.usesArt && draft.source === 'text' && !font)
+  const error = (style.usesArt ? blockError ?? artError : null) ?? buildError
+  const exportBlocked = busy || (style.usesArt && blocksPending) || Boolean(error) || (style.usesArt && draft.source === 'text' && !font)
   const hasVisibleParts = parts.some((p) => !hidden.has(p.code))
 
   // Shop estimate: the shop's own prices against what this design uses.
@@ -682,6 +685,14 @@ export default function Editor() {
     setDraft((d) => ({ ...d, blocks: [...d.blocks, { id, text: 'ข้อความรอง', fontId, heightMM, spacingMM: 0, ...belowOffset(artBox, bounds(layout), heightMM) }] }))
     setSelectedBlock(id)
   }
+  const scenePanel = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!sceneOpen || !scenePanel.current) return
+    const panel = scenePanel.current
+    const previous = panel.ownerDocument.activeElement as HTMLElement | null
+    panel.focus()
+    return () => { if (previous?.isConnected) previous.focus() }
+  }, [sceneOpen])
   const sizeLabel = draft.source === 'text' ? 'ขนาดตัวอักษร (ขนาดฟอนต์)' : 'ความสูงชิ้นงาน'
   const exact = (label: string, axis: 'w' | 'h') => (
     <Range
@@ -783,7 +794,7 @@ export default function Editor() {
         {!error && parts.length === 0 && !busy && draft.source === 'text' && !font && <p className="ed-hint">กำลังโหลดฟอนต์…</p>}
 
         {sceneOpen && (
-          <section id="scene-panel" className="ed-scene" aria-label="ฉากติดตั้งจริง" onKeyDown={(e) => e.key === 'Escape' && setSceneOpen(false)}>
+          <section ref={scenePanel} tabIndex={-1} id="scene-panel" className="ed-scene" aria-label="ฉากติดตั้งจริง" onKeyDown={(e) => e.key === 'Escape' && setSceneOpen(false)}>
             <div className="ed-scene-head">
               <span className="option-title">ฉากติดตั้งจริง</span>
               <button type="button" className="ed-scene-close" aria-label="ปิดแผงฉาก" onClick={() => setSceneOpen(false)}><Icon name="close" size={16} /></button>

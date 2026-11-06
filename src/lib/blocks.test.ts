@@ -46,3 +46,9 @@ describe('text blocks', () => {
     expect(free).toEqual({ x: 77, y: -120, guides: { v: [], h: [] } })
   })
 })
+
+it('repairs saturated duplicate ids without looping and remains stable on a second import', () => {
+  const result = cleanBlocks([{ id: 'xxxxxxxxxxxx' }, { id: 'xxxxxxxxxxxx' }, { id: 'b2x1' }, { id: 'xxxxxxxxxxxx' }], fonts)
+  expect(new Set(result.map(b => b.id)).size).toBe(4)
+  expect(cleanBlocks(JSON.parse(JSON.stringify(result)), fonts)).toEqual(result)
+})

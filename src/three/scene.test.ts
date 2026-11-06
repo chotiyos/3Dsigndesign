@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { rect, union } from '../lib/geo2d'
+import { rect, union, diff, intersect, circle, regionArea } from '../lib/geo2d'
 import { extrude } from '../lib/solid'
 import type { SignPart } from '../lib/styles'
 import { buildScene, disposeScene, sceneActive, standoffPoints, STANDOFF_GAP } from './scene'
@@ -60,4 +60,41 @@ describe('scene', () => {
     expect(all.min.y).toBeCloseTo(box.min.y - 750 - 20, 0)
     disposeScene(group)
   })
+})
+
+it('disposes every owned material exactly once, including materials unused by a mount', () => {
+  for (const mount of ['none', 'wall', 'standoff', 'arm', 'desk'] as const) {
+    const group = buildScene(parts, box, { mount, person: true, heightMM: 750 })
+    const materials = group.userData.materials as THREE.Material[]
+    const calls = new Map<THREE.Material, number>()
+    materials.forEach(m => m.addEventListener('dispose', () => calls.set(m, (calls.get(m) ?? 0) + 1)))
+    const geometries: THREE.BufferGeometry[] = []
+    group.traverse(c => { if (c instanceof THREE.Mesh) geometries.push(c.geometry) })
+    let disposed = 0
+    geometries.forEach(g => g.addEventListener('dispose', () => disposed++))
+    disposeScene(group)
+    expect(materials.length).toBeGreaterThan(0)
+    expect(materials.every(m => calls.get(m) === 1)).toBe(true)
+    expect(disposed).toBe(geometries.length)
+  }
+})
+
+it('places standoff anchors on solid material rather than in hollow letter centres', () => {
+  const ring = diff(rect(0, 0, 100, 100), rect(0, 0, 60, 60))
+  const letter = { ...back, geometry: extrude(ring, 3), profile: { region: ring, depth: 3 } }
+  const points = standoffPoints([letter], new THREE.Box3().setFromBufferAttribute(letter.geometry.getAttribute('position') as THREE.BufferAttribute))
+  expect(points).toHaveLength(1)
+  const [x, y] = points[0]
+  expect(regionArea(intersect(ring, circle(x, y, 0.1)))).toBeGreaterThan(0.02)
+  letter.geometry.dispose()
+})
+
+it('places the 1.70 m figure directly on the floor and clear of the desk', () => {
+  const group = buildScene(parts, box, { mount: 'desk', person: true, heightMM: 750 })
+  const figure = group.children.find(c => c instanceof THREE.Group)!
+  const figureBox = new THREE.Box3().setFromObject(figure)
+  expect(figureBox.min.y).toBeCloseTo(box.min.y - 750)
+  expect(figureBox.max.y - figureBox.min.y).toBeCloseTo(1700)
+  expect(figureBox.min.x).toBeGreaterThan(box.max.x + 250)
+  disposeScene(group)
 })

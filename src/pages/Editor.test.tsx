@@ -257,3 +257,53 @@ it('clamps live sheet rates with the same limits used for saved rates', () => {
   const rates = update({ shop: '', filament: 450, sheet: {}, led: 0, psu: 0, labour: 0, margin: 0 })
   expect(Object.values(rates.sheet)).toEqual([1_000_000])
 })
+it('keeps imported block identities, order, fonts and placement through a share and project round trip', async () => {
+  const { encodeShare, decodeShare } = await import('../lib/share')
+  const blocks = [{ id: 'first', text: 'ข้อความรอง', fontId: FONT_OPTIONS[1].id, heightMM: 42, spacingMM: 3, x: 123, y: -85 }]
+  const saved = cleanDraft({ blocks })
+  expect(cleanDraft(decodeShare('#d=' + encodeShare(saved))!).blocks).toEqual(blocks)
+  expect(cleanDraft(JSON.parse(JSON.stringify(saved))).blocks).toEqual(blocks)
+  expect(cleanDraft({}).blocks).toEqual([])
+})
+
+it('blocks incomplete manufacturing exports until every nonempty block has its font and valid outline', () => {
+  const draft = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, styleId: STYLES[0].id,
+    blocks: [{ id: 'a', text: 'extra', fontId: FONT_OPTIONS[1].id, heightMM: 50, spacingMM: 0, x: 0, y: -100 }] }
+  harness.states[0] = draft
+  harness.states[1] = 4
+  harness.states[3] = { id: draft.fontId, font: {} }
+  const zip = () => nodes(Editor()).find(n => n.type === 'button' && String(n.props.children).includes('ZIP'))!
+  expect(zip().props.disabled).toBe(true)
+  harness.index = 0
+  harness.states[20] = { [FONT_OPTIONS[1].id]: {} }
+  expect(zip().props.disabled).toBe(false)
+  harness.index = 0
+  const shapeText = vi.mocked(textToRegion).getMockImplementation()!
+  vi.mocked(textToRegion).mockImplementationOnce(shapeText).mockImplementationOnce(() => [])
+  expect(zip().props.disabled).toBe(true)
+})
+
+it('moves keyboard focus into the scene panel and restores the opener when closed', () => {
+  harness.states[23] = true
+  const tree = nodes(Editor())
+  const panel = tree.find(n => n.props.id === 'scene-panel')!
+  const previous = { isConnected: true, focus: vi.fn() }
+  const focus = vi.fn()
+  panel.props.ref.current = { ownerDocument: { activeElement: previous }, focus }
+  const cleanup = harness.effects.at(-1)!() as () => void
+  expect(focus).toHaveBeenCalledOnce()
+  cleanup()
+  expect(previous.focus).toHaveBeenCalledOnce()
+})
+it('warns when only an extra block uses a custom font in a share link', async () => {
+  harness.states[0] = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, styleId: STYLES[0].id,
+    blocks: [{ id: 'a', text: 'extra', fontId: CUSTOM_FONT_ID, heightMM: 50, spacingMM: 0, x: 0, y: -100 }] }
+  harness.states[1] = 4
+  const tree = nodes(Editor())
+  vi.stubGlobal('window', { location: { origin: 'https://example.test' } })
+  vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(async () => {}) } })
+  try {
+    await tree.find(n => n.type === 'button' && String(n.props.children).includes('คัดลอกลิงก์แชร์แบบ'))!.props.onClick()
+    expect(harness.setters[5]).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('ฟอนต์ของคุณไม่ได้ไปกับลิงก์') }))
+  } finally { vi.unstubAllGlobals() }
+})
