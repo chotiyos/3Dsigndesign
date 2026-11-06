@@ -15,7 +15,7 @@ import {
   type Region,
 } from '../geo2d'
 import { bend, chamfer, extrude, merge, revolve, slats } from '../solid'
-import { holeGrid } from './lit'
+import { holeGrid, spaced } from './lit'
 import { bridgeArt } from '../bridges'
 import { common, p, Parts, silhouette } from './kit'
 import type { StyleDef } from './types'
@@ -89,11 +89,15 @@ export const MINI_STYLES: StyleDef[] = [
     make: 'print',
     usesArt: true,
     params: [common.depth(15), p('face', 'ความหนาชั้นหน้า', 1.2, 0.4, 30, 0.2)],
-    build: ({ art, v }) =>
-      new Parts()
-        .slab('ตัวอักษร', 'print', art, v.depth - v.face, 0)
-        .slab('ชั้นหน้าสีโปร่งแสง', 'opalprint', art, v.face, v.depth - v.face, 0.6)
-        .done(),
+    build: ({ art, v }) => {
+      const face = Math.min(v.face, v.depth - 0.4)
+      const parts = new Parts()
+        .slab('ตัวอักษร', 'print', art, v.depth - face, 0)
+        .slab('ชั้นหน้าสีโปร่งแสง', 'opalprint', art, face, v.depth - face, 0.6)
+        .done()
+      if (face < v.face) parts[0].warning = 'ลดความหนาชั้นหน้าเพื่อเหลือเนื้อตัวอักษรอย่างน้อย 0.4 มม. เพิ่มความลึกตัวอักษรเพื่อใช้ชั้นหน้าเต็มความหนา'
+      return parts
+    },
   },
   {
     id: 'classic-solid',
@@ -395,7 +399,7 @@ export const DECO_STYLES: StyleDef[] = [
     usesArt: true,
     params: [common.depth(10), p('stand', 'ระยะลอย', 15, 3, 300), p('pin', 'ขนาดหมุด', 6, 3, 14), p('pitch', 'ระยะห่างหมุด', 90, 30, 600, 5)],
     build: ({ art, v }) => {
-      const pins = holeGrid(art, v.pitch, v.pin / 2 + 2, 40)
+      const pins = holeGrid(art, spaced(v.pitch, v.pin), v.pin / 2 + 2, 40)
       const pinGeo = merge(pins.map(([x, y]) => extrude(circle(x, y, v.pin / 2, 20), v.stand + 2, -v.stand)))
       return new Parts().slab('ตัวอักษร', 'accent', art, v.depth, 0, 0.5).solid('หมุดลอย', 'metal', pinGeo, -0.6).done()
     },

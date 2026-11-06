@@ -3,6 +3,8 @@ import { chamfer, extrude, merge, revolve } from '../solid'
 import { common, p, Parts } from './kit'
 import type { StyleDef } from './types'
 
+/** Centre spacing that leaves 0.6 mm between neighbouring bulbs, dots or pins of diameter `size`. */
+export const spaced = (pitch: number, size: number) => Math.max(pitch, size + 0.6)
 /** Centres of a hexagonal grid of circles that fit fully inside `region`. */
 export function holeGrid(region: Region, pitch: number, radius: number, limit = 600) {
   const safe = offset(region, -radius - 0.6)
@@ -23,7 +25,7 @@ export function holeGrid(region: Region, pitch: number, radius: number, limit = 
   const centres: [number, number][] = []
   // Bound candidate probes too: sparse artwork may never fill the output limit.
   pitch = Math.max(pitch, 0.1, b.w / 4000, b.h / 4000, Math.sqrt(Math.max(0, b.w * b.h) / 4000))
-  const rowH = pitch * 0.866
+  const rowH = pitch * Math.sqrt(3) / 2
   for (let row = 0, y = b.minY; y <= b.maxY && centres.length < limit; row++, y += rowH) {
     for (let x = b.minX + (row % 2 ? pitch / 2 : 0); x <= b.maxX && centres.length < limit; x += pitch) {
       if (contains(x, y)) centres.push([x, y])
@@ -355,7 +357,7 @@ export const LIT_STYLES: StyleDef[] = [
     params: [common.depth(40), common.wall(), p('bulb', 'ขนาดหลอด', 20, 8, 40, 1), p('pitch', 'ระยะห่างหลอด', 32, 12, 600, 1), common.front(3), common.back(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
-      const centres = holeGrid(offset(art, -v.wall), v.pitch, v.bulb / 2, 300)
+      const centres = holeGrid(offset(art, -v.wall), spaced(v.pitch, v.bulb), v.bulb / 2, 300)
       const holes = union(...centres.map(([x, y]) => circle(x, y, v.bulb / 2 - 1, 32)))
       const r = v.bulb / 2
       const dome: [number, number][] = [[0, 0]]
@@ -390,7 +392,7 @@ export const LIT_STYLES: StyleDef[] = [
     params: [common.depth(), common.wall(), p('dot', 'ขนาดรู', 4, 1.5, 60), p('pitch', 'ระยะห่างรู', 8, 3, 600), common.front(2), common.back(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
-      const centres = holeGrid(offset(art, -v.wall), v.pitch, v.dot / 2, 600)
+      const centres = holeGrid(offset(art, -v.wall), spaced(v.pitch, v.dot), v.dot / 2, 600)
       const holes = union(...centres.map(([x, y]) => circle(x, y, v.dot / 2, 12)))
       return new Parts()
         .back('แผ่นหลัง', 'print', art, v.back, 0, -1, offset(art, -v.wall))

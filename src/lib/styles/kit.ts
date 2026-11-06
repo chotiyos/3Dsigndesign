@@ -184,12 +184,14 @@ export function silhouette(art: Region, grow: number): Region {
   // Counters belong to the lettering, not to a supporting plate or box.
   art = islands(art).map(([outer]) => outer)
   const grown = offset(art, grow)
-  if (islands(grown).length <= 1) return grown
+  // Joining letters can enclose new whitespace too. A box needs only the
+  // outside contour, otherwise its ring gains a detached inner wall.
+  if (islands(grown).length <= 1) return islands(grown).map(([outer]) => outer)
   const h = Math.max(1, bounds(art).h)
   for (const k of [0.08, 0.15, 0.25, 0.4, 0.6]) {
     const close = h * k
     const closed = offset(offset(art, grow + close), -close)
-    if (islands(closed).length === 1) return closed
+    if (islands(closed).length === 1) return islands(closed).map(([outer]) => outer)
   }
   return offset(hull(art), grow)
 }
