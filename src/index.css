@@ -2765,7 +2765,6 @@ input[type='range'] {
   padding: 16px 18px;
   background: var(--sheet);
   color: var(--ink);
-  border-top: 4px solid var(--signal);
   border-radius: var(--radius);
   box-shadow: 0 12px 32px rgb(6 20 48 / 0.35);
 }
