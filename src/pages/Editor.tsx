@@ -1,8 +1,11 @@
-import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Box3 } from 'three'
 import { READY_FILES } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
+import { bridgeArt, floatingCount, type BridgeMode } from '../lib/bridges'
+import { artMeasures, baht, cleanRates, costSheet, type Rates } from '../lib/estimate'
+import { jobSheetHtml } from '../lib/jobSheet'
 import { buildDxf } from '../lib/exportDxf'
 import { buildZip, downloadBlob, dxfLayer, MATERIAL_INFO, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
@@ -42,9 +45,14 @@ interface Draft {
   /** LED estimate settings: module spacing in mm and watts per module. */
   ledPitch: number
   ledWatt: number
+  /** Bars that tie floating pieces on: 0 off, 1 marks only, 2 everything. Width in mm. */
+  bridge: BridgeMode
+  bridgeW: number
 }
 
 const DRAFT_KEY = 'jjdesign-draft-v1'
+/** The shop's own prices and name, kept in this browser only. */
+const RATES_KEY = 'jjdesign-rates-v1'
 
 /** Images are persisted as their traced outline; pixel data stays in memory. */
 export function portableDraft(draft: Draft, art: Region): Draft {
@@ -66,10 +74,12 @@ export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
     ['heightMM', 10, 1500, 200], ['spacingMM', -30, 150, 0],
     ['lineGap', 0.8, 2.5, 1.15], ['threshold', 20, 235, 128],
     ['ledPitch', 15, 300, 60], ['ledWatt', 0.1, 10, 0.72],
+    ['bridge', 0, 2, 0], ['bridgeW', 0.6, 6, 2],
   ] as const) {
     const value = input[key]
-    out[key] = typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
+    ;(out as Record<string, number>)[key] = typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
   }
+  out.bridge = Math.round(out.bridge ?? 0) as BridgeMode
   out.source = input.source === 'svg' ? 'svg' : 'text'
   out.align = input.align === 'left' || input.align === 'right' ? input.align : 'center'
   out.invert = input.invert === true
@@ -109,6 +119,8 @@ function initialDraft(query: URLSearchParams): Draft {
     invert: false,
     ledPitch: 60,
     ledWatt: 0.72,
+    bridge: 0,
+    bridgeW: 2,
     ...cleanDraft(saved),
   }
   if (base.fontId === CUSTOM_FONT_ID) base.fontId = FONT_OPTIONS[0].id
@@ -159,7 +171,17 @@ export default function Editor() {
   const [backdrop, setBackdrop] = useState<string | null>(null)
   const [filter, setFilter] = useState<StyleGroup | 'all'>('all')
   const [search, setSearch] = useState('')
-  const [pricePerKg, setPricePerKg] = useState(450)
+  const [rates, setRates] = useState<Rates>(() => {
+    try {
+      return cleanRates(JSON.parse(localStorage.getItem(RATES_KEY) ?? 'null'))
+    } catch {
+      return cleanRates(null)
+    }
+  })
+  const [job, setJob] = useState({ customer: '', job: '', notes: '', prices: true })
+  const capture = useRef<(() => string | null) | null>(null)
+  const [sheet, setSheet] = useState<string | null>(null)
+  const sheetFrame = useRef<HTMLIFrameElement>(null)
   const [panelOpen, setPanelOpen] = useState(true)
 
   const style = findStyle(draft.styleId)
@@ -217,17 +239,35 @@ export default function Editor() {
     return () => clearTimeout(id)
   }, [draft, deferred, art])
 
+  // Floating marks (Thai vowels, tone marks, dots) and the optional bars that tie them on.
+  const floating = useMemo(() => floatingCount(art), [art])
+  const joined = useMemo(() => {
+    try {
+      return bridgeArt(art, deferred.bridge, deferred.bridgeW)
+    } catch {
+      return { region: art, bars: 0 }
+    }
+  }, [art, deferred.bridge, deferred.bridgeW])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(RATES_KEY, JSON.stringify(rates))
+    } catch {
+      // Remembering prices is a convenience only.
+    }
+  }, [rates])
+
   const deferredStyle = findStyle(deferred.styleId)
   const deferredValues = cleanValues(deferredStyle, deferred.values[deferredStyle.id])
   const valuesKey = JSON.stringify(deferredValues)
   const { parts: builtParts, buildError } = useMemo((): { parts: SignPart[]; buildError: string | null } => {
     if (deferredStyle.usesArt && art.length === 0) return { parts: [], buildError: null }
     try {
-      return { parts: buildStyle(deferredStyle, art, JSON.parse(valuesKey)), buildError: null }
+      return { parts: buildStyle(deferredStyle, joined.region, JSON.parse(valuesKey)), buildError: null }
     } catch (err) {
       return { parts: [], buildError: `สร้างชิ้นส่วนไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }
     }
-  }, [deferredStyle, art, valuesKey])
+  }, [deferredStyle, joined, valuesKey])
 
   // The customer's material picks: same geometry, new material, and the cut
   // outline (DXF) appears or disappears to suit how that material is made.
@@ -407,9 +447,65 @@ export default function Editor() {
   )
 
   const error = (style.usesArt ? artError : null) ?? buildError
-  const totalGrams = stats.reduce((sum, s) => sum + (hidden.has(s.part.code) ? 0 : s.grams), 0)
   const exportBlocked = busy || Boolean(error) || (style.usesArt && draft.source === 'text' && !font)
   const hasVisibleParts = parts.some((p) => !hidden.has(p.code))
+
+  // Shop estimate: the shop's own prices against what this design uses.
+  const shownStats = useMemo(() => stats.filter((s) => !hidden.has(s.part.code)), [stats, hidden])
+  const ledUse = modules && power ? { modules: modules.length, supplies: power.supplies } : null
+  const cost = costSheet(shownStats, ledUse, rates)
+  const measures = useMemo(() => (step === 4 && style.usesArt ? artMeasures(joined.region) : null), [step, style.usesArt, joined])
+  const figures: [string, string][] = [
+    ...(measures
+      ? ([
+          ['ความยาวขอบตัวอักษร', `${(measures.perimeter / 1000).toLocaleString('th-TH', { maximumFractionDigits: 2 })} ม.`],
+          ['พื้นที่หน้าตัวอักษร', `${(measures.faceArea / 100).toLocaleString('th-TH', { maximumFractionDigits: 0 })} ตร.ซม.`],
+        ] as [string, string][])
+      : []),
+    ['น้ำหนักชิ้นพิมพ์', `${shownStats.filter((s) => !s.part.cut && s.part.material !== 'led').reduce((sum, s) => sum + s.grams, 0).toFixed(0)} กรัม`],
+    ...(ledUse ? ([['ไฟ LED', `${ledUse.modules} ดวง · หม้อแปลง ${ledUse.supplies} ตัว`]] as [string, string][]) : []),
+  ]
+  const quantity = (n: number, unit: string) =>
+    `${n.toLocaleString('th-TH', { maximumFractionDigits: unit === 'กก.' || unit === 'ตร.ม.' ? 3 : 0 })} ${unit}`
+  const setRate = (key: string, raw: number) => {
+    const value = Number.isFinite(raw) ? Math.max(0, raw) : 0
+    setRates((r) =>
+      key.startsWith('sheet:')
+        ? { ...r, sheet: { ...r.sheet, [key.slice(6)]: value } }
+        : cleanRates({ ...r, [key]: value }),
+    )
+  }
+
+  function openJobSheet() {
+    if (exportBlocked || !hasVisibleParts) return
+    let image: string | null = null
+    try {
+      image = capture.current?.() ?? null
+    } catch {
+      image = null
+    }
+    setSheet(jobSheetHtml({
+      shop: rates.shop.trim(),
+      customer: job.customer.trim(),
+      job: job.job.trim(),
+      notes: job.notes.trim(),
+      date: new Date(),
+      image,
+      style: `${style.code} ${style.name}`,
+      text: style.usesArt && draft.source === 'text' ? draft.text : '',
+      size,
+      parts: shownStats.map((s) => ({
+        code: s.part.code,
+        label: s.part.label,
+        material: MATERIAL_NAMES[s.part.material],
+        method: partMethod(s.part),
+        size: `${s.size.x.toFixed(0)}×${s.size.y.toFixed(0)}×${s.size.z.toFixed(1)}`,
+        grams: s.part.material === 'led' ? '—' : s.grams.toFixed(0),
+      })),
+      figures,
+      cost: job.prices ? { ...cost, margin: rates.margin } : null,
+    }))
+  }
 
   // Artwork size (the lettering itself, before frames or bases), and a width
   // control that scales the height to match: signs are often quoted by width.
@@ -516,6 +612,7 @@ export default function Editor() {
           edges={edges}
           backdrop={backdrop}
           frameKey={`${deferredStyle.id}|${draft.source}|${Math.round(Math.log2(Math.max(size.w, size.h, 1)) * 2)}`}
+          captureRef={capture}
           className="ed-viewer"
         />
         <div className="ed-readout" aria-live="polite">
@@ -731,6 +828,36 @@ export default function Editor() {
                 <strong>{style.code} {style.name}</strong> {style.blurb}
               </p>
               {style.usesArt && sizeBox}
+              {style.usesArt && floating.pieces > 1 && (
+                <div className="option-card" data-on={draft.bridge > 0 || undefined}>
+                  <div className="option-head">
+                    <span>
+                      <span className="option-kicker">
+                        {floating.marks > 0 ? `พบชิ้นลอย ${floating.marks} ชิ้น` : `ลายแยกเป็น ${floating.pieces} ชิ้น`}
+                      </span>
+                      <span className="option-title">เชื่อมชิ้นลอยเข้ากับตัวอักษร</span>
+                      <small className="range-hint">ต่อสะพานบางๆ ให้สระบน สระล่าง วรรณยุกต์ และจุด ติดกับตัวอักษร พิมพ์และติดตั้งเป็นชิ้นเดียว ไม่หลุดหาย</small>
+                    </span>
+                  </div>
+                  <div className="seg seg-small" role="group" aria-label="เชื่อมชิ้นลอย">
+                    {(['ไม่เชื่อม', 'เฉพาะสระ วรรณยุกต์', 'ทุกชิ้นเป็นชิ้นเดียว'] as const).map((choice, i) => (
+                      <button key={choice} type="button" aria-pressed={draft.bridge === i} onClick={() => update({ bridge: i as BridgeMode })}>
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+                  {draft.bridge > 0 && (
+                    <>
+                      <Range label="ความหนาสะพาน" unit="มม." value={draft.bridgeW} min={0.6} max={6} step={0.1} onChange={(v) => update({ bridgeW: v })} />
+                      {!busy && (
+                        <small className="range-hint">
+                          {joined.bars > 0 ? `เพิ่มสะพาน ${joined.bars} จุด` : 'ไม่มีชิ้นที่ต้องเชื่อม'}
+                        </small>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               {style.params.filter((param) => !param.when).map((param) => {
                 const range = (def: typeof param) => (
                   <Range
@@ -867,14 +994,96 @@ export default function Editor() {
                 </button>
               )}
               <p className="note">เปลี่ยนวัสดุแล้วน้ำหนักและไฟล์จะเปลี่ยนตาม ชิ้นแบนบางที่ใช้วัสดุแผ่นได้ไฟล์ DXF สำหรับตัด ส่วนชิ้นที่มีรูปทรงได้ไฟล์ STL สำหรับพิมพ์ ใน ZIP แยกโฟลเดอร์ตามวัสดุ</p>
-              <label className="field field-inline">
-                <span className="field-label">ราคาวัสดุพิมพ์ (บาท/กก.)</span>
-                <input type="number" min={0} max={100000} value={pricePerKg} onChange={(e) => setPricePerKg(Math.min(100000, Math.max(0, Number(e.target.value) || 0)))} />
-              </label>
-              <p className="estimate">
-                ค่าวัสดุโดยประมาณ <strong className="tabular">{Math.round((totalGrams / 1000) * pricePerKg).toLocaleString('th-TH')}</strong> บาท
-                <small> จากน้ำหนักชิ้นส่วนที่แสดง {totalGrams.toFixed(0)} กรัม ยังไม่รวมไฟ ค่าแรง และค่าเครื่อง</small>
-              </p>
+              <section className="option-card quote" aria-label="ประมาณต้นทุนงาน">
+                <div className="option-head">
+                  <span>
+                    <span className="option-kicker">สำหรับร้านป้าย · ใส่ราคาของร้านเอง</span>
+                    <span className="option-title">ประมาณต้นทุนงาน</span>
+                  </span>
+                </div>
+                <dl className="led-figures">
+                  {figures.map(([label, value]) => (
+                    <div key={label}><dt>{label}</dt><dd className="tabular">{value}</dd></div>
+                  ))}
+                </dl>
+                <table className="quote-lines">
+                  <thead>
+                    <tr><th>รายการ</th><th className="num">ราคาต่อหน่วย</th><th className="num">บาท</th></tr>
+                  </thead>
+                  <tbody>
+                    {cost.lines.map((line) => (
+                      <tr key={line.key}>
+                        <td>
+                          {line.label}
+                          <small className="tabular">{quantity(line.qty, line.unit)}</small>
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            min={0}
+                            inputMode="decimal"
+                            aria-label={`ราคา ${line.label} บาทต่อ${line.unit}`}
+                            value={line.rate || ''}
+                            placeholder="0"
+                            onChange={(e) => setRate(line.key, Number(e.target.value))}
+                          />
+                          <small>บาท/{line.unit}</small>
+                        </td>
+                        <td className="num tabular">{baht(line.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td>บวกเพิ่ม (กำไร ค่าดำเนินการ)</td>
+                      <td className="num">
+                        <input type="number" min={0} max={500} inputMode="decimal" aria-label="บวกเพิ่ม เปอร์เซ็นต์" value={rates.margin || ''} placeholder="0" onChange={(e) => setRate('margin', Number(e.target.value))} />
+                        <small>%</small>
+                      </td>
+                      <td className="num tabular">{baht(cost.markup)}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr><td colSpan={2}>รวมโดยประมาณ</td><td className="num tabular">{baht(cost.total)}</td></tr>
+                  </tfoot>
+                </table>
+                <small className="range-hint">
+                  {cost.unpriced.length > 0 && <>ยังไม่ได้ใส่ราคา: {cost.unpriced.join(', ')} · </>}
+                  ชิ้นพิมพ์คิดตามน้ำหนัก ชิ้นแผ่นคิดตามกรอบสี่เหลี่ยมที่ตัด ราคาที่ใส่จำไว้ในเบราว์เซอร์นี้เท่านั้น
+                </small>
+              </section>
+              <section className="option-card job-card" aria-label="ใบงานและใบยืนยันแบบ">
+                <div className="option-head">
+                  <span>
+                    <span className="option-kicker">ส่งลูกค้าอนุมัติ</span>
+                    <span className="option-title">ใบงานและใบยืนยันแบบ</span>
+                    <small className="range-hint">ภาพป้ายตามมุมที่หมุนไว้ ขนาด รายการชิ้นส่วน และช่องเซ็นอนุมัติ พิมพ์หรือบันทึกเป็น PDF ได้</small>
+                  </span>
+                </div>
+                <label className="field">
+                  <span className="field-label">ชื่อร้านของคุณ</span>
+                  <input type="text" maxLength={80} value={rates.shop} onChange={(e) => setRates((r) => ({ ...r, shop: e.target.value }))} />
+                </label>
+                <div className="job-pair">
+                  <label className="field">
+                    <span className="field-label">ลูกค้า</span>
+                    <input type="text" maxLength={80} value={job.customer} onChange={(e) => setJob((j) => ({ ...j, customer: e.target.value }))} />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">ชื่องาน / เลขที่</span>
+                    <input type="text" maxLength={80} value={job.job} onChange={(e) => setJob((j) => ({ ...j, job: e.target.value }))} />
+                  </label>
+                </div>
+                <label className="field">
+                  <span className="field-label">หมายเหตุ</span>
+                  <textarea rows={2} maxLength={600} value={job.notes} onChange={(e) => setJob((j) => ({ ...j, notes: e.target.value }))} placeholder="เช่น สีไฟ วันส่ง ที่ติดตั้ง" />
+                </label>
+                <label className="check">
+                  <input type="checkbox" checked={job.prices} onChange={(e) => setJob((j) => ({ ...j, prices: e.target.checked }))} />
+                  แสดงราคาในใบงาน
+                </label>
+                <button type="button" className="btn btn-ghost btn-block" disabled={exportBlocked || !hasVisibleParts} onClick={openJobSheet}>
+                  <Icon name="file" size={16} /> เปิดใบงาน <span className="cost">ฟรี</span>
+                </button>
+              </section>
               <div className="export-list">
                 <button type="button" className="btn btn-primary btn-block" disabled={exportBlocked || !hasVisibleParts} onClick={exportZip}>
                   <Icon name="download" size={16} /> ดาวน์โหลดครบชุด ZIP <span className="cost">{EXPORT_COST.zip} เครดิต</span>
@@ -897,6 +1106,20 @@ export default function Editor() {
           )}
         </div>
       </aside>
+      {sheet && (
+        <div className="sheet-modal" role="dialog" aria-modal="true" aria-label="ใบงานและใบยืนยันแบบ" onKeyDown={(e) => e.key === 'Escape' && setSheet(null)}>
+          <div className="sheet-bar">
+            <strong>ใบงานและใบยืนยันแบบ</strong>
+            <button type="button" className="btn btn-primary" autoFocus onClick={() => sheetFrame.current?.contentWindow?.print()}>
+              <Icon name="download" size={16} /> พิมพ์ / บันทึกเป็น PDF
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setSheet(null)}>
+              <Icon name="close" size={16} /> ปิด
+            </button>
+          </div>
+          <iframe ref={sheetFrame} title="ใบงาน" srcDoc={sheet} />
+        </div>
+      )}
     </div>
   )
 }

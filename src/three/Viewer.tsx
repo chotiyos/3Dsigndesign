@@ -28,6 +28,8 @@ export interface ViewerProps {
   autoRotate?: boolean
   /** Photo shown behind the model, for placing a sign on a real storefront. */
   backdrop?: string | null
+  /** Set to a function that renders one frame and returns it as a PNG data URL. */
+  captureRef?: { current: (() => string | null) | null }
   /** Called every frame with each part's anchor projected to canvas pixels. */
   onCallouts?: (callouts: Callout[]) => void
   className?: string
@@ -54,7 +56,7 @@ interface SceneState {
 }
 
 export function Viewer(props: ViewerProps) {
-  const { parts, explodeMM, hidden, colors, night = false, grid = true, edges = false, frameKey, autoRotate = false, backdrop, className, label } = props
+  const { parts, explodeMM, hidden, colors, night = false, grid = true, edges = false, frameKey, autoRotate = false, backdrop, captureRef, className, label } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const stateRef = useRef<SceneState | null>(null)
   const latest = useRef(props)
@@ -269,6 +271,53 @@ export function Viewer(props: ViewerProps) {
     state.renderer.toneMappingExposure = night ? 0.9 : 1
     state.controls.autoRotate = autoRotate
   }, [parts, explodeMM, hidden, colors, night, grid, edges, autoRotate, backdrop])
+
+  // Snapshot for the job sheet: render now, read back before the buffer clears.
+  useEffect(() => {
+    if (!captureRef) return
+    captureRef.current = () => {
+      const state = stateRef.current
+      if (!state) return null
+      // No floor grid in the picture, and cropped to the sign with a margin.
+      const gridWas = state.grid.visible
+      state.grid.visible = false
+      if (latest.current.night) state.composer.render()
+      else state.renderer.render(state.scene, state.camera)
+      state.grid.visible = gridWas
+      const canvas = state.renderer.domElement
+      const box = new THREE.Box3()
+      for (const { mesh } of state.meshes) if (mesh.visible) box.expandByObject(mesh)
+      if (box.isEmpty()) return canvas.toDataURL('image/png')
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+      const v = new THREE.Vector3()
+      for (let i = 0; i < 8; i++) {
+        v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(state.camera)
+        const x = ((v.x + 1) / 2) * canvas.width
+        const y = ((1 - v.y) / 2) * canvas.height
+        minX = Math.min(minX, x)
+        maxX = Math.max(maxX, x)
+        minY = Math.min(minY, y)
+        maxY = Math.max(maxY, y)
+      }
+      const pad = Math.max(maxX - minX, maxY - minY) * 0.06
+      const x0 = Math.max(0, Math.floor(minX - pad))
+      const y0 = Math.max(0, Math.floor(minY - pad))
+      const w = Math.min(canvas.width, Math.ceil(maxX + pad)) - x0
+      const h = Math.min(canvas.height, Math.ceil(maxY + pad)) - y0
+      if (w < 8 || h < 8) return canvas.toDataURL('image/png')
+      const out = document.createElement('canvas')
+      out.width = w
+      out.height = h
+      out.getContext('2d')?.drawImage(canvas, x0, y0, w, h, 0, 0, w, h)
+      return out.toDataURL('image/png')
+    }
+    return () => {
+      captureRef.current = null
+    }
+  }, [captureRef])
 
   // Optional photo behind the sign.
   useEffect(() => {
