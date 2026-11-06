@@ -170,12 +170,12 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟที่ขอบตามรูปข้อความหรือโลโก้ หน้าโปร่งแสง ตัวอักษรนูนสีเข้มติดบนหน้า',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(60), p('margin', 'ขอบเผื่อรอบรูป', 15, 4, 80), common.wall(2), common.front(3), common.back(3), p('raise', 'ตัวอักษรนูนบนหน้า', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick()],
+    params: [common.depth(60), p('margin', 'ขอบเผื่อรอบรูป', 15, 4, 80), common.wall(2), common.front(3), common.back(3), p('raise', 'ตัวอักษรนูนบนหน้า', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const shape = offset(union(art, offset(art, v.margin)), 0)
       const z = v.back + v.depth
       return new Parts()
-        .slab('แผ่นหลัง', 'plaswood', shape, v.back, 0, -1)
+        .back('แผ่นหลัง', 'plaswood', shape, v.back, 0, -1, offset(shape, -v.wall))
         .slab('ผนังกล่อง', 'print', ring(shape, v.wall), v.depth, v.back)
         .slab('หน้าโปร่งแสง', 'opal', offset(shape, -v.wall - 0.2), v.front, z - v.front, 0.6)
         .slab('ตัวอักษรบนหน้า', 'accent', art, v.raise, z, 1.2)
@@ -192,13 +192,13 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟสี่เหลี่ยม หน้าพิมพ์สองสีเป็นแผ่นเดียว ตัวอักษรฝังเรียบเสมอหน้า ไม่มีรอยต่อ',
     make: 'print',
     usesArt: true,
-    params: [common.depth(50), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), p('radius', 'มุมโค้ง', 10, 0, 60), common.wall(2), common.front(2.4), common.seatLip(), common.lipWidth(4), common.lipThick()],
+    params: [common.depth(50), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), p('radius', 'มุมโค้ง', 10, 0, 60), common.wall(2), common.front(2.4), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
     build: ({ art, box, v }) => {
       const outline = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, v.radius)
       const face = offset(outline, -v.wall - 0.2)
       const z = 3 + v.depth
       return new Parts()
-        .slab('แผ่นหลัง', 'print', outline, 3, 0, -1)
+        .back('แผ่นหลัง', 'print', outline, 3, 0, -1, offset(outline, -v.wall))
         .slab('ผนังกล่อง', 'print', ring(outline, v.wall), v.depth, 3)
         .slab('หน้าพื้น', 'opalprint', diff(face, art), v.front, z - v.front, 0.8)
         .slab('ตัวอักษรฝังหน้า', 'accent', intersect(art, face), v.front, z - v.front, 1.2)
@@ -261,7 +261,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟทรงขวด ข้อความอยู่ตรงฉลาก ใช้กับร้านเครื่องดื่ม คาเฟ่ หรือร้านคราฟต์เบียร์',
     make: 'mixed',
     usesArt: true,
-    params: [p('bottleW', 'ความกว้างขวด', 240, 80, 900, 5), common.depth(50), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick()],
+    params: [p('bottleW', 'ความกว้างขวด', 240, 80, 900, 5), common.depth(50), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
     build: ({ art, box, v }) => {
       const h = v.bottleW * 2.6
       const outline = bottleOutline(v.bottleW, h)
@@ -269,7 +269,7 @@ export const BOX_STYLES: StyleDef[] = [
       const label = art.map((poly) => poly.map(([x, y]) => [x * fit, y * fit - h * 0.12] as [number, number]))
       const z = 3 + v.depth
       return new Parts()
-        .slab('แผ่นหลัง', 'plaswood', outline, 3, 0, -1)
+        .back('แผ่นหลัง', 'plaswood', outline, 3, 0, -1, offset(outline, -v.wall))
         .slab('ผนังทรงขวด', 'print', ring(outline, v.wall), v.depth, 3)
         .slab('หน้าโปร่งแสง', 'opal', offset(outline, -v.wall - 0.2), v.front, z - v.front, 0.6)
         .slab('ข้อความบนฉลาก', 'accent', label, v.raise, z, 1.2)

@@ -33,6 +33,12 @@ export interface SignPart {
    * when that wall is plastic.
    */
   addon?: { kind: 'lip'; wall: string }
+  /**
+   * The plate that closes the back of a lit letter or box. Wire and wall
+   * mounting holes are cut into it; `cavity` is the hollow inside the walls,
+   * where those holes may go, and `z` is where the plate starts.
+   */
+  rear?: { cavity: Region; z: number }
   /** Shown in the editor when the style had to adjust the user's settings. */
   warning?: string
 }
@@ -46,9 +52,15 @@ export interface ParamDef {
   step: number
   value: number
   hint?: string
-  /** 'toggle' shows an on/off switch (value 0 or 1) instead of a slider. */
-  kind?: 'toggle'
-  /** Only shown while the toggle with this key is on. */
+  /**
+   * 'toggle' shows an on/off switch (value 0 or 1); 'choice' shows one button
+   * per entry in `choices` (value is the index). Both show as option cards.
+   */
+  kind?: 'toggle' | 'choice'
+  choices?: string[]
+  /** Small heading on an option card, e.g. who the option is for. */
+  kicker?: string
+  /** Only shown while the toggle or choice with this key is above 0. */
   when?: string
 }
 

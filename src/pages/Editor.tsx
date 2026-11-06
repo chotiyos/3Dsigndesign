@@ -7,6 +7,7 @@ import { buildDxf } from '../lib/exportDxf'
 import { buildZip, downloadBlob, dxfLayer, MATERIAL_INFO, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
 import { bounds, type Region } from '../lib/geo2d'
+import { planModules, powerFor, PSU_LOAD } from '../lib/ledPlan'
 import { fontFromArrayBuffer, loadFont, type LoadedFont } from '../lib/hb'
 import { applyMaterials, buildStyle, cleanValues, findStyle, GROUPS, lipHost, PLASTIC, STYLES, type MaterialId, type SignPart, type StyleGroup } from '../lib/styles'
 import { Link, useLocation, useTitle } from '../router'
@@ -35,6 +36,9 @@ interface Draft {
   svgText?: string
   threshold: number
   invert: boolean
+  /** LED estimate settings: module spacing in mm and watts per module. */
+  ledPitch: number
+  ledWatt: number
 }
 
 const DRAFT_KEY = 'jjdesign-draft-v1'
@@ -58,6 +62,7 @@ export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
   for (const [key, min, max, fallback] of [
     ['heightMM', 10, 1500, 200], ['spacingMM', -30, 150, 0],
     ['lineGap', 0.8, 2.5, 1.15], ['threshold', 20, 235, 128],
+    ['ledPitch', 15, 300, 60], ['ledWatt', 0.1, 10, 0.72],
   ] as const) {
     const value = input[key]
     out[key] = typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
@@ -99,6 +104,8 @@ function initialDraft(query: URLSearchParams): Draft {
     materials: {},
     threshold: 128,
     invert: false,
+    ledPitch: 60,
+    ledWatt: 0.72,
     ...cleanDraft(saved),
   }
   if (base.fontId === CUSTOM_FONT_ID) base.fontId = FONT_OPTIONS[0].id
@@ -226,6 +233,12 @@ export default function Editor() {
   // The lip add-on is offered only while the wall it prints onto is plastic.
   const lipWall = lipHost(parts)
   const lipAllowed = Boolean(lipWall && PLASTIC.has(lipWall.material))
+  // LED module estimate, for lit styles lit by modules inside a hollow back
+  // (the neon channel takes flexible neon instead). Shown only; files unchanged.
+  const ledCavity = deferredStyle.id === 'neon-channel' ? undefined : builtParts.find((part) => part.rear)?.rear?.cavity
+  const ledPitch = useDeferredValue(draft.ledPitch)
+  const modules = useMemo(() => (ledCavity && (step === 3 || step === 4) ? planModules(ledCavity, ledPitch) : null), [ledCavity, ledPitch, step])
+  const power = modules ? powerFor(modules.length, draft.ledWatt) : null
   const setMaterial = (code: string, material: MaterialId) =>
     setDraft((d) => ({ ...d, materials: { ...d.materials, [style.id]: { ...d.materials[style.id], [code]: material } } }))
 
@@ -729,25 +742,67 @@ export default function Editor() {
                     onChange={(v) => setValue(def.key, v)}
                   />
                 )
-                if (param.kind !== 'toggle') return range(param)
+                if (!param.kind) return range(param)
                 // The lip is an add-on for plastic walls only: hidden for metal or sheet walls.
                 if (param.key === 'seatLip' && !lipAllowed) return null
                 const on = values[param.key] > 0
                 const children = style.params.filter((child) => child.when === param.key)
+                const heading = (
+                  <span>
+                    {param.kicker && <span className="option-kicker">{param.kicker}</span>}
+                    <span className="option-title">{param.label}</span>
+                    {param.hint && <small className="range-hint">{param.hint}</small>}
+                  </span>
+                )
+                if (param.kind === 'choice') {
+                  return (
+                    <div key={param.key} className="option-card" data-on={on || undefined}>
+                      <div className="option-head">{heading}</div>
+                      <div className="seg seg-small" role="group" aria-label={param.label}>
+                        {(param.choices ?? []).map((choice, i) => (
+                          <button key={choice} type="button" aria-pressed={values[param.key] === i} onClick={() => setValue(param.key, i)}>
+                            {choice}
+                          </button>
+                        ))}
+                      </div>
+                      {on && children.map(range)}
+                    </div>
+                  )
+                }
                 return (
                   <div key={param.key} className="option-card" data-on={on || undefined}>
                     <label className="option-head">
-                      <span>
-                        <span className="option-kicker">ออปชั่นเสริม · ผนังพลาสติก</span>
-                        <span className="option-title">{param.label}</span>
-                        {param.hint && <small className="range-hint">{param.hint}</small>}
-                      </span>
+                      {heading}
                       <input type="checkbox" role="switch" className="switch" checked={on} onChange={(e) => setValue(param.key, e.target.checked ? 1 : 0)} />
                     </label>
                     {on && children.map(range)}
                   </div>
                 )
               })}
+              {modules && power && (
+                <section className="option-card led-plan" aria-label="ประมาณไฟ LED">
+                  <div className="option-head">
+                    <span>
+                      <span className="option-kicker">ประมาณการ · ไม่เปลี่ยนไฟล์ผลิต</span>
+                      <span className="option-title">ไฟ LED และหม้อแปลง</span>
+                    </span>
+                  </div>
+                  <dl className="led-figures">
+                    <div><dt>โมดูล LED</dt><dd className="tabular">{modules.length} ดวง</dd></div>
+                    <div><dt>กำลังไฟรวม</dt><dd className="tabular">{power.watts.toFixed(1)} วัตต์</dd></div>
+                    <div><dt>กระแสที่ 12 V</dt><dd className="tabular">{power.amps.toFixed(2)} A</dd></div>
+                    <div>
+                      <dt>หม้อแปลง 12 V</dt>
+                      <dd className="tabular">{power.supplies > 1 ? `${power.supplies} × ` : ''}{power.supply} วัตต์</dd>
+                    </div>
+                  </dl>
+                  <Range label="ระยะห่างโมดูล" unit="มม." value={draft.ledPitch} min={15} max={300} step={5} onChange={(v) => update({ ledPitch: v })} />
+                  <Range label="กำลังไฟต่อโมดูล" unit="วัตต์" value={draft.ledWatt} min={0.1} max={10} step={0.01} onChange={(v) => update({ ledWatt: v })} />
+                  <small className="range-hint">
+                    วางโมดูลห่างจากผนังด้านใน 5 มม. ทุกช่องที่วางได้มีอย่างน้อย 1 ดวง หม้อแปลงเผื่อไว้ให้ใช้ไม่เกิน {Math.round(PSU_LOAD * 100)}% ของพิกัด ตรวจสเปกโมดูลจริงก่อนเสนอราคา
+                  </small>
+                </section>
+              )}
               <div className="row">
                 <button type="button" className="btn btn-ghost" onClick={() => setDraft((d) => { const next = { ...d.values }; delete next[style.id]; return { ...d, values: next } })}>
                   <Icon name="reset" size={16} /> ค่าเริ่มต้น

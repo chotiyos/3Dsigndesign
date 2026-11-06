@@ -47,6 +47,9 @@ export function applyMaterials(parts: SignPart[], picks: Record<string, Material
   })
 }
 
+/** The catalogue letter for the part at `index`. */
+export const codeAt = (index: number) => CODES[index] ?? `Z${index}`
+
 /** Collects parts and hands out catalogue letters in order. */
 export class Parts {
   private list: SignPart[] = []
@@ -63,13 +66,24 @@ export class Parts {
     return this
   }
 
+  /**
+   * The plate that closes the back of a lit letter or box. Wire passages and
+   * wall mounting holes (see rear.ts) are cut into it, inside `cavity`.
+   */
+  back(label: string, material: MaterialId, region: Region, depth: number, z: number, explode: number, cavity: Region) {
+    const before = this.list.length
+    this.slab(label, material, region, depth, z, explode)
+    if (this.list.length > before) this.list[before].rear = { cavity, z }
+    return this
+  }
+
   solid(label: string, material: MaterialId, geometry: THREE.BufferGeometry, explode = 0, cut?: Region) {
     const index = this.nextCode++
     if (!geometry.getAttribute('position') || geometry.getAttribute('position').count === 0) {
       geometry.dispose()
       return this
     }
-    const code = CODES[index] ?? `Z${index}`
+    const code = codeAt(index)
     this.list.push({ id: `${code}-${index}`, code, label, material, geometry, cut, explode })
     return this
   }
@@ -127,7 +141,35 @@ export const common = {
   seatLip: (on = 0): ParamDef => ({
     ...p('seatLip', 'บ่ารับแผ่นหน้า', on, 0, 1, 1, '', 'ขอบด้านในผนังสำหรับวางแผ่นหน้า พิมพ์ติดไปกับผนัง'),
     kind: 'toggle',
+    kicker: 'ออปชั่นเสริม · ผนังพลาสติก',
   }),
   lipWidth: (value = 3): ParamDef => ({ ...p('lip', 'ความกว้างบ่า', value, 1, 15, 0.5), when: 'seatLip' }),
   lipThick: (value = 2): ParamDef => ({ ...p('lipT', 'ความหนาบ่า', value, 0.8, 6, 0.1), when: 'seatLip' }),
+  /**
+   * Add-ons for the back of a lit sign: wire passages, wall mounting holes
+   * and a desk base. The style must build its back with Parts.back; rear.ts
+   * applies them after the style is built. All are off by default.
+   */
+  rear: (): ParamDef[] => [
+    {
+      ...p('wire', 'รูร้อยสายไฟด้านหลัง', 0, 0, 1, 1, '', 'เจาะรูที่แผ่นหลังทุกชิ้นที่มีช่องไฟ ให้สาย LED ออกด้านหลัง'),
+      kind: 'toggle',
+      kicker: 'ออปชั่นเสริม · งานไฟ',
+    },
+    { ...p('wireD', 'ขนาดรูสายไฟ', 6, 3, 20, 0.5), when: 'wire' },
+    {
+      ...p('mount', 'ตัวยึดผนัง', 0, 0, 2, 1, '', 'รูที่แผ่นหลังสำหรับยึดป้ายเข้ากับผนัง'),
+      kind: 'choice',
+      choices: ['หลังเรียบ', 'รูสกรู', 'รูแขวน'],
+      kicker: 'ออปชั่นเสริม · ติดตั้ง',
+    },
+    { ...p('screwD', 'ขนาดสกรู', 4, 3, 8, 0.5, 'มม.', 'รูแขวนเผื่อหัวสกรูไว้ 2 เท่าของขนาดสกรู'), when: 'mount' },
+    {
+      ...p('deskBase', 'ฐานตั้งโต๊ะ', 0, 0, 1, 1, '', 'แท่นใต้ป้าย มีร่องหน้าหลังกันล้ม ใช้ตั้งบนเคาน์เตอร์หรือชั้นวาง'),
+      kind: 'toggle',
+      kicker: 'ออปชั่นเสริม · ตั้งโต๊ะ',
+    },
+    { ...p('baseH', 'ความสูงแท่น', 15, 6, 60), when: 'deskBase' },
+    { ...p('baseOver', 'แท่นยื่นหน้าและหลัง', 25, 8, 120, 1), when: 'deskBase' },
+  ],
 }
