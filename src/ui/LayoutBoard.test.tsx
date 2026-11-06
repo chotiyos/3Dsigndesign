@@ -62,3 +62,16 @@ it('supports button activation and exposes selection and position to assistive t
   expect(onMove).toHaveBeenCalledWith('a', 10, -80)
 })
 
+it('keeps dragged and nudged positions within the project round-trip limits', () => {
+  block().onPointerDown(event())
+  h.drag = { ...h.drag, x: 25000, y: -25000 }
+  block().onPointerUp(event())
+  expect(onMove).toHaveBeenLastCalledWith('a', 20000, -20000)
+  const edge = [{ ...blocks[0], x: 20000, y: -20000 }]
+  const tree = nodes(LayoutBoard({ main: rect(0, 0, 400, 100), blocks: edge, selected: 'a', onMove, onSelect }))
+  const props = tree.find(n => n.type === 'g').props
+  props.onKeyDown({ key: 'ArrowRight', shiftKey: true, preventDefault: vi.fn() })
+  expect(onMove).toHaveBeenLastCalledWith('a', 20000, -20000)
+  props.onKeyDown({ key: 'ArrowDown', shiftKey: true, preventDefault: vi.fn() })
+  expect(onMove).toHaveBeenLastCalledWith('a', 20000, -20000)
+})

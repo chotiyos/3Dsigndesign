@@ -1,4 +1,4 @@
-import { band, bounds, circle, diff, offset, ring, union, type Region } from '../geo2d'
+import { band, bounds, circle, diff, hull, offset, ring, union, type Region } from '../geo2d'
 import { chamfer, extrude, merge, revolve } from '../solid'
 import { common, p, Parts } from './kit'
 import type { StyleDef } from './types'
@@ -86,7 +86,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'อะคริลิกหน้าเต็มตัวอักษร วางบนผนังที่หดเข้า 1 มม. มองจากหน้าไม่เห็นขอบ หลังมีแผ่นรองเผื่อขอบ',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(), common.wall(), common.front(5), common.back(), p('pad', 'แผ่นรองล้นขอบ', 6, 0, 30), ...common.rear()],
+    params: [common.depth(), common.wall(), common.front(5), common.back(), p('pad', 'แผ่นรองล้นขอบ', 6, 0, 150), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       return new Parts()
@@ -105,7 +105,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'ขอบผนังยื่นเลยหน้าอะคริลิกเล็กน้อยเป็นเส้นบาง หลังเป็นพลาสวูดตัดด้วยเครื่อง CNC',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(), p('rim', 'ความหนาขอบ', 1.2, 0.8, 4, 0.1), p('rise', 'ขอบยื่นเลยหน้า', 1.5, 0, 6), common.seatLip(), common.lipWidth(3), common.lipThick(1.5), common.front(), common.back(5), common.gap(), ...common.rear()],
+    params: [common.depth(), p('rim', 'ความหนาขอบ', 1.2, 0.8, 20, 0.1), p('rise', 'ขอบยื่นเลยหน้า', 1.5, 0, 30), common.seatLip(), common.lipWidth(3), common.lipThick(1.5), common.front(), common.back(5), common.gap(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       return new Parts()
@@ -125,7 +125,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'ไฟออกทั้งหน้าและแถบรอบตัวอักษร ผนังกลางเป็นวัสดุโปร่งแสงคั่นระหว่างผนังทึบบนล่าง',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), common.seatLip(), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap(), ...common.rear()],
+    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 300), common.seatLip(), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       const glow = Math.min(v.glow, v.depth)
@@ -150,7 +150,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'เหมือนไฟสองชั้น แต่หน้าตัวอักษรแบ่งเป็นขอบสีกับไส้สีอ่อน พิมพ์สองสีเป็นแผ่นเดียว',
     make: 'print',
     usesArt: true,
-    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), p('edge', 'ความกว้างขอบสี', 4, 1, 20), common.seatLip(), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap(), ...common.rear()],
+    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 300), p('edge', 'ความกว้างขอบสี', 4, 1, 100), common.seatLip(), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       const glow = Math.min(v.glow, v.depth)
@@ -224,7 +224,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'สร้างเฉพาะฝาหลังให้ตัวอักษรที่มีผนังอยู่แล้ว มีขอบสวมในและรูยึดสกรู',
     make: 'print',
     usesArt: true,
-    params: [common.wall(), common.back(2.5), p('plug', 'ความลึกขอบสวม', 5, 2, 20), p('hole', 'ขนาดรูสกรู', 4, 2, 8), common.gap()],
+    params: [common.wall(), common.back(2.5), p('plug', 'ความลึกขอบสวม', 5, 2, 100), p('hole', 'ขนาดรูสกรู', 4, 2, 8), common.gap()],
     build: ({ art, v }) => {
       const inner = offset(art, -v.wall - v.gap)
       const holes = union(...holeGrid(inner, 120, v.hole / 2 + 3, 60).map(([x, y]) => circle(x, y, v.hole / 2, 24)))
@@ -242,7 +242,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรเป็นรางเปิดหน้า วางไฟเส้นนีออนดัดได้ลงในราง เหมาะกับฟอนต์เส้นโค้งมน',
     make: 'print',
     usesArt: true,
-    params: [p('depth', 'ความลึกราง', 18, 6, 60, 1), common.wall(1.6), common.back(3), p('tube', 'ความกว้างไฟเส้น', 8, 3, 20), ...common.rear()],
+    params: [p('depth', 'ความลึกราง', 18, 6, 500, 1), common.wall(1.6), common.back(3), p('tube', 'ความกว้างไฟเส้น', 8, 3, 20), ...common.rear()],
     build: ({ art, v }) => {
       return new Parts()
         .back('พื้นราง', 'print', art, v.back, 0, -0.6, offset(art, -v.wall))
@@ -259,7 +259,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'หน้าตัวอักษรนูนขึ้นเป็นสันเหลี่ยมรับแสงหลายมุม พิมพ์ด้วยเส้นใยโปร่งแสงทั้งหน้า',
     make: 'print',
     usesArt: true,
-    params: [common.depth(40), common.wall(), p('crown', 'ความสูงสันหน้า', 12, 2, 40), p('slope', 'ระยะลาดเข้าใน', 8, 1, 30), common.back(), common.gap(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
+    params: [common.depth(40), common.wall(), p('crown', 'ความสูงสันหน้า', 12, 2, 150), p('slope', 'ระยะลาดเข้าใน', 8, 1, 150), common.back(), common.gap(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       const face = offset(art, -v.wall - v.gap)
@@ -280,7 +280,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'หน้าตัวอักษรมีปีกยื่นออกนอกผนังเป็นคิ้วรอบตัว ให้เงาและเส้นขอบคมเวลามองเฉียง',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(), common.wall(), p('brow', 'คิ้วยื่นออก', 4, 1, 20), p('browT', 'ความหนาคิ้ว', 3, 1, 10), common.front(), common.back(), common.seatLip(), common.lipWidth(5), common.lipThick(), ...common.rear()],
+    params: [common.depth(), common.wall(), p('brow', 'คิ้วยื่นออก', 4, 1, 100), p('browT', 'ความหนาคิ้ว', 3, 1, 30), common.front(), common.back(), common.seatLip(), common.lipWidth(5), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       return new Parts()
@@ -304,20 +304,22 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรทึบ ล้อมด้วยรางสองช่องสำหรับไฟเส้นนีออนวิ่งรอบตัว ใช้ทำป้ายไฟวิ่งโชว์',
     make: 'print',
     usesArt: true,
-    params: [common.depth(30), p('gap2', 'ระยะห่างจากตัวอักษร', 4, 0, 20), p('rail', 'ความกว้างแต่ละราง', 7, 3, 16), p('railH', 'ความลึกราง', 10, 4, 30), common.wall(1.4)],
+    params: [common.depth(30), p('gap2', 'ระยะห่างจากตัวอักษร', 4, 0, 150), p('rail', 'ความกว้างแต่ละราง', 7, 3, 16), p('railH', 'ความลึกราง', 10, 4, 150), common.wall(1.4)],
     build: ({ art, v }) => {
-      const r1 = band(offset(art, v.gap2 + v.rail * 2 + v.wall * 3), 0, v.rail * 2 + v.wall * 3)
+      // A single enclosing frame; the hull also keeps repeated rail offsets small.
+      const outline = hull(art)
+      const r1 = band(offset(outline, v.gap2 + v.rail * 2 + v.wall * 3), 0, v.rail * 2 + v.wall * 3)
       const walls = union(
-        band(offset(art, v.gap2 + v.rail * 2 + v.wall * 3), 0, v.wall),
-        band(offset(art, v.gap2 + v.rail + v.wall * 2), 0, v.wall),
-        band(offset(art, v.gap2 + v.wall), 0, v.wall),
+        band(offset(outline, v.gap2 + v.rail * 2 + v.wall * 3), 0, v.wall),
+        band(offset(outline, v.gap2 + v.rail + v.wall * 2), 0, v.wall),
+        band(offset(outline, v.gap2 + v.wall), 0, v.wall),
       )
       return new Parts()
         .slab('ตัวอักษรทึบ', 'accent', art, v.depth, 0, 0.6)
         .slab('พื้นราง', 'print', r1, 2, 0, -0.6)
         .slab('ผนังราง', 'print', walls, v.railH, 2, -0.6)
-        .slab('ไฟเส้นวงนอก', 'led', band(offset(art, v.gap2 + v.rail * 2 + v.wall * 2), 0.5, v.rail - 1), v.railH - 2, 2, 0)
-        .slab('ไฟเส้นวงใน', 'led', band(offset(art, v.gap2 + v.rail + v.wall), 0.5, v.rail - 1), v.railH - 2, 2, 0)
+        .slab('ไฟเส้นวงนอก', 'led', band(offset(outline, v.gap2 + v.rail * 2 + v.wall * 2), 0.5, v.rail - 1), v.railH - 2, 2, 0)
+        .slab('ไฟเส้นวงใน', 'led', band(offset(outline, v.gap2 + v.rail + v.wall), 0.5, v.rail - 1), v.railH - 2, 2, 0)
         .done()
     },
   },
@@ -329,7 +331,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'หน้าและผนังทึบ ไฟส่องย้อนออกด้านหลังให้เป็นวงแสงบนผนังร้าน ติดตั้งลอยด้วยหมุด',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(40), common.wall(2), common.front(3), p('stand', 'ระยะลอยจากผนัง', 25, 5, 80, 1)],
+    params: [common.depth(40), common.wall(2), common.front(3), p('stand', 'ระยะลอยจากผนัง', 25, 5, 300, 1)],
     build: ({ art, v }) => {
       const z = v.stand + v.depth
       const pins = holeGrid(offset(art, -v.wall - 4), 140, 4, 12)
@@ -350,7 +352,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'หน้าตัวอักษรเจาะรูเรียงเป็นตาราง ใส่ครอบไฟทรงลูกปิงปอง ได้ป้ายแบบโรงละครย้อนยุค',
     make: 'print',
     usesArt: true,
-    params: [common.depth(40), common.wall(), p('bulb', 'ขนาดหลอด', 20, 8, 40, 1), p('pitch', 'ระยะห่างหลอด', 32, 12, 80, 1), common.front(3), common.back(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
+    params: [common.depth(40), common.wall(), p('bulb', 'ขนาดหลอด', 20, 8, 40, 1), p('pitch', 'ระยะห่างหลอด', 32, 12, 600, 1), common.front(3), common.back(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       const centres = holeGrid(offset(art, -v.wall), v.pitch, v.bulb / 2, 300)
@@ -385,7 +387,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'หน้าทึบเจาะรูเล็กเรียงเป็นลาย แสงลอดออกเป็นจุด ด้านหลังมีแผ่นโปร่งแสงกระจายไฟ',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(), common.wall(), p('dot', 'ขนาดรู', 4, 1.5, 15), p('pitch', 'ระยะห่างรู', 8, 3, 40), common.front(2), common.back(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
+    params: [common.depth(), common.wall(), p('dot', 'ขนาดรู', 4, 1.5, 60), p('pitch', 'ระยะห่างรู', 8, 3, 600), common.front(2), common.back(), common.seatLip(), common.lipWidth(), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const z = top(v)
       const centres = holeGrid(offset(art, -v.wall), v.pitch, v.dot / 2, 600)

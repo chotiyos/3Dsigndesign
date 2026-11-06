@@ -131,11 +131,11 @@ export const p = (
 
 /** Parameters most letter styles share, so similar styles feel the same to adjust. */
 export const common = {
-  depth: (value = 50) => p('depth', 'ความลึกตัวอักษร', value, 5, 200, 1),
-  wall: (value = 2) => p('wall', 'ความหนาผนัง', value, 0.8, 10, 0.1),
-  front: (value = 3) => p('front', 'ความหนาแผ่นหน้า', value, 1, 10, 0.5),
-  back: (value = 3) => p('back', 'ความหนาแผ่นหลัง', value, 1, 10, 0.5),
-  lip: (value = 4) => p('lip', 'ความกว้างบ่า', value, 1, 15, 0.5),
+  depth: (value = 50) => p('depth', 'ความลึกตัวอักษร', value, 5, 500, 1),
+  wall: (value = 2) => p('wall', 'ความหนาผนัง', value, 0.8, 30, 0.1),
+  front: (value = 3) => p('front', 'ความหนาแผ่นหน้า', value, 1, 30, 0.5),
+  back: (value = 3) => p('back', 'ความหนาแผ่นหลัง', value, 1, 30, 0.5),
+  lip: (value = 4) => p('lip', 'ความกว้างบ่า', value, 1, 100, 0.5),
   gap: (value = 0.2) => p('gap', 'ระยะเผื่อสวม', value, 0, 1, 0.05, 'มม.', 'เผื่อให้ชิ้นสวมเข้ากันได้'),
   /** On/off switch for the ledge that holds the front panel (see Parts.seat). */
   seatLip: (on = 0): ParamDef => ({
@@ -143,8 +143,8 @@ export const common = {
     kind: 'toggle',
     kicker: 'ออปชั่นเสริม · ผนังพลาสติก',
   }),
-  lipWidth: (value = 3): ParamDef => ({ ...p('lip', 'ความกว้างบ่า', value, 1, 15, 0.5), when: 'seatLip' }),
-  lipThick: (value = 2): ParamDef => ({ ...p('lipT', 'ความหนาบ่า', value, 0.8, 6, 0.1), when: 'seatLip' }),
+  lipWidth: (value = 3): ParamDef => ({ ...p('lip', 'ความกว้างบ่า', value, 1, 100, 0.5), when: 'seatLip' }),
+  lipThick: (value = 2): ParamDef => ({ ...p('lipT', 'ความหนาบ่า', value, 0.8, 20, 0.1), when: 'seatLip' }),
   /**
    * Add-ons for the back of a lit sign: wire passages, wall mounting holes
    * and a desk base. The style must build its back with Parts.back; rear.ts
@@ -169,8 +169,8 @@ export const common = {
       kind: 'toggle',
       kicker: 'ออปชั่นเสริม · ตั้งโต๊ะ',
     },
-    { ...p('baseH', 'ความสูงแท่น', 15, 6, 60), when: 'deskBase' },
-    { ...p('baseOver', 'แท่นยื่นหน้าและหลัง', 25, 8, 120, 1), when: 'deskBase' },
+    { ...p('baseH', 'ความสูงแท่น', 15, 6, 300), when: 'deskBase' },
+    { ...p('baseOver', 'แท่นยื่นหน้าและหลัง', 25, 8, 600, 1), when: 'deskBase' },
   ],
 }
 
@@ -181,6 +181,8 @@ export const common = {
  * height; artwork that still falls apart gets its outer hull.
  */
 export function silhouette(art: Region, grow: number): Region {
+  // Counters belong to the lettering, not to a supporting plate or box.
+  art = islands(art).map(([outer]) => outer)
   const grown = offset(art, grow)
   if (islands(grown).length <= 1) return grown
   const h = Math.max(1, bounds(art).h)

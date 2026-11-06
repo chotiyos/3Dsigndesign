@@ -16,6 +16,7 @@ import {
 } from '../geo2d'
 import { bend, chamfer, extrude, merge, revolve, slats } from '../solid'
 import { holeGrid } from './lit'
+import { bridgeArt } from '../bridges'
 import { common, p, Parts, silhouette } from './kit'
 import type { StyleDef } from './types'
 
@@ -87,7 +88,7 @@ export const MINI_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรทึบ หน้าบนเปลี่ยนเส้นใยเป็นสีโปร่งแสงตอนพิมพ์ ไม่ต้องประกอบ',
     make: 'print',
     usesArt: true,
-    params: [common.depth(15), p('face', 'ความหนาชั้นหน้า', 1.2, 0.4, 5, 0.2)],
+    params: [common.depth(15), p('face', 'ความหนาชั้นหน้า', 1.2, 0.4, 30, 0.2)],
     build: ({ art, v }) =>
       new Parts()
         .slab('ตัวอักษร', 'print', art, v.depth - v.face, 0)
@@ -116,12 +117,14 @@ export const DESK_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรตั้งบนแท่นสี่เหลี่ยมขอบมน พิมพ์ชิ้นเดียว วางหน้าเคาน์เตอร์หรือโต๊ะทำงาน',
     make: 'print',
     usesArt: true,
-    params: [common.depth(8), p('baseH', 'ความสูงแท่น', 14, 4, 60), p('baseD', 'ความลึกแท่น', 40, 10, 120), p('margin', 'แท่นยื่นพ้นตัวอักษร', 10, 0, 60)],
+    params: [common.depth(8), p('baseH', 'ความสูงแท่น', 14, 4, 300), p('baseD', 'ความลึกแท่น', 40, 10, 600), p('margin', 'แท่นยื่นพ้นตัวอักษร', 10, 0, 300)],
     build: ({ art, box, v }) => {
       const base = roundRect(0, box.minY - v.baseH / 2 + 1, box.w + v.margin * 2, v.baseH, 3)
+      const supported = bridgeArt(union(base, art), 2, Math.max(1.2, box.h * 0.015)).region
+      const letters = intersect(supported, rect(box.cx, box.maxY, box.w + 4, box.h * 2 + 1))
       return new Parts()
         .slab('แท่นฐาน', 'print', base, v.baseD, -v.baseD / 2 + v.depth / 2, -0.3)
-        .slab('ตัวอักษร', 'accent', art, v.depth, 0, 0.3)
+        .slab('ตัวอักษร', 'accent', letters, v.depth, 0, 0.3)
         .done()
     },
   },
@@ -133,7 +136,7 @@ export const DESK_STYLES: StyleDef[] = [
     blurb: 'แผ่นป้ายโค้งไปด้านหลังเป็นขาตั้งในตัว ตัวอักษรนูนบนแผ่น พิมพ์นอนแล้วตั้งได้ทันที',
     make: 'print',
     usesArt: true,
-    params: [p('sheet', 'ความหนาแผ่น', 3, 1.2, 8, 0.2), p('raise', 'ตัวอักษรนูน', 3, 0.6, 15), p('radius', 'รัศมีความโค้ง', 120, 40, 600, 5), p('margin', 'ขอบแผ่น', 12, 2, 50)],
+    params: [p('sheet', 'ความหนาแผ่น', 3, 1.2, 30, 0.2), p('raise', 'ตัวอักษรนูน', 3, 0.6, 60), p('radius', 'รัศมีความโค้ง', 120, 40, 6000, 5), p('margin', 'ขอบแผ่น', 12, 2, 300)],
     build: ({ art, box, v }) => {
       const plate = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, 8)
       const step = Math.max(2, (box.h + v.margin * 2) / 60)
@@ -150,7 +153,7 @@ export const DESK_STYLES: StyleDef[] = [
     blurb: 'แผ่นป้ายโค้งไปทางด้านข้างจนตั้งได้เอง เห็นข้อความรอบมุมกว้าง เหมาะกับป้ายต้อนรับ',
     make: 'print',
     usesArt: true,
-    params: [p('sheet', 'ความหนาแผ่น', 3, 1.2, 8, 0.2), p('raise', 'ตัวอักษรนูน', 3, 0.6, 15), p('radius', 'รัศมีความโค้ง', 260, 60, 1200, 5), p('margin', 'ขอบแผ่น', 12, 2, 50)],
+    params: [p('sheet', 'ความหนาแผ่น', 3, 1.2, 30, 0.2), p('raise', 'ตัวอักษรนูน', 3, 0.6, 60), p('radius', 'รัศมีความโค้ง', 260, 60, 6000, 5), p('margin', 'ขอบแผ่น', 12, 2, 300)],
     build: ({ art, box, v }) => {
       const plate = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, 8)
       const step = Math.max(2, (box.w + v.margin * 2) / 80)
@@ -170,7 +173,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟที่ขอบตามรูปข้อความหรือโลโก้ หน้าโปร่งแสง ตัวอักษรนูนสีเข้มติดบนหน้า',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(60), p('margin', 'ขอบเผื่อรอบรูป', 15, 4, 80), common.wall(2), common.front(3), common.back(3), p('raise', 'ตัวอักษรนูนบนหน้า', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
+    params: [common.depth(60), p('margin', 'ขอบเผื่อรอบรูป', 15, 4, 300), common.wall(2), common.front(3), common.back(3), p('raise', 'ตัวอักษรนูนบนหน้า', 2, 0.6, 60), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
     build: ({ art, v }) => {
       const shape = silhouette(art, v.margin)
       const z = v.back + v.depth
@@ -192,7 +195,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟสี่เหลี่ยม หน้าพิมพ์สองสีเป็นแผ่นเดียว ตัวอักษรฝังเรียบเสมอหน้า ไม่มีรอยต่อ',
     make: 'print',
     usesArt: true,
-    params: [common.depth(50), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), p('radius', 'มุมโค้ง', 10, 0, 60), common.wall(2), common.front(2.4), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
+    params: [common.depth(50), p('margin', 'ขอบรอบข้อความ', 25, 5, 300), p('radius', 'มุมโค้ง', 10, 0, 750), common.wall(2), common.front(2.4), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
     build: ({ art, box, v }) => {
       const outline = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, v.radius)
       const face = offset(outline, -v.wall - 0.2)
@@ -215,7 +218,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟอ่านได้ทั้งสองด้าน ติดแขนยื่นออกจากผนังให้เห็นจากทางเดินทั้งสองทิศ',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(80), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick()],
+    params: [common.depth(80), p('margin', 'ขอบรอบข้อความ', 25, 5, 300), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 60), common.seatLip(), common.lipWidth(4), common.lipThick()],
     build: ({ art, box, v }) => {
       const w = box.w + v.margin * 2
       const h = box.h + v.margin * 2
@@ -244,7 +247,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'ถาดที่มีหลุมเป็นรูปตัวอักษร ใช้ใส่ของจุกจิก เป็นแม่พิมพ์ช็อกโกแลตหรือสบู่ หรือจัดวางของโชว์',
     make: 'print',
     usesArt: true,
-    params: [p('floor', 'ความหนาพื้น', 2, 0.8, 10, 0.2), p('pocket', 'ความลึกหลุม', 15, 2, 80), p('margin', 'ขอบถาด', 10, 3, 60), p('radius', 'มุมโค้ง', 8, 0, 40)],
+    params: [p('floor', 'ความหนาพื้น', 2, 0.8, 30, 0.2), p('pocket', 'ความลึกหลุม', 15, 2, 300), p('margin', 'ขอบถาด', 10, 3, 300), p('radius', 'มุมโค้ง', 8, 0, 750)],
     build: ({ art, box, v }) => {
       const outline = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, v.radius)
       return new Parts()
@@ -261,7 +264,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟทรงขวด ข้อความอยู่ตรงฉลาก ใช้กับร้านเครื่องดื่ม คาเฟ่ หรือร้านคราฟต์เบียร์',
     make: 'mixed',
     usesArt: true,
-    params: [p('bottleW', 'ความกว้างขวด', 240, 80, 900, 5), common.depth(50), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
+    params: [p('bottleW', 'ความกว้างขวด', 240, 80, 900, 5), common.depth(50), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 60), common.seatLip(), common.lipWidth(4), common.lipThick(), ...common.rear()],
     build: ({ art, box, v }) => {
       const h = v.bottleW * 2.6
       const outline = bottleOutline(v.bottleW, h)
@@ -289,7 +292,7 @@ export const DECO_STYLES: StyleDef[] = [
     blurb: 'แผ่นพื้น เส้นขอบ และตัวอักษรนูนซ้อนกันสามชั้น แต่ละชั้นสีต่างกัน งานแขวนผนังตกแต่ง',
     make: 'print',
     usesArt: true,
-    params: [p('base', 'ความหนาพื้น', 3, 1, 10), p('outline', 'ความกว้างเส้นขอบ', 5, 1, 30), p('step', 'ความสูงแต่ละชั้น', 2, 0.6, 10), p('margin', 'ขอบแผ่นพื้น', 15, 0, 80)],
+    params: [p('base', 'ความหนาพื้น', 3, 1, 60), p('outline', 'ความกว้างเส้นขอบ', 5, 1, 300), p('step', 'ความสูงแต่ละชั้น', 2, 0.6, 60), p('margin', 'ขอบแผ่นพื้น', 15, 0, 300)],
     build: ({ art, box, v }) => {
       const plate = roundRect(0, 0, box.w + v.margin * 2 + v.outline * 2, box.h + v.margin * 2 + v.outline * 2, 10)
       return new Parts()
@@ -307,7 +310,7 @@ export const DECO_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรตันที่ฉลุลายข้าวหลามตัดข้างใน เหลือขอบรอบตัว แสงลอดเป็นลายสวยเมื่อมีไฟหลัง',
     make: 'print',
     usesArt: true,
-    params: [common.depth(10), p('border', 'ความกว้างขอบ', 4, 1.5, 20), p('cell', 'ขนาดช่องลาย', 12, 4, 60), p('bar', 'ความหนาเส้นลาย', 2.4, 0.8, 10, 0.2)],
+    params: [common.depth(10), p('border', 'ความกว้างขอบ', 4, 1.5, 150), p('cell', 'ขนาดช่องลาย', 12, 4, 300), p('bar', 'ความหนาเส้นลาย', 2.4, 0.8, 30, 0.2)],
     build: ({ art, box, v }) => {
       const cells: Region = []
       // Increase pitch on large signs rather than generating millions of cells.
@@ -331,7 +334,7 @@ export const DECO_STYLES: StyleDef[] = [
     blurb: 'หลังตัวอักษรโค้งรับผิวเสากลมหรือผนังโค้ง ติดแนบสนิทไม่มีช่องว่าง ข้อความพันรอบเสาได้ไม่เกินสามในสี่รอบ',
     make: 'print',
     usesArt: true,
-    params: [common.depth(15), p('radius', 'รัศมีเสา', 150, 30, 2000, 5)],
+    params: [common.depth(15), p('radius', 'รัศมีเสา', 150, 30, 6000, 5)],
     build: ({ art, box, v }) => {
       // Text longer than the column's circumference would wrap onto itself.
       // Cap the wrap at three quarters of a turn by widening the radius.
@@ -372,7 +375,7 @@ export const DECO_STYLES: StyleDef[] = [
     blurb: 'ข้อความพับรอบมุมเสาหรือมุมตึก อ่านได้จากสองด้าน ครึ่งขวาหักตามมุมที่ตั้งไว้',
     make: 'print',
     usesArt: true,
-    params: [common.depth(15), p('angle', 'มุมพับ', 90, 10, 150, 1, 'องศา'), p('shift', 'ตำแหน่งมุมพับ', 0, -500, 500, 1)],
+    params: [common.depth(15), p('angle', 'มุมพับ', 90, 10, 150, 1, 'องศา'), p('shift', 'ตำแหน่งมุมพับ', 0, -5000, 5000, 1)],
     build: ({ art, v }) => {
       const moved = art.map((poly) => poly.map(([x, y]) => [x - v.shift, y] as [number, number]))
       const { left, right } = halves(moved, v.depth, 0)
@@ -390,7 +393,7 @@ export const DECO_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรตันลอยห่างจากผนัง มีหมุดเกลียวด้านหลังตามจุดที่เหมาะกับแต่ละตัว',
     make: 'print',
     usesArt: true,
-    params: [common.depth(10), p('stand', 'ระยะลอย', 15, 3, 60), p('pin', 'ขนาดหมุด', 6, 3, 14), p('pitch', 'ระยะห่างหมุด', 90, 30, 300, 5)],
+    params: [common.depth(10), p('stand', 'ระยะลอย', 15, 3, 300), p('pin', 'ขนาดหมุด', 6, 3, 14), p('pitch', 'ระยะห่างหมุด', 90, 30, 600, 5)],
     build: ({ art, v }) => {
       const pins = holeGrid(art, v.pitch, v.pin / 2 + 2, 40)
       const pinGeo = merge(pins.map(([x, y]) => extrude(circle(x, y, v.pin / 2, 20), v.stand + 2, -v.stand)))
@@ -408,7 +411,7 @@ export const GIFT_STYLES: StyleDef[] = [
     blurb: 'ตัวอักษรนูนบนพื้นที่ขยายตามรูปข้อความ มีห่วงร้อยกุญแจ พิมพ์สองสีชิ้นเดียว',
     make: 'print',
     usesArt: true,
-    params: [p('base', 'ความหนาพื้น', 2.4, 1, 30, 0.2), p('raise', 'ตัวอักษรนูน', 1.6, 0.4, 30, 0.2), p('outline', 'ขอบรอบตัวอักษร', 3, 1, 120), p('hole', 'ขนาดรูห่วง', 4, 2, 40)],
+    params: [p('base', 'ความหนาพื้น', 2.4, 1, 60, 0.2), p('raise', 'ตัวอักษรนูน', 1.6, 0.4, 60, 0.2), p('outline', 'ขอบรอบตัวอักษร', 3, 1, 300), p('hole', 'ขนาดรูห่วง', 4, 2, 100)],
     build: ({ art, v }) => {
       // One base under every letter, and the loop on its leftmost point so it never floats.
       const plate = silhouette(art, v.outline)
@@ -429,15 +432,17 @@ export const GIFT_STYLES: StyleDef[] = [
     blurb: 'ป้ายสี่เหลี่ยมขอบมนฉลุตัวอักษรทะลุ ใส่สีพื้นหลังด้วยการพิมพ์ชั้นล่างอีกสี',
     make: 'print',
     usesArt: true,
-    params: [p('thick', 'ความหนาป้าย', 3, 1.2, 30, 0.2), p('backing', 'ชั้นรองสี', 0.8, 0, 10, 0.2), p('margin', 'ขอบรอบข้อความ', 5, 2, 120), p('hole', 'ขนาดรูห่วง', 4, 2, 40)],
+    params: [p('thick', 'ความหนาป้าย', 3, 1.2, 60, 0.2), p('backing', 'ชั้นรองสี', 0.8, 0, 30, 0.2), p('margin', 'ขอบรอบข้อความ', 5, 2, 300), p('hole', 'ขนาดรูห่วง', 4, 2, 100)],
     build: ({ art, box, v }) => {
       const w = box.w + v.margin * 2 + v.hole + 6
-      const tag = roundRect(-(v.hole + 6) / 2, 0, w, box.h + v.margin * 2, 6)
+      const tag = roundRect(-(v.hole + 6) / 2, 0, w, Math.max(box.h + v.margin * 2, v.hole + 4), 6)
       const holeAt = box.minX - v.margin - v.hole / 2 - 2
       const plate = diff(tag, circle(holeAt, 0, v.hole / 2, 24))
       const parts = new Parts()
       parts.slab('ชั้นรองสี', 'accent', plate, v.backing, 0, -0.6)
-      return parts.slab('ป้ายฉลุ', 'print', diff(plate, art), v.thick, v.backing, 0.4).done()
+      const stencil = diff(plate, art)
+      const face = v.backing > 0 ? stencil : bridgeArt(stencil, 2, Math.max(1.2, box.h * 0.01)).region
+      return parts.slab('ป้ายฉลุ', 'print', face, v.thick, v.backing, 0.4).done()
     },
   },
   {
@@ -460,7 +465,7 @@ export const GIFT_STYLES: StyleDef[] = [
       const stem = diff(circle(0, 0, 2.75, 32), union(rect(0, 0, 4.1, 1.35), rect(0, 0, 1.25, 4.1)))
       return new Parts()
         .solid('ตัวปุ่ม', 'print', shell)
-        .slab('แกนสวมสวิตช์', 'print', stem, 4, -4, -1)
+        .slab('แกนสวมสวิตช์', 'print', stem, v.height - 1.2, 0, -1)
         .slab('ตัวอักษรบนปุ่ม', 'accent', glyph, v.raise, v.height, 1)
         .done()
     },
@@ -473,7 +478,7 @@ export const GIFT_STYLES: StyleDef[] = [
     blurb: 'กรอบรูปตั้งโต๊ะ ชื่อนูนอยู่ขอบล่าง มีร่องเสียบรูปและขาตั้งด้านหลัง',
     make: 'print',
     usesArt: true,
-    params: [p('photoW', 'ความกว้างรูป', 102, 50, 300, 1), p('photoH', 'ความสูงรูป', 152, 50, 300, 1), p('border', 'ความกว้างกรอบ', 14, 6, 60), p('thick', 'ความหนากรอบ', 6, 3, 15)],
+    params: [p('photoW', 'ความกว้างรูป', 102, 50, 300, 1), p('photoH', 'ความสูงรูป', 152, 50, 300, 1), p('border', 'ความกว้างกรอบ', 14, 6, 150), p('thick', 'ความหนากรอบ', 6, 3, 60)],
     build: ({ art, box, v }) => {
       const textH = Math.max(box.h * Math.min(1, (v.photoW + v.border) / Math.max(box.w, 1)), 0) + 6
       const w = v.photoW + v.border * 2
@@ -504,7 +509,7 @@ export const GIFT_STYLES: StyleDef[] = [
     blurb: 'ด้ามตรายางกลึงกลม แผ่นฐาน และหน้ายางตัวอักษรกลับซ้ายขวาพร้อมปั๊ม',
     make: 'print',
     usesArt: true,
-    params: [p('margin', 'ขอบแผ่นฐาน', 4, 1, 20), p('rubber', 'ความสูงหน้ายาง', 2, 0.8, 5, 0.2), p('handle', 'ความสูงด้าม', 60, 30, 120, 1)],
+    params: [p('margin', 'ขอบแผ่นฐาน', 4, 1, 300), p('rubber', 'ความสูงหน้ายาง', 2, 0.8, 5, 0.2), p('handle', 'ความสูงด้าม', 60, 30, 120, 1)],
     build: ({ art, box, v }) => {
       const plate = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, 3)
       const r = Math.min(14, Math.min(box.w, box.h) / 2 + v.margin)
@@ -534,7 +539,7 @@ export const GIFT_STYLES: StyleDef[] = [
     blurb: 'แม่พิมพ์ตัวผู้และตัวเมียคู่กัน หนีบกระดาษแล้วกดให้ข้อความนูนบนการ์ดหรือซองจดหมาย',
     make: 'print',
     usesArt: true,
-    params: [p('plate', 'ความหนาแผ่น', 4, 2, 10), p('relief', 'ความสูงลาย', 1, 0.4, 3, 0.1), p('paper', 'เผื่อความหนากระดาษ', 0.3, 0.1, 1, 0.05), p('margin', 'ขอบแผ่น', 6, 2, 30)],
+    params: [p('plate', 'ความหนาแผ่น', 4, 2, 60), p('relief', 'ความสูงลาย', 1, 0.4, 15, 0.1), p('paper', 'เผื่อความหนากระดาษ', 0.3, 0.1, 1, 0.05), p('margin', 'ขอบแผ่น', 6, 2, 300)],
     build: ({ art, box, v }) => {
       const plate = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, 4)
       return new Parts()

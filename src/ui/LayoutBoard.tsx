@@ -14,6 +14,9 @@ export interface BoardBlock {
 const pathOf = (region: Region, dx = 0, dy = 0) =>
   region.map((poly) => `M${poly.map(([x, y]) => `${(x + dx).toFixed(2)},${(-(y + dy)).toFixed(2)}`).join('L')}Z`).join('')
 
+// Match saved-project limits so a layout survives reopening without moving.
+const position = (value: number) => Math.max(-20000, Math.min(20000, Math.round(value * 10) / 10))
+
 /**
  * A flat plan of the sign: the main artwork stays put, extra text blocks are
  * dragged (or nudged with the arrow keys) and snap to its centre line and
@@ -74,7 +77,7 @@ export function LayoutBoard({ main, blocks, selected, onSelect, onMove }: {
   }
   const up = (e: PointerEvent<SVGGElement>) => {
     if (!drag || e.pointerId !== drag.pointerId) return
-    if (drag.x !== drag.start[0] || drag.y !== drag.start[1]) onMove(drag.id, Math.round(drag.x * 10) / 10, Math.round(drag.y * 10) / 10)
+    if (drag.x !== drag.start[0] || drag.y !== drag.start[1]) onMove(drag.id, position(drag.x), position(drag.y))
     setDrag(null)
   }
   const key = (e: KeyboardEvent<SVGGElement>, b: BoardBlock) => {
@@ -87,7 +90,7 @@ export function LayoutBoard({ main, blocks, selected, onSelect, onMove }: {
     const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key]
     if (!d) return
     e.preventDefault()
-    onMove(b.id, Math.round((b.x + d[0]) * 10) / 10, Math.round((b.y + d[1]) * 10) / 10)
+    onMove(b.id, position(b.x + d[0]), position(b.y + d[1]))
   }
 
   const [x0, y0] = view.split(' ').map(Number)
