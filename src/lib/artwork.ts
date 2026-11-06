@@ -63,25 +63,34 @@ export function imageToRegion(
     const lum = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) * alpha + 255 * (1 - alpha)
     return invert ? lum >= threshold : lum < threshold
   }
-  // Every inked pixel becomes a unit square; merging them gives exact outlines.
+  const smoothed = traceMask(width, height, ink)
+  if (smoothed.length === 0) return []
+  const b = bounds(smoothed)
+  const s = heightMM / b.h
+  return smoothed.map((poly) => poly.map(([x, y]) => [x * s, y * s] as [number, number]))
+}
+
+/**
+ * Outlines the pixels where `on(x, y)` is true, in pixel units: x right,
+ * y down as negative values (row 0 spans y 0 to -1). Stair-steps are smoothed.
+ */
+export function traceMask(width: number, height: number, on: (x: number, y: number) => boolean): Region {
+  // Every set pixel becomes a unit square; merging them gives exact outlines.
   // Rows of consecutive pixels are merged first to keep the polygon count low.
   const squares: Region = []
   for (let y = 0; y < height; y++) {
     let start = -1
     for (let x = 0; x <= width; x++) {
-      const on = x < width && ink(x, y)
-      if (on && start < 0) start = x
-      if (!on && start >= 0) {
+      const set = x < width && on(x, y)
+      if (set && start < 0) start = x
+      if (!set && start >= 0) {
         squares.push([[start, -y], [x, -y], [x, -y - 1], [start, -y - 1]].reverse() as Region[number])
         start = -1
       }
     }
   }
   if (squares.length === 0) return []
-  const smoothed = union(squares).map(smooth)
-  const b = bounds(smoothed)
-  const s = heightMM / b.h
-  return smoothed.map((poly) => poly.map(([x, y]) => [x * s, y * s] as [number, number]))
+  return union(squares).map(smooth)
 }
 
 /** Removes the stair-steps of a pixel outline by averaging neighbours, keeping the winding. */

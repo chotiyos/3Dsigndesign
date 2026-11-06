@@ -9,6 +9,7 @@ import { SiteShell } from './ui/SiteShell'
 
 const Editor = lazy(() => import('./pages/Editor'))
 const Gen = lazy(() => import('./pages/Gen'))
+const Lightbox = lazy(() => import('./pages/Lightbox'))
 
 function Loading() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
   else if (path.startsWith('/styles/')) page = <StyleDetail id={path.slice('/styles/'.length)} />
   else if (path === '/files') page = <Files />
   else if (path === '/gen') page = <Gen />
+  else if (path === '/lightbox') page = <Lightbox />
   else if (path === '/how-to') page = <HowTo />
   else if (path === '/plugin') page = <Plugin />
   else if (path === '/contact') page = <Contact />

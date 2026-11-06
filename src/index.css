@@ -2493,3 +2493,131 @@ input[type='range'] {
   font-weight: 600;
   font-size: 1.05rem;
 }
+
+/* Lightbox maker */
+.form-ok {
+  color: var(--navy-700);
+  margin: 0;
+}
+
+.lbx-step {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lbx-step h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.lbx-step h2 span {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--navy-900);
+  color: var(--on-navy);
+  font-size: 0.85rem;
+}
+
+.lbx-colours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.lbx-colours li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+}
+
+.lbx-colours li[data-off] {
+  background: var(--paper);
+}
+
+.lbx-colours li[data-off] .lbx-colour-name {
+  color: var(--ink-2);
+  text-decoration: line-through;
+}
+
+.lbx-colours input[type='color'] {
+  width: 36px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.lbx-colour-name {
+  display: grid;
+  line-height: 1.25;
+}
+
+.lbx-colour-name small {
+  font-size: 0.75rem;
+  color: var(--ink-2);
+}
+
+.lbx-thick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+
+.lbx-thick input {
+  width: 58px;
+}
+
+.lbx-view {
+  position: sticky;
+  top: 84px;
+  height: min(78vh, 720px);
+}
+
+.lbx-tools {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lbx-tools input[type='range'] {
+  width: 110px;
+}
+
+.lbx-warn {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 48px;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .lbx-view {
+    position: relative;
+    top: 0;
+    height: 420px;
+    order: -1;
+  }
+}
