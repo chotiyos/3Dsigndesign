@@ -98,7 +98,7 @@ export const MINI_STYLES: StyleDef[] = [
     code: 'B03',
     group: 'mini',
     name: 'อักษรตันคลาสสิก',
-    blurb: 'ตัวอักษรตันเรียบ ใช้ติดผนัง ตั้งโชว์ หรือส่งเข้าเครื่อง CNC ตัดจากแผ่นหนา',
+    blurb: 'ตัวอักษรตันเรียบพิมพ์ 3D ใช้ติดผนังหรือตั้งโชว์',
     make: 'print',
     usesArt: true,
     params: [common.depth(20)],

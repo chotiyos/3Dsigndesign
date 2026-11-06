@@ -19,7 +19,10 @@ export function loadFont(url: string): Promise<LoadedFont> {
     if (!res.ok) throw new Error(`Failed to fetch font ${url}: ${res.status}`)
     const buffer = await res.arrayBuffer()
     return fontFromArrayBuffer(buffer)
-  })()
+  })().catch((error: unknown) => {
+    fontCache.delete(url)
+    throw error
+  })
 
   fontCache.set(url, promise)
   return promise

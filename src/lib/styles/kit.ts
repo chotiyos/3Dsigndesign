@@ -72,7 +72,7 @@ export const p = (
 export const common = {
   depth: (value = 50) => p('depth', 'ความลึกตัวอักษร', value, 5, 200, 1),
   wall: (value = 2) => p('wall', 'ความหนาผนัง', value, 0.8, 10, 0.1),
-  front: (value = 3) => p('front', 'ความหนาหน้าอะคริลิก', value, 1, 10, 0.5),
+  front: (value = 3) => p('front', 'ความหนาแผ่นหน้า', value, 1, 10, 0.5),
   back: (value = 3) => p('back', 'ความหนาแผ่นหลัง', value, 1, 10, 0.5),
   lip: (value = 4) => p('lip', 'ความกว้างบ่า', value, 1, 15, 0.5),
   gap: (value = 0.2) => p('gap', 'ระยะเผื่อสวม', value, 0, 1, 0.05, 'มม.', 'เผื่อให้ชิ้นสวมเข้ากันได้'),

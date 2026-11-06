@@ -107,6 +107,18 @@ describe('changing a part material', () => {
     if (led) expect(withMaterial(led, 'print')).toBe(led)
     expect(withMaterial(face, 'led')).toBe(face)
   })
+
+  it('separates sheet opal from printed opal in files, layers, methods and weights', () => {
+    const printed = withMaterial(face, 'opalprint')
+    const files = unzipSync(buildZip({ baseName: 'opal', parts: [face, printed], readme: '' }))
+    expect(partFolder(face)).not.toBe(partFolder(printed))
+    const cuts = Object.keys(files).filter(name => name.endsWith('.dxf'))
+    expect(cuts).toHaveLength(1)
+    expect(strFromU8(files[cuts[0]])).toContain(`${face.code}_opal`)
+    expect(partMethod(printed)).toBe('พิมพ์ 3D · STL')
+    const [sheetStats, printStats] = partStats([face, printed])
+    expect(printStats.grams / sheetStats.grams).toBeCloseTo(1.27 / 1.19, 5)
+  })
 })
 
 it('balances DXF polylines across layers and holes', () => {

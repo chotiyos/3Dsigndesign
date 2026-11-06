@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
 import { isValidElement, type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 
@@ -18,15 +20,19 @@ vi.mock('react', async (original) => ({
 vi.mock('../router', () => ({ useTitle() {}, useLocation: () => ({ query: new URLSearchParams() }), Link: 'a' }))
 vi.mock('../lib/account', () => ({ useDemo: () => ({}), credits: () => 100, EXPORT_COST: {}, spend: vi.fn() }))
 vi.mock('../lib/artwork', () => ({
-  textToRegion: (_font: unknown, text: string, height: number, spacing: number) => [[
-    [0, 0], [height * 2 + spacing, 0], [height * 2 + spacing, height * (text.includes('\n') ? 2 : 1)], [0, height * (text.includes('\n') ? 2 : 1)],
-  ]],
+  textToRegion: vi.fn((_font: unknown, text: string, height: number, spacing: number) => {
+    const width = text === 'W\niiiiii' ? Math.max(height * 3, height + spacing * 6) : height * 2 + spacing
+    return [[[0, 0], [width, 0], [width, height * (text.includes('\n') ? 2 : 1)], [0, height * (text.includes('\n') ? 2 : 1)]]]
+  }),
   svgToRegion: () => [], imageToRegion: () => [], readImage: vi.fn(),
 }))
 vi.mock('../three/Viewer', () => ({ Viewer: 'viewer' }))
 import Editor, { cleanDraft, portableDraft, Range } from './Editor'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
 import { STYLES } from '../lib/styles'
+import { textToRegion } from '../lib/artwork'
+import { bounds } from '../lib/geo2d'
+import { fontFromArrayBuffer } from '../lib/hb'
 
 function nodes(node: ReactNode): { type: unknown; props: Record<string, any> }[] {
   if (Array.isArray(node)) return node.flatMap(nodes)
@@ -111,4 +117,78 @@ it('gives repeated labels unique ids and labels the numeric input without a slid
   expect(second.find(n => n.type === 'input')!.props.id).not.toBe(input.props.id)
   input.props.onBlur({ target: { value: '100' } })
   expect(props.onChange).toHaveBeenCalledWith(20)
+})
+
+it('fits exact width when the widest line changes, without measuring during unrelated controls', () => {
+  const draft = { ...cleanDraft({}), source: 'text', text: 'W\niiiiii', fontId: FONT_OPTIONS[0].id, heightMM: 100, spacingMM: 100, styleId: STYLES[0].id }
+  harness.states[0] = draft
+  harness.states[3] = { id: draft.fontId, font: {} }
+  const tree = nodes(Editor())
+  vi.mocked(textToRegion).mockClear()
+  tree.find(n => n.props['aria-label'] === 'แสดงตาราง')!.props.onClick()
+  expect(textToRegion).not.toHaveBeenCalled()
+  tree.find(n => n.type === Range && n.props.label === 'กว้างจริง')!.props.onChange(1800.01)
+  const fitted = harness.setters[0].mock.calls[0][0](draft)
+  expect(bounds(textToRegion({} as any, draft.text, fitted.heightMM, draft.spacingMM)).w).toBeCloseTo(1800.01, 2)
+})
+
+it('preserves sub-centimillimetre font sizes needed for an exact width', () => {
+  const draft = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, heightMM: 200, spacingMM: 0, styleId: STYLES[0].id }
+  harness.states[0] = draft
+  harness.states[3] = { id: draft.fontId, font: {} }
+  nodes(Editor()).find(n => n.type === Range && n.props.label === 'กว้างจริง')!.props.onChange(700.01)
+  expect(harness.setters[0].mock.calls[0][0](draft).heightMM * 2).toBeCloseTo(700.01, 4)
+})
+
+it('fits real multiline outlines with tracking across a change of widest line', async () => {
+  const actual = await vi.importActual<typeof import('../lib/artwork')>('../lib/artwork')
+  const bytes = readFileSync('public/fonts/Kanit-Bold.ttf')
+  const font = fontFromArrayBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+  const original = vi.mocked(textToRegion).getMockImplementation()!
+  vi.mocked(textToRegion).mockImplementation(actual.textToRegion)
+  try {
+    for (const spacingMM of [50, -30]) {
+      harness.index = 0
+      const draft = { ...cleanDraft({}), source: 'text', text: 'WW\niiiiii', fontId: FONT_OPTIONS[0].id, heightMM: 100, spacingMM, styleId: STYLES[0].id }
+      harness.states[0] = draft
+      harness.states[3] = { id: draft.fontId, font }
+      const tree = nodes(Editor())
+      tree.find(n => n.type === Range && n.props.label === 'กว้างจริง')!.props.onChange(1000.01)
+      const fitted = harness.setters[0].mock.calls[0][0](draft)
+      expect(bounds(actual.textToRegion(font, draft.text, fitted.heightMM, spacingMM)).w).toBeCloseTo(1000.01, 1)
+    }
+  } finally { vi.mocked(textToRegion).mockImplementation(original) }
+})
+
+it('commits Enter through blur once and does not commit unchanged sizes', () => {
+  const onChange = vi.fn()
+  const input = nodes(Range({ label: 'size', unit: 'mm', value: 10, min: 1, max: 100, step: 1, onChange })).find(n => n.type === 'input')!
+  input.props.onBlur({ target: { value: '10' } })
+  expect(onChange).not.toHaveBeenCalled()
+  const blur = vi.fn(() => input.props.onBlur({ target: { value: '20' } }))
+  input.props.onKeyDown({ key: 'Enter', currentTarget: { blur } })
+  expect(blur).toHaveBeenCalledOnce()
+  expect(onChange).toHaveBeenCalledExactlyOnceWith(20)
+})
+
+it('retains old opal picks and new printed-opal picks through project sanitation', () => {
+  const id = STYLES[0].id
+  expect(cleanDraft({ materials: { [id]: { A: 'opal', B: 'opalprint' } } }).materials).toEqual({ [id]: { A: 'opal', B: 'opalprint' } })
+})
+
+it('disables DXF when every sheet is hidden and allows changing export visibility in step 4', () => {
+  harness.states[0] = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, styleId: STYLES[0].id }
+  harness.states[1] = 4
+  harness.states[3] = { id: FONT_OPTIONS[0].id, font: {} }
+  harness.states[10] = new Set(['A', 'D'])
+  const tree = nodes(Editor())
+  const dxf = tree.find(n => n.type === 'button' && String(n.props.children).includes('DXF'))!
+  expect(dxf.props.disabled).toBe(true)
+  const visibility = tree.find(n => n.type === 'input' && n.props['aria-label']?.startsWith('ส่งออก D '))!
+  expect(visibility.props.checked).toBe(false)
+  visibility.props.onChange()
+  expect(harness.setters[10].mock.calls[0][0](new Set(['A', 'D']))).toEqual(new Set(['A']))
+  harness.index = 0
+  harness.states[10] = new Set(['A'])
+  expect(nodes(Editor()).find(n => n.type === 'button' && String(n.props.children).includes('DXF'))!.props.disabled).toBe(false)
 })

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { textToRegion } from '../lib/artwork'
+import { partMethod } from '../lib/exportModel'
 import { buildStyle, defaultValues, GROUPS, STYLES, type StyleGroup } from '../lib/styles'
 import { useFont } from '../lib/useFont'
 import { MATERIAL_NAMES } from '../three/materials'
@@ -126,7 +127,7 @@ export function StyleDetail({ id }: { id: string }) {
                   <td className="tabular">{part.code}</td>
                   <td>{part.label}</td>
                   <td>{MATERIAL_NAMES[part.material]}</td>
-                  <td>{part.cut ? 'ตัดแผ่นได้' : 'พิมพ์ 3D'}</td>
+                  <td>{partMethod(part)}</td>
                 </tr>
               ))}
             </tbody>

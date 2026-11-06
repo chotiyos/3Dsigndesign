@@ -90,7 +90,11 @@ describe('files follow materials', () => {
       try {
         for (const part of parts) {
           if (part.cut) expect(SHEET.has(part.material), `${part.code} ${part.label} is ${part.material} but has a DXF`).toBe(true)
+          if (part.label.includes('อะคริลิก') && !part.label.includes('บ่า')) expect(['opal', 'acrylic', 'mirror']).toContain(part.material)
         }
+        const front = style.params.find(p => p.key === 'front')
+        // Shared thickness controls must also fit printed and metal faces.
+        if (front && parts.some(p => p.material === 'opalprint')) expect(front.label).not.toContain('อะคริลิก')
         const made = parts.filter((p) => p.material !== 'led')
         const cut = made.filter((p) => p.cut).length
         const actual = cut === 0 ? 'print' : cut === made.length ? 'cut' : 'mixed'
@@ -98,4 +102,11 @@ describe('files follow materials', () => {
       } finally { parts.forEach((p) => p.geometry.dispose()) }
     })
   }
+})
+
+it('does not advertise CNC files for the default printed classic solid', () => {
+  const style = STYLES.find(s => s.id === 'classic-solid')!
+  expect(style.make).toBe('print')
+  expect(style.blurb).toContain('พิมพ์ 3D')
+  expect(style.blurb).not.toContain('CNC')
 })

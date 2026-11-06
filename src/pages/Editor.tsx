@@ -383,20 +383,31 @@ export default function Editor() {
 
   // Artwork size (the lettering itself, before frames or bases), and a width
   // control that scales the height to match: signs are often quoted by width.
-  const artBox = bounds(art)
+  const artBox = useMemo(() => bounds(art), [art])
   const artReady = art.length > 0 && artBox.w > 0 && artBox.h > 0
   const setHeight = (mm: number) => update({ heightMM: Math.round(Math.min(1500, Math.max(10, mm))) })
-  // Size is affine in font size (glyphs scale, letter spacing stays fixed):
-  // size = a * height + b. One extra measurement on commit pins down a and b,
-  // so typing an exact size costs a single re-shape, never one per render.
+  // Fixed tracking makes size piecewise affine: the widest line (or outermost
+  // glyph with negative tracking) can change. Verify each estimate on commit,
+  // never during rendering, and stop once it matches the requested size.
   const solveHeight = (mm: number, axis: 'w' | 'h') => {
     const h0 = deferred.heightMM
     const s0 = artBox[axis]
+    if (Math.abs(mm - s0) <= 0.001) return h0
     if (deferred.source !== 'text' || !font || deferred.spacingMM === 0) return (h0 * mm) / s0
-    const h1 = h0 >= 750 ? h0 / 2 : h0 * 2
-    const s1 = bounds(textToRegion(font, deferred.text, h1, deferred.spacingMM, deferred.lineGap, deferred.align))[axis]
-    const slope = (s1 - s0) / (h1 - h0)
-    return slope > 0 ? h0 + (mm - s0) / slope : (h0 * mm) / s0
+    let previousH = h0
+    let previousS = s0
+    let height = h0 >= 750 ? h0 / 2 : h0 * 2
+    for (let i = 0; i < 4; i++) {
+      const measured = bounds(textToRegion(font, deferred.text, height, deferred.spacingMM, deferred.lineGap, deferred.align))[axis]
+      if (Math.abs(measured - mm) <= 0.01) return height
+      const slope = (measured - previousS) / (height - previousH)
+      const next = Math.min(1500, Math.max(10, slope > 0 ? height + (mm - measured) / slope : height * mm / measured))
+      if (!Number.isFinite(next) || Math.abs(next - height) < 0.0001) return height
+      previousH = height
+      previousS = measured
+      height = next
+    }
+    return height
   }
   const sizeLabel = draft.source === 'text' ? 'ขนาดตัวอักษร (ขนาดฟอนต์)' : 'ความสูงชิ้นงาน'
   const exact = (label: string, axis: 'w' | 'h') => (
@@ -412,7 +423,7 @@ export default function Editor() {
       onChange={(mm) => {
         if (busy || !artReady) return
         const height = solveHeight(mm, axis)
-        if (Number.isFinite(height)) update({ heightMM: Math.round(Math.min(1500, Math.max(10, height)) * 100) / 100 })
+        if (Number.isFinite(height)) update({ heightMM: Math.round(Math.min(1500, Math.max(10, height)) * 1_000_000) / 1_000_000 })
       }}
     />
   )
@@ -728,6 +739,12 @@ export default function Editor() {
                   {stats.map((s) => (
                     <tr key={s.part.id} data-off={hidden.has(s.part.code) || undefined}>
                       <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`ส่งออก ${s.part.code} ${s.part.label}`}
+                          checked={!hidden.has(s.part.code)}
+                          onChange={() => setHidden((h) => { const next = new Set(h); if (next.has(s.part.code)) next.delete(s.part.code); else next.add(s.part.code); return next })}
+                        />{' '}
                         <span className="layer-code">{s.part.code}</span> {s.part.label}
                         <span className="method" data-cut={s.part.cut ? true : undefined}>{partMethod(s.part)}</span>
                         {!s.watertight && <span className="warn" title="ผิวชิ้นงานมีรอยต่อ ให้ตรวจหรือซ่อมใน slicer ก่อนพิมพ์">ตรวจใน slicer</span>}
@@ -802,7 +819,7 @@ export function Range({ label, unit, value, min, max, step, hint, slider = true,
     if (raw.trim() !== '' && Number.isFinite(n)) {
       const clamped = Math.min(max, Math.max(min, n))
       setText(String(clamped))
-      onChange(clamped)
+      if (clamped !== value) onChange(clamped)
     }
     else setText(String(value))
   }
@@ -823,7 +840,7 @@ export function Range({ label, unit, value, min, max, step, hint, slider = true,
             onFocus={() => (focused.current = true)}
             onBlur={(e) => { focused.current = false; commit(e.target.value) }}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && commit((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
           />
           {unit && <span>{unit}</span>}
         </span>
