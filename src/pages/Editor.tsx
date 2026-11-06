@@ -362,6 +362,51 @@ export default function Editor() {
   const exportBlocked = busy || Boolean(error) || (style.usesArt && draft.source === 'text' && !font)
   const hasVisibleParts = parts.some((p) => !hidden.has(p.code))
 
+  // Artwork size (the lettering itself, before frames or bases), and a width
+  // control that scales the height to match: signs are often quoted by width.
+  const artBox = bounds(art)
+  const artReady = art.length > 0 && artBox.w > 0 && artBox.h > 0
+  const setHeight = (mm: number) => update({ heightMM: Math.round(Math.min(1500, Math.max(10, mm))) })
+  const fitTo = (mm: number, measured: number) => {
+    if (artReady) setHeight((deferred.heightMM * mm) / measured)
+  }
+  const sizeLabel = draft.source === 'text' ? 'ขนาดตัวอักษร (ขนาดฟอนต์)' : 'ความสูงชิ้นงาน'
+  const exact = (label: string, measured: number) => (
+    <Range
+      label={label}
+      unit="มม."
+      value={Math.round(measured)}
+      min={Math.ceil((measured * 10) / deferred.heightMM)}
+      max={Math.floor((measured * 1500) / deferred.heightMM)}
+      step={1}
+      slider={false}
+      onChange={(mm) => fitTo(mm, measured)}
+    />
+  )
+  const sizeBox = (
+    <fieldset className="size-box">
+      <legend>ขนาด{draft.source === 'text' ? 'ตัวอักษร' : 'ชิ้นงาน'}</legend>
+      <div className="size-presets" role="group" aria-label={`${sizeLabel}สำเร็จรูป`}>
+        {[50, 100, 200, 300, 500].map((mm) => (
+          <button key={mm} type="button" aria-pressed={draft.heightMM === mm} onClick={() => setHeight(mm)}>
+            {mm >= 100 ? `${mm / 10} ซม.` : `${mm} มม.`}
+          </button>
+        ))}
+      </div>
+      <Range label={sizeLabel} unit="มม." value={draft.heightMM} min={10} max={1500} step={1} onChange={setHeight} />
+      {artReady && (
+        <div className="size-exact">
+          <p className="size-sum">
+            {draft.source === 'text' ? 'หรือสั่งตามขนาดจริงของข้อความ' : 'หรือสั่งตามขนาดจริง'}
+            {draft.source === 'text' && draft.text.includes('\n') && ' (รวมทุกบรรทัด)'} ใส่ตัวเลขแล้วกด Enter สัดส่วนคงเดิม
+          </p>
+          {exact('กว้างจริง', artBox.w)}
+          {exact('สูงจริง', artBox.h)}
+        </div>
+      )}
+    </fieldset>
+  )
+
   return (
     <div className="ed" data-night={night || undefined}>
       <header className="ed-top">
@@ -520,6 +565,7 @@ export default function Editor() {
                     <Icon name="upload" size={16} /> ใช้ฟอนต์ของตัวเอง (.ttf / .otf)
                     <input type="file" accept=".ttf,.otf,font/ttf,font/otf" onChange={onFont} className="sr-only" />
                   </label>
+                  {sizeBox}
                   <Range label="ระยะห่างตัวอักษร" unit="มม." value={draft.spacingMM} min={-30} max={150} step={1} onChange={(v) => update({ spacingMM: v })} />
                   <Range label="ระยะห่างบรรทัด" unit="เท่า" value={draft.lineGap} min={0.8} max={2.5} step={0.05} onChange={(v) => update({ lineGap: v })} />
                   <div className="seg seg-small" role="group" aria-label="จัดแนวบรรทัด">
@@ -540,6 +586,7 @@ export default function Editor() {
                     <span>ใช้เส้นปิดที่เติมสีแล้ว ส่งออกจาก Illustrator, CorelDRAW หรือ Inkscape</span>
                     <input type="file" accept=".svg,image/svg+xml" onChange={onSvg} className="sr-only" />
                   </label>
+                  {sizeBox}
                 </>
               )}
 
@@ -556,10 +603,9 @@ export default function Editor() {
                     <input type="checkbox" checked={draft.invert} onChange={(e) => update({ invert: e.target.checked })} />
                     กลับสี (โลโก้สีอ่อนบนพื้นเข้ม)
                   </label>
+                  {sizeBox}
                 </>
               )}
-
-              <Range label={draft.source === 'text' ? 'ความสูงตัวอักษร' : 'ความสูงชิ้นงาน'} unit="มม." value={draft.heightMM} min={10} max={1500} step={1} onChange={(v) => update({ heightMM: v })} />
 
               <label className="file-btn">
                 <Icon name="file" size={16} /> เปิดไฟล์งาน .jjd
@@ -610,6 +656,7 @@ export default function Editor() {
               <p className="note">
                 <strong>{style.code} {style.name}</strong> {style.blurb}
               </p>
+              {style.usesArt && sizeBox}
               {style.params.map((param) => (
                 <Range
                   key={param.key}
@@ -709,7 +756,7 @@ export default function Editor() {
   )
 }
 
-function Range({ label, unit, value, min, max, step, hint, onChange }: { label: string; unit: string; value: number; min: number; max: number; step: number; hint?: string; onChange: (v: number) => void }) {
+function Range({ label, unit, value, min, max, step, hint, slider = true, onChange }: { label: string; unit: string; value: number; min: number; max: number; step: number; hint?: string; slider?: boolean; onChange: (v: number) => void }) {
   const [text, setText] = useState(String(value))
   const focused = useRef(false)
   useEffect(() => {
@@ -730,6 +777,7 @@ function Range({ label, unit, value, min, max, step, hint, onChange }: { label: 
         <label className="field-label" htmlFor={`r-${label}`}>{label}</label>
         <span className="range-value">
           <input
+            id={slider ? undefined : `r-${label}`}
             type="number"
             inputMode="decimal"
             value={text}
@@ -745,7 +793,7 @@ function Range({ label, unit, value, min, max, step, hint, onChange }: { label: 
           {unit && <span>{unit}</span>}
         </span>
       </div>
-      <input id={`r-${label}`} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      {slider && <input id={`r-${label}`} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />}
       {hint && <small className="range-hint">{hint}</small>}
     </div>
   )
