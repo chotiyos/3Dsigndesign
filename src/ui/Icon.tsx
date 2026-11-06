@@ -1,5 +1,6 @@
 /** Authored icon set: 24px grid, 1.6 stroke, round joins. One family across the site. */
 const PATHS = {
+  scene: 'M3 11 12 3l9 8M5 9v12h14V9M9 11h6v5H9zM12 16v5',
   sun: 'M12 4V2M12 22v-2M4 12H2m20 0h-2M5.6 5.6 4.2 4.2m15.6 15.6-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z',
   grid: 'M3 9h18M3 15h18M9 3v18M15 3v18M3 3h18v18H3z',

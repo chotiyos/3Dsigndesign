@@ -211,6 +211,7 @@ export default function Editor() {
   // the editor's other hooks keep their order.
   const sharedRef = useRef<Partial<Draft> | null | undefined>(undefined)
   if (sharedRef.current === undefined) sharedRef.current = typeof window === 'undefined' ? null : (decodeShare(window.location.hash) as Partial<Draft> | null)
+  const shareRequested = useRef(typeof window !== 'undefined' && window.location.hash.startsWith('#d=')).current
   const shared = sharedRef.current
   const [draft, setDraft] = useState<Draft>(() => initialDraft(query, shared))
   const [step, setStep] = useState<Step>(query.get('style') || shared ? 3 : 1)
@@ -354,11 +355,11 @@ export default function Editor() {
 
   // Explain share imports; autosave removes the launch URL after saving.
   useEffect(() => {
-    if (!window.location.hash.startsWith('#d=')) return
+    if (!shareRequested) return
     setMessage(shared
       ? { tone: 'ok', text: 'เปิดแบบจากลิงก์แชร์แล้ว แก้ต่อได้เลย แบบเดิมของผู้ส่งไม่เปลี่ยน' }
       : { tone: 'error', text: 'ลิงก์แชร์นี้ไม่สมบูรณ์ อาจถูกตัดตอนคัดลอก ขอลิงก์ใหม่จากผู้ส่ง' })
-  }, [shared])
+  }, [shared, shareRequested])
 
   // Fonts used by the extra text blocks (the main text loads its own above).
   const blockFontKey = [...new Set(draft.blocks.map((b) => b.fontId))].filter((id) => id !== CUSTOM_FONT_ID).sort().join(',')
@@ -841,65 +842,68 @@ export default function Editor() {
         {error && <p className="ed-error" role="alert">{error}</p>}
         {!error && parts.length === 0 && !busy && draft.source === 'text' && !font && <p className="ed-hint">กำลังโหลดฟอนต์…</p>}
 
-        {sceneOpen && (
-          <section ref={scenePanel} tabIndex={-1} id="scene-panel" className="ed-scene" aria-label="ฉากติดตั้งจริง" onKeyDown={(e) => e.key === 'Escape' && setSceneOpen(false)}>
-            <div className="ed-scene-head">
-              <span className="option-title">ฉากติดตั้งจริง</span>
-              <button type="button" className="ed-scene-close" aria-label="ปิดแผงฉาก" onClick={() => setSceneOpen(false)}><Icon name="close" size={16} /></button>
-            </div>
-            <div className="seg seg-small" role="group" aria-label="วิธีติดตั้ง">
-              {MOUNTS.map((m) => (
-                <button key={m.id} type="button" aria-pressed={surround.mount === m.id} onClick={() => setSurround((s) => ({ ...s, mount: m.id, heightMM: m.id === 'none' ? s.heightMM : MOUNT_HEIGHT[m.id] }))}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            <label className="check">
-              <input type="checkbox" checked={surround.person} onChange={(e) => setSurround((s) => ({ ...s, person: e.target.checked }))} />
-              คนยืนเทียบขนาด (สูง 1.70 ม.)
-            </label>
-            {surround.mount !== 'none' && (
-              <Range label="พื้นถึงขอบล่างป้าย" unit="มม." value={surround.heightMM} min={300} max={8000} step={50} onChange={(v) => setSurround((s) => ({ ...s, heightMM: v }))} />
-            )}
-            <small className="range-hint">
-              {surround.mount === 'standoff' ? `ขาลอยห่างผนัง 25 มม. ` : ''}ฉาก ผนัง และอุปกรณ์ยึดใช้ดูภาพเท่านั้น ไม่รวมในไฟล์ที่ส่งออก
-            </small>
-          </section>
-        )}
-        <div className="ed-tools" role="group" aria-label="มุมมอง">
-          <button type="button" className="tool" aria-label="ดูตอนเปิดไฟกลางคืน" aria-pressed={night} onClick={() => setNight(!night)} title="ดูตอนเปิดไฟกลางคืน">
-            <Icon name={night ? 'moon' : 'sun'} />
-            <span>{night ? 'กลางคืน' : 'กลางวัน'}</span>
-          </button>
-          <button type="button" className="tool" aria-label="แสดงเส้นขอบ" aria-pressed={edges} onClick={() => setEdges(!edges)} title="แสดงเส้นขอบ">
-            <Icon name="edges" />
-            <span>เส้นขอบ</span>
-          </button>
-          <button type="button" className="tool" aria-label="แสดงตาราง" aria-pressed={grid} onClick={() => setGrid(!grid)} title="แสดงตาราง">
-            <Icon name="grid" />
-            <span>ตาราง</span>
-          </button>
-          <button type="button" className="tool" aria-pressed={sceneActive(surround)} aria-expanded={sceneOpen} aria-controls="scene-panel" onClick={() => setSceneOpen(!sceneOpen)} title="ดูป้ายในที่ติดตั้งจริง">
-            <Icon name="box" />
-            <span>ฉากจริง</span>
-          </button>
-          <label className="tool" title="วางป้ายบนรูปหน้าร้านจริง">
-            <Icon name="camera" />
-            <span>รูปหน้างาน</span>
-            <input type="file" accept="image/*" onChange={onBackdrop} className="sr-only" aria-label="เลือกรูปหน้างาน" />
-          </label>
-          {backdrop && (
-            <button type="button" className="tool" aria-label="เอารูปหน้างานออก" onClick={() => { URL.revokeObjectURL(backdrop); setBackdrop(null) }}>
-              <Icon name="close" />
-              <span>เอารูปออก</span>
-            </button>
+        <div className="ed-view-controls">
+          {sceneOpen && (
+            <section ref={scenePanel} tabIndex={-1} id="scene-panel" className="ed-scene" aria-label="ฉากติดตั้งจริง" onKeyDown={(e) => e.key === 'Escape' && setSceneOpen(false)}>
+              <div className="ed-scene-head">
+                <span className="option-title">ฉากติดตั้งจริง</span>
+                <button type="button" className="ed-scene-close" aria-label="ปิดแผงฉาก" onClick={() => setSceneOpen(false)}><Icon name="close" size={16} /></button>
+              </div>
+              <div className="seg seg-small" role="group" aria-label="วิธีติดตั้ง">
+                {MOUNTS.map((m) => (
+                  <button key={m.id} type="button" aria-pressed={surround.mount === m.id} onClick={() => setSurround((s) => ({ ...s, mount: m.id, heightMM: m.id === 'none' ? s.heightMM : MOUNT_HEIGHT[m.id] }))}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <label className="check">
+                <input type="checkbox" checked={surround.person} onChange={(e) => setSurround((s) => ({ ...s, person: e.target.checked }))} />
+                คนยืนเทียบขนาด (สูง 1.70 ม.)
+              </label>
+              {surround.mount !== 'none' && (
+                <Range label="พื้นถึงขอบล่างป้าย" unit="มม." value={surround.heightMM} min={300} max={8000} step={50} onChange={(v) => setSurround((s) => ({ ...s, heightMM: v }))} />
+              )}
+              <small className="range-hint">
+                {surround.mount === 'standoff' ? `ขาลอยห่างผนัง 25 มม. ` : ''}ฉาก ผนัง และอุปกรณ์ยึดใช้ดูภาพเท่านั้น ไม่รวมในไฟล์ที่ส่งออก
+              </small>
+            </section>
           )}
-          <label className="tool tool-range">
-            <Icon name="explode" />
-            <span>แยกชิ้น</span>
-            <input type="range" min={0} max={150} value={explode} onChange={(e) => setExplode(Number(e.target.value))} aria-label="ระยะแยกชิ้น" />
-            <span className="tabular">{explode}</span>
-          </label>
+          <div className="ed-tools" role="group" aria-label="มุมมอง">
+            <button type="button" className="tool" aria-label="ดูตอนเปิดไฟกลางคืน" aria-pressed={night} onClick={() => setNight(!night)} title="ดูตอนเปิดไฟกลางคืน">
+              <Icon name={night ? 'moon' : 'sun'} />
+              <span>{night ? 'กลางคืน' : 'กลางวัน'}</span>
+            </button>
+            <button type="button" className="tool" aria-label="แสดงเส้นขอบ" aria-pressed={edges} onClick={() => setEdges(!edges)} title="แสดงเส้นขอบ">
+              <Icon name="edges" />
+              <span>เส้นขอบ</span>
+            </button>
+            <button type="button" className="tool" aria-label="แสดงตาราง" aria-pressed={grid} onClick={() => setGrid(!grid)} title="แสดงตาราง">
+              <Icon name="grid" />
+              <span>ตาราง</span>
+            </button>
+            <button type="button" className="tool" aria-label="ฉากจริง" aria-pressed={sceneActive(surround)} aria-expanded={sceneOpen} aria-controls="scene-panel" onClick={() => setSceneOpen(!sceneOpen)} title="ดูป้ายในที่ติดตั้งจริง">
+              <Icon name="scene" />
+              <span>ฉากจริง</span>
+            </button>
+            <label className="tool" title="วางป้ายบนรูปหน้าร้านจริง">
+              <Icon name="camera" />
+              <span>รูปหน้างาน</span>
+              <input type="file" accept="image/*" onChange={onBackdrop} className="sr-only" aria-label="เลือกรูปหน้างาน" />
+            </label>
+            {backdrop && (
+              <button type="button" className="tool" aria-label="เอารูปหน้างานออก" onClick={() => { URL.revokeObjectURL(backdrop); setBackdrop(null) }}>
+                <Icon name="close" />
+                <span>เอารูปออก</span>
+              </button>
+            )}
+            <label className="tool tool-range">
+              <Icon name="explode" />
+              <span>แยกชิ้น</span>
+              <input type="range" min={0} max={150} value={explode} onChange={(e) => setExplode(Number(e.target.value))} aria-label="ระยะแยกชิ้น" />
+              <span className="tabular">{explode}</span>
+            </label>
+          </div>
+
         </div>
 
         <ol className="ed-layers" aria-label="ชิ้นส่วน">

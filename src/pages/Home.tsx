@@ -207,7 +207,7 @@ function ThumbIndex() {
   return (
     <nav className="thumb-index" aria-label="หมวดในแคตตาล็อก">
       {GROUPS.map((g) => (
-        <Link key={g.id} href={`#group-${g.id}`}>
+          <Link key={g.id} href={`#group-${g.id}`} aria-label={`${g.letter} ${g.name}`}>
           <span className="thumb-index-letter">{g.letter}</span>
           <span className="thumb-index-name">{g.name}</span>
         </Link>

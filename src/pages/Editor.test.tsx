@@ -33,6 +33,7 @@ import { STYLES } from '../lib/styles'
 import { textToRegion } from '../lib/artwork'
 import { bounds } from '../lib/geo2d'
 import { fontFromArrayBuffer } from '../lib/hb'
+import { encodeShare } from '../lib/share'
 
 function nodes(node: ReactNode): { type: unknown; props: Record<string, any> }[] {
   if (Array.isArray(node)) return node.flatMap(nodes)
@@ -40,6 +41,24 @@ function nodes(node: ReactNode): { type: unknown; props: Record<string, any> }[]
   return [node as any, ...nodes(node.props.children)]
 }
 beforeEach(() => { harness.query = ''; harness.index = 0; harness.id = 0; harness.states = []; harness.setters = []; harness.effects = [] })
+
+for (const valid of [true, false]) {
+  it(`shows the ${valid ? 'success' : 'error'} share message after consuming the launch URL`, () => {
+    const hash = '#d=' + (valid ? encodeShare({ text: 'Shared design' }) : 'broken')
+    const location = { href: 'https://jjdesign.test/app' + hash, hash }
+    const replaceState = vi.fn(() => { location.hash = '' })
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() })
+    vi.stubGlobal('window', { location, history: { state: null, replaceState }, addEventListener: vi.fn() })
+    try {
+      Editor()
+      harness.effects[2]()
+      expect(replaceState).toHaveBeenCalled()
+      expect(location.hash).toBe('')
+      harness.effects[4]()
+      expect(harness.setters[5]).toHaveBeenCalledWith(expect.objectContaining({ tone: valid ? 'ok' : 'error' }))
+    } finally { vi.unstubAllGlobals() }
+  })
+}
 
 it('removes launch inputs only after autosave succeeds, so refresh keeps later edits', () => {
   vi.useFakeTimers()
