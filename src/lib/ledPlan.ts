@@ -29,13 +29,15 @@ export function planModules(cavity: Region, pitch: number, edge = 5): Point[] {
     return false
   }
   for (const piece of islands(cavity)) {
+    const start = modules.length
     const b = bounds(piece)
     const fine = Math.max(1, Math.min(pitch / 5, Math.min(b.w, b.h) / 6))
     const spots = holeGrid(piece, fine, edge, 8000)
     // Start from the middle of each letter so short strokes get centred modules.
     spots.sort((a, c) => Math.hypot(a[0] - b.cx, a[1] - b.cy) - Math.hypot(c[0] - b.cx, c[1] - b.cy))
     for (const spot of spots) {
-      if (near(spot)) continue
+      // Separate letters still need their own light even when closer than a pitch.
+      if (modules.length > start && near(spot)) continue
       modules.push(spot)
       const k = key(spot[0], spot[1])
       grid.set(k, [...(grid.get(k) ?? []), spot])

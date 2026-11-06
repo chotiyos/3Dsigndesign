@@ -44,3 +44,9 @@ describe('print tips', () => {
     expect(guide.split('\n')).toHaveLength(4)
   })
 })
+
+ it('rejects highly compressed designs above the expanded size limit', () => {
+   const code = encodeShare({ text: 'x'.repeat(1_000_001) })
+   expect(code.length).toBeLessThan(30_000)
+   expect(decodeShare('#d=' + code)).toBeNull()
+ })

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { containModalFocus } from './modalFocus'
 
 export interface TourStep {
   /** CSS selector of the thing this step points at. */
@@ -22,6 +23,8 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
   const [card, setCard] = useState({ w: 340, h: 180 })
   const cardRef = useRef<HTMLDivElement>(null)
   const nextRef = useRef<HTMLButtonElement>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
   const step = shown[Math.min(index, shown.length - 1)]
 
   useLayoutEffect(() => {
@@ -35,6 +38,10 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
   }, [step])
+
+  useEffect(() => {
+    if (cardRef.current) return containModalFocus(cardRef.current, () => closeRef.current())
+  }, [])
 
   useEffect(() => {
     nextRef.current?.focus()
@@ -64,7 +71,7 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
   }
 
   return (
-    <div className="tour" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+    <div className="tour">
       {rect && (
         <div
           className="tour-ring"

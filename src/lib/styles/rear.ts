@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { bounds, circle, diff, intersect, islands, offset, rect, regionArea, union, type Point, type Region } from '../geo2d'
-import { extrude, merge } from '../solid'
+import { extrude } from '../solid'
 import { codeAt, isCuttable } from './kit'
 import { holeGrid } from './lit'
 import type { SignPart } from './types'
@@ -111,13 +111,15 @@ function deskBase(parts: SignPart[], v: Record<string, number>, index: number): 
   const w = box.max.x - box.min.x + 20
   const depth = box.max.z - box.min.z
   const rail = Math.min(8, v.baseH)
-  const railRegion = rect(cx, box.min.y + rail / 2 - 0.5, w, rail + 1)
-  const geometry = merge([
-    extrude(rect(cx, box.min.y - v.baseH / 2, w, v.baseH), depth + v.baseOver * 2, box.min.z - v.baseOver),
-    // 0.2 mm each side so the sign slides into the slot between the rails.
-    extrude(railRegion, 3, box.max.z + 0.2),
-    extrude(railRegion, 3, box.min.z - 3.2),
-  ])
+  // Extrude one united cross-section along X, avoiding overlapping solids.
+  const section = union(
+    rect(-(box.min.z + box.max.z) / 2, box.min.y - v.baseH / 2, depth + v.baseOver * 2, v.baseH),
+    rect(-box.max.z - 1.7, box.min.y + rail / 2 - 0.5, 3, rail + 1),
+    rect(-box.min.z + 1.7, box.min.y + rail / 2 - 0.5, 3, rail + 1),
+  )
+  const geometry = extrude(section, w)
+  geometry.rotateY(Math.PI / 2)
+  geometry.translate(cx - w / 2, 0, 0)
   const code = codeAt(index)
   return { id: `${code}-${index}`, code, label: 'แท่นตั้งโต๊ะ', material: 'print', geometry, explode: 0 }
 }

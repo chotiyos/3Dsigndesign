@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { bounds, circle, diff, islands, rect, regionArea, union, type Region } from '../geo2d'
+import { partStats } from '../exportModel'
 import { planModules, powerFor } from '../ledPlan'
 import { applyMaterials, buildStyle, findStyle, keyhole, rearHoles, STYLES } from './index'
 
@@ -94,4 +95,22 @@ describe('LED estimate', () => {
     expect(powerFor(1000, 0.72).supplies).toBe(3)
     expect(powerFor(0, 0.72).supplies).toBe(0)
   })
+})
+
+it('gives nearby separate hollows at least one module each', () => {
+  const modules = planModules(union(rect(0, 0, 16, 16), rect(20, 0, 16, 16)), 60)
+  expect(modules).toHaveLength(2)
+  expect(modules.some(([x]) => x < 8)).toBe(true)
+  expect(modules.some(([x]) => x > 12)).toBe(true)
+})
+
+it('exports the desk plinth and rails with no overlapping volume', () => {
+  const parts = buildStyle(findStyle('front-lit-lip'), rect(0, 0, 100, 60), { deskBase: 1, baseH: 15, baseOver: 25 })
+  try {
+    const base = parts.at(-1)!
+    const stat = partStats([base])[0]
+    // 120 mm wide; sign depth 53 mm; two 3 mm rails rise 8 mm.
+    expect(stat.volumeCm3).toBeCloseTo(120 * ((53 + 50) * 15 + 6 * 8) / 1000, 3)
+    expect(stat.watertight).toBe(true)
+  } finally { dispose(parts) }
 })

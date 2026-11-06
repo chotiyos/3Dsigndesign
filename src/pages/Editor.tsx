@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Box3 } from 'three'
+import { containModalFocus } from '../ui/modalFocus'
 import { READY_FILES } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
@@ -205,6 +206,7 @@ export default function Editor() {
   const [job, setJob] = useState({ customer: '', job: '', notes: '', prices: true })
   const capture = useRef<(() => string | null) | null>(null)
   const [sheet, setSheet] = useState<string | null>(null)
+  const sheetRoot = useRef<HTMLDivElement>(null)
   const sheetFrame = useRef<HTMLIFrameElement>(null)
   const [panelOpen, setPanelOpen] = useState(true)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -543,11 +545,11 @@ export default function Editor() {
     `${n.toLocaleString('th-TH', { maximumFractionDigits: unit === 'กก.' || unit === 'ตร.ม.' ? 3 : 0 })} ${unit}`
   const setRate = (key: string, raw: number) => {
     const value = Number.isFinite(raw) ? Math.max(0, raw) : 0
-    setRates((r) =>
+    setRates((r) => cleanRates(
       key.startsWith('sheet:')
         ? { ...r, sheet: { ...r.sheet, [key.slice(6)]: value } }
-        : cleanRates({ ...r, [key]: value }),
-    )
+        : { ...r, [key]: value },
+    ))
   }
 
   function openJobSheet() {
@@ -580,6 +582,10 @@ export default function Editor() {
       cost: job.prices ? { ...cost, margin: rates.margin } : null,
     }))
   }
+
+  useEffect(() => {
+    if (sheet && sheetRoot.current) return containModalFocus(sheetRoot.current, () => setSheet(null))
+  }, [sheet])
 
   // Artwork size (the lettering itself, before frames or bases), and a width
   // control that scales the height to match: signs are often quoted by width.
@@ -1194,10 +1200,10 @@ export default function Editor() {
       </aside>
       {tour && <Tour steps={TOUR} onClose={endTour} />}
       {sheet && (
-        <div className="sheet-modal" role="dialog" aria-modal="true" aria-label="ใบงานและใบยืนยันแบบ" onKeyDown={(e) => e.key === 'Escape' && setSheet(null)}>
+        <div ref={sheetRoot} className="sheet-modal" role="dialog" aria-modal="true" aria-label="ใบงานและใบยืนยันแบบ">
           <div className="sheet-bar">
             <strong>ใบงานและใบยืนยันแบบ</strong>
-            <button type="button" className="btn btn-primary" autoFocus onClick={() => sheetFrame.current?.contentWindow?.print()}>
+            <button type="button" className="btn btn-primary" onClick={() => sheetFrame.current?.contentWindow?.print()}>
               <Icon name="download" size={16} /> พิมพ์ / บันทึกเป็น PDF
             </button>
             <button type="button" className="btn btn-ghost" onClick={() => setSheet(null)}>

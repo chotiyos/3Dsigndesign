@@ -2,6 +2,8 @@ import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate'
 
 /** Longest share code we hand out; past this a chat app may cut the link. */
 export const SHARE_LIMIT = 30_000
+/** Cap expanded JSON too: a short DEFLATE code can expand to many megabytes. */
+export const SHARE_JSON_LIMIT = 1_000_000
 
 function toBase64Url(bytes: Uint8Array) {
   let binary = ''
@@ -29,8 +31,10 @@ export function decodeShare(hash: string): Record<string, unknown> | null {
   const match = /^#?d=([A-Za-z0-9_-]+)$/.exec(hash)
   if (!match || match[1].length > SHARE_LIMIT * 2) return null
   try {
-    const parsed = JSON.parse(strFromU8(inflateSync(fromBase64Url(match[1])))) as { app?: string; d?: unknown }
-    if (parsed.app !== 'jjdesign' || !parsed.d || typeof parsed.d !== 'object' || Array.isArray(parsed.d)) return null
+    const bytes = inflateSync(fromBase64Url(match[1]), { out: new Uint8Array(SHARE_JSON_LIMIT + 1) })
+    if (bytes.length > SHARE_JSON_LIMIT) return null
+    const parsed = JSON.parse(strFromU8(bytes)) as { app?: string; v?: number; d?: unknown }
+    if (!parsed || parsed.app !== 'jjdesign' || parsed.v !== 1 || !parsed.d || typeof parsed.d !== 'object' || Array.isArray(parsed.d)) return null
     return parsed.d as Record<string, unknown>
   } catch {
     return null

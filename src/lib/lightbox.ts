@@ -247,7 +247,7 @@ export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: R
     .slab('กรอบข้าง', 'print', ring(shape, o.wall), z, 0)
     .solid('แผ่นกระจายแสง', 'opalprint', diffuser, 1)
     // Reference only: a strip stuck around the inside of the frame, facing in.
-    .slab('ไฟเส้น LED', 'led', band(shape, o.wall + 0.2, 2), 10, o.back + 2, -0.4)
+    .slab('ไฟเส้น LED', 'led', band(shape, o.wall + 0.2, 2), Math.min(10, o.depth - 2 - plug), o.back + 2, -0.4)
   const order: number[] = []
   placed.forEach((region, j) => {
     if (region.length) order.push(j)

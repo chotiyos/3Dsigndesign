@@ -112,3 +112,14 @@ describe('buildLightbox', () => {
     parts.forEach((p) => p.geometry.dispose())
   })
 })
+
+it('keeps the LED strip clear of the diffuser plug at minimum depth', () => {
+  const { parts } = buildLightbox({ width: 60, height: 40 }, [], [], { ...DEFAULT_LIGHTBOX, depth: 12 })
+  try {
+    const led = parts.find(p => p.material === 'led')!.geometry
+    const face = parts.find(p => p.material === 'opalprint')!.geometry
+    led.computeBoundingBox()
+    face.computeBoundingBox()
+    expect(led.boundingBox!.max.z).toBeLessThanOrEqual(face.boundingBox!.min.z)
+  } finally { parts.forEach(p => p.geometry.dispose()) }
+})

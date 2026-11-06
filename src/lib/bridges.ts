@@ -93,14 +93,14 @@ export function bridgeArt(art: Region, mode: BridgeMode, width: number): { regio
   }
   const bars: Region[] = []
   const join = (candidates: [number, number][]) => {
-    const edges = candidates.map(([i, j]) => ({ i, j, ...pair(i, j) })).sort((a, c) => a.d - c.d)
+    const edges = candidates.filter(([i, j]) => wanted(i, j)).map(([i, j]) => ({ i, j, ...pair(i, j) })).sort((a, c) => a.d - c.d)
     for (const e of edges) {
       if (!wanted(e.i, e.j)) continue
       const a = root(e.i)
       const c = root(e.j)
       parent[a] = c
       anchored[c] = anchored[c] || anchored[a]
-      if (e.d < 0.01) continue
+      if (e.d === 0) continue
       const dx = (e.to[0] - e.from[0]) / e.d
       const dy = (e.to[1] - e.from[1]) / e.d
       const reach = Math.min(width * 0.5, 1)
@@ -117,10 +117,24 @@ export function bridgeArt(art: Region, mode: BridgeMode, width: number): { regio
       .forEach(({ j }) => near.push([i, j]))
   })
   join(near)
-  if (!done()) {
-    const all: [number, number][] = []
-    for (let i = 0; i < found.length; i++) for (let j = i + 1; j < found.length; j++) if (root(i) !== root(j)) all.push([i, j])
-    join(all)
+  while (!done()) {
+    // Connect each remaining group by its nearest eligible edge. Box gaps
+    // bound exact outline distances, so distant pairs need no vertex search.
+    const best = new Map<number, { i: number; j: number; d: number }>()
+    for (let i = 0; i < found.length; i++) {
+      for (let j = i + 1; j < found.length; j++) {
+        if (!wanted(i, j)) continue
+        const a = root(i)
+        const c = root(j)
+        const gap = boxGap(found[i], found[j])
+        if (gap >= (best.get(a)?.d ?? Infinity) && gap >= (best.get(c)?.d ?? Infinity)) continue
+        const { d } = pair(i, j)
+        if (d < (best.get(a)?.d ?? Infinity)) best.set(a, { i, j, d })
+        if (d < (best.get(c)?.d ?? Infinity)) best.set(c, { i, j, d })
+      }
+    }
+    if (!best.size) break
+    join([...best.values()].map(({ i, j }) => [i, j]))
   }
   return bars.length ? { region: union(art, ...bars), bars: bars.length } : { region: art, bars: 0 }
 }

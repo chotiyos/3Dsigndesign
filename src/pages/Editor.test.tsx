@@ -244,3 +244,16 @@ it('disables DXF when every sheet is hidden and allows changing export visibilit
   harness.states[10] = new Set(['A'])
   expect(nodes(Editor()).find(n => n.type === 'button' && String(n.props.children).includes('DXF'))!.props.disabled).toBe(false)
 })
+
+it('clamps live sheet rates with the same limits used for saved rates', () => {
+  harness.states[0] = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, styleId: STYLES[0].id }
+  harness.states[1] = 4
+  harness.states[3] = { id: FONT_OPTIONS[0].id, font: {} }
+  const tree = nodes(Editor())
+  const input = tree.find(n => n.type === 'input' && String(n.props['aria-label']).includes('\u0e15\u0e23.\u0e21.'))!
+  expect(input).toBeDefined()
+  input.props.onChange({ target: { value: '1e308' } })
+  const update = harness.setters[14].mock.calls.at(-1)![0]
+  const rates = update({ shop: '', filament: 450, sheet: {}, led: 0, psu: 0, labour: 0, margin: 0 })
+  expect(Object.values(rates.sheet)).toEqual([1_000_000])
+})

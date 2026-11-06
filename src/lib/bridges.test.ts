@@ -37,3 +37,18 @@ describe('bridgeArt', () => {
     expect(bridgeArt(letters, 1, 2)).toEqual({ region: letters, bars: 0 })
   })
 })
+
+it('bridges sub-centimetre gaps instead of only marking them connected', () => {
+  const result = bridgeArt(union(rect(0, 0, 10, 30), rect(10.005, 0, 10, 30)), 2, 1)
+  expect(result.bars).toBe(1)
+  expect(islands(result.region)).toHaveLength(1)
+})
+
+it('connects many separated clusters without an exhaustive outline search', () => {
+  const clustered = union(...Array.from({ length: 140 }, (_, i) => circle(Math.floor(i / 7) * 200 + (i % 7) * 12, 0, 4, 64)))
+  const start = performance.now()
+  const result = bridgeArt(clustered, 2, 1)
+  expect(islands(result.region)).toHaveLength(1)
+  expect(result.bars).toBe(139)
+  expect(performance.now() - start).toBeLessThan(5000)
+}, 10000)

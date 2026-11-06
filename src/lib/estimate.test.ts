@@ -64,3 +64,13 @@ describe('jobSheetHtml', () => {
     expect(html).toContain('ลูกค้าอนุมัติแบบ')
   })
 })
+
+it('escapes image attributes and cost units in the printable HTML', () => {
+  const html = jobSheetHtml({ shop: '', customer: '', job: '', notes: '', date: new Date(),
+    image: 'x" onerror="alert(1)', style: '', text: '', size: { w: 1, h: 1, d: 1 }, parts: [], figures: [],
+    cost: { lines: [{ key: 'x', label: '', qty: 1, unit: '<script>alert(1)</script>', rate: 0, amount: 0 }], subtotal: 0, markup: 0, margin: 0, total: 0 },
+  })
+  expect(html).not.toContain('src="x" onerror=')
+  expect(html).not.toContain('<script>')
+  expect(html).toContain('&lt;script&gt;')
+})

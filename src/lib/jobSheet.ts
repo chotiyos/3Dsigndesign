@@ -21,7 +21,7 @@ export interface JobSheetData {
 const esc = (text: string) =>
   text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
-const qty = (n: number, unit: string) => `${n.toLocaleString('th-TH', { maximumFractionDigits: unit === 'กก.' || unit === 'ตร.ม.' ? 3 : 0 })} ${unit}`
+const qty = (n: number, unit: string) => `${n.toLocaleString('th-TH', { maximumFractionDigits: unit === 'กก.' || unit === 'ตร.ม.' ? 3 : 0 })} ${esc(unit)}`
 
 /**
  * A one-page A4 job sheet for the customer to approve: picture, sizes, parts,
@@ -36,7 +36,7 @@ export function jobSheetHtml(d: JobSheetData): string {
   const cost = d.cost
     ? `<h2>ราคา</h2><table><thead><tr><th>รายการ</th><th class="num">จำนวน</th><th class="num">ราคาต่อหน่วย</th><th class="num">บาท</th></tr></thead><tbody>${d.cost.lines
         .map((l) => `<tr><td>${esc(l.label)}</td><td class="num">${qty(l.qty, l.unit)}</td><td class="num">${baht(l.rate)}</td><td class="num">${baht(l.amount)}</td></tr>`)
-        .join('')}${d.cost.markup ? `<tr><td colspan="3">บวกเพิ่ม ${d.cost.margin}%</td><td class="num">${baht(d.cost.markup)}</td></tr>` : ''}</tbody><tfoot><tr><td colspan="3">รวม</td><td class="num">${baht(d.cost.total)}</td></tr></tfoot></table>`
+        .join('')}${d.cost.markup ? `<tr><td colspan="3">บวกเพิ่ม ${esc(String(d.cost.margin))}%</td><td class="num">${baht(d.cost.markup)}</td></tr>` : ''}</tbody><tfoot><tr><td colspan="3">รวม</td><td class="num">${baht(d.cost.total)}</td></tr></tfoot></table>`
     : ''
   return `<!doctype html>
 <html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -77,7 +77,7 @@ tfoot td{font-weight:700;font-size:14px;border-top:2px solid #14213d;border-bott
 <header><div><h1>ใบงานและใบยืนยันแบบป้าย</h1>${d.shop ? `<div>${esc(d.shop)}</div>` : ''}</div>
 <div class="meta">${d.job ? `<div>งาน: <b>${esc(d.job)}</b></div>` : ''}${d.customer ? `<div>ลูกค้า: <b>${esc(d.customer)}</b></div>` : ''}<div>วันที่ ${esc(date)}</div></div></header>
 <section class="top">
-<div class="pic">${d.image ? `<img src="${d.image}" alt="ภาพป้าย">` : '<span>ไม่มีภาพ</span>'}</div>
+<div class="pic">${d.image ? `<img src="${esc(d.image)}" alt="ภาพป้าย">` : '<span>ไม่มีภาพ</span>'}</div>
 <div><dl>
 <dt>แบบ</dt><dd>${esc(d.style)}</dd>
 ${d.text ? `<dt>ข้อความ</dt><dd>${esc(d.text).replace(/\n/g, '<br>')}</dd>` : ''}
