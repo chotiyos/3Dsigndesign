@@ -18,11 +18,11 @@ vi.mock('../lib/styles', async (original) => ({
   ...await original<typeof import('../lib/styles')>(), buildStyle: vi.fn(),
 }))
 vi.mock('../lib/exportModel', () => ({
-  partsToStl: vi.fn(), downloadBlob: vi.fn(), safeName: (name: string) => name,
+  printableStl: vi.fn(), downloadBlob: vi.fn(), safeName: (name: string) => name,
 }))
 
 import { spend } from '../lib/account'
-import { downloadBlob, partsToStl } from '../lib/exportModel'
+import { downloadBlob, printableStl } from '../lib/exportModel'
 import { buildStyle } from '../lib/styles'
 import { Files } from './Shop'
 import { READY_FILES } from '../data/shop'
@@ -52,7 +52,7 @@ it('generates the ready-file STL before charging and releases its geometry', asy
   const geometry = new BoxGeometry()
   const dispose = vi.spyOn(geometry, 'dispose')
   vi.mocked(buildStyle).mockReturnValue([{ id: 'A', code: 'A', label: 'test', material: 'print', explode: 0, geometry }])
-  vi.mocked(partsToStl).mockImplementation(() => {
+  vi.mocked(printableStl).mockImplementation(() => {
     expect(spend).not.toHaveBeenCalled()
     return new Uint8Array([1])
   })
@@ -66,7 +66,7 @@ it('does not charge or download when ready-file STL generation fails', async () 
   const geometry = new BoxGeometry()
   const dispose = vi.spyOn(geometry, 'dispose')
   vi.mocked(buildStyle).mockReturnValue([{ id: 'A', code: 'A', label: 'test', material: 'print', explode: 0, geometry }])
-  vi.mocked(partsToStl).mockImplementation(() => { throw new Error('export failed') })
+  vi.mocked(printableStl).mockImplementation(() => { throw new Error('export failed') })
   await firstDownload(Files())!()
   expect(spend).not.toHaveBeenCalled()
   expect(downloadBlob).not.toHaveBeenCalled()

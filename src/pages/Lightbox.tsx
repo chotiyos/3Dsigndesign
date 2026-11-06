@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
-import { buildZip, downloadBlob, partsToStl, safeName } from '../lib/exportModel'
+import { buildZip, downloadBlob, printableStl, safeName } from '../lib/exportModel'
 import { lightboxReadme } from '../lib/lightboxReadme'
 import {
   borderColour, buildLightbox, DEFAULT_LIGHTBOX, quantize, stripLength, toHex, traceColours,
@@ -126,7 +126,7 @@ export default function Lightbox() {
     const cost = EXPORT_COST[kind]
     try {
       const data = kind === 'stl'
-        ? partsToStl(parts)
+        ? printableStl(parts)
         : buildZip({ baseName, parts, readme: lightboxReadme(parts) })
       if (!spend(cost, `${kind.toUpperCase()} กล่องไฟ ${baseName}`)) {
         setMessage({ tone: 'error', text: `เครดิตทดลองไม่พอ ต้องใช้ ${cost} เครดิต เหลือ ${credits(demo)} เครดิต` })

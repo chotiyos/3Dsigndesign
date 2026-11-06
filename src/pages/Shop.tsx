@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { READY_FILES, type ReadyFile } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { textToRegion } from '../lib/artwork'
-import { downloadBlob, partsToStl, safeName } from '../lib/exportModel'
+import { downloadBlob, printableStl, safeName } from '../lib/exportModel'
 import { FONT_OPTIONS } from '../lib/fonts'
 import { loadFont } from '../lib/hb'
 import { buildStyle, defaultValues, findStyle } from '../lib/styles'
@@ -28,7 +28,7 @@ export function Files() {
       const parts = buildStyle(style, art, { ...defaultValues(style), ...file.values })
       let data: Uint8Array
       try {
-        data = partsToStl(parts)
+        data = printableStl(parts)
       } finally {
         parts.forEach((part) => part.geometry.dispose())
       }

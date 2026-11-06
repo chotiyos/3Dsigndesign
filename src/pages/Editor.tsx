@@ -10,7 +10,7 @@ import { jobSheetHtml } from '../lib/jobSheet'
 import { printGuide } from '../lib/printTips'
 import { decodeShare, encodeShare, SHARE_LIMIT } from '../lib/share'
 import { buildDxf } from '../lib/exportDxf'
-import { modelSize, partRow, partsList, buildZip, downloadBlob, dxfLayer, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
+import { modelSize, partRow, partsList, buildZip, downloadBlob, dxfLayer, partMethod, partStats, printableStl, visiblePartCount, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
 import { bounds, union, type Region } from '../lib/geo2d'
 import { planModules, powerFor, PSU_LOAD } from '../lib/ledPlan'
@@ -474,7 +474,7 @@ export default function Editor() {
   function exportStl() {
     const visible = parts.filter((p) => !hidden.has(p.code))
     if (visible.length === 0) return
-    exportFile(EXPORT_COST.stl, 'stl', 'model/stl', () => partsToStl(visible))
+    exportFile(EXPORT_COST.stl, 'stl', 'model/stl', () => printableStl(visible))
   }
 
   function exportDxf() {
@@ -811,7 +811,7 @@ export default function Editor() {
           <span>{style.name}</span>
           {parts.length > 0 && (
             <span className="tabular">
-              {size.w.toFixed(1)} × {size.h.toFixed(1)} × {size.d.toFixed(1)} มม. · {parts.length} ชิ้น
+              {size.w.toFixed(1)} × {size.h.toFixed(1)} × {size.d.toFixed(1)} มม. · {visiblePartCount(parts, hidden)}
             </span>
           )}
           {busy && <span className="ed-busy">กำลังคำนวณ…</span>}

@@ -65,7 +65,7 @@ for (const id of ['front-lit-lip', 'bolt-nut', 'desk-curl']) {
           }
         }
         expect(Object.keys(files).sort()).toEqual(expected.sort())
-        checkStl(files['sample-ทั้งหมด.stl'], parts)
+        checkStl(files['sample-ทั้งหมด.stl'], parts.filter(p => p.material !== 'led'))
         expect(strFromU8(files['รายการชิ้นส่วน.txt'])).toBe('parts list')
       } finally {
         parts.forEach((p) => p.geometry.dispose())

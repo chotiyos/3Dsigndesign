@@ -15,6 +15,19 @@ export function partsToStl(parts: SignPart[]): Uint8Array {
   return new Uint8Array(result.buffer, result.byteOffset, result.byteLength)
 }
 
+/** Bought LED geometry is retained only in individual reference files. */
+export function printableStl(parts: SignPart[]) {
+  const printable = parts.filter(part => part.material !== 'led')
+  if (!printable.length) throw new Error('ไม่มีชิ้นส่วนสำหรับพิมพ์ 3D')
+  return partsToStl(printable)
+}
+
+export function visiblePartCount(parts: SignPart[], hidden: ReadonlySet<string>) {
+  const visible = parts.filter(part => !hidden.has(part.code)).length
+  const count = parts.length - visible
+  return `${visible} ชิ้น${count ? ` (ซ่อน ${count})` : ''}`
+}
+
 export function safeName(text: string) {
   const cleaned = text.replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').trim().slice(0, 40)
   return cleaned || 'jjdesign'
@@ -46,7 +59,7 @@ export const dxfLayer = (part: SignPart) => `${part.code}_${part.material}`
  */
 export function buildZip({ baseName, parts, readme }: ZipOptions): Uint8Array {
   const files: Record<string, Uint8Array> = {}
-  files[`${baseName}-ทั้งหมด.stl`] = partsToStl(parts)
+  if (parts.some(part => part.material !== 'led')) files[`${baseName}-ทั้งหมด.stl`] = printableStl(parts)
   for (const part of parts) {
     const stem = `${partFolder(part)}/${part.code}-${safeName(part.label)}`
     files[`${stem}.stl`] = partsToStl([part])

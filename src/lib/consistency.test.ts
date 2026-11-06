@@ -3,7 +3,7 @@ import { strFromU8, unzipSync } from 'fflate'
 import { Box3, BufferAttribute, BufferGeometry, Vector3 } from 'three'
 import { applyMaterials, buildStyle, defaultValues, STYLES, type SignPart } from './styles'
 import { bounds, diff, islands, rect, union, type Region } from './geo2d'
-import { buildZip, dxfLayer, modelSize, partFolder, partRow, partsList, partStats, partsToStl, safeName } from './exportModel'
+import { buildZip, dxfLayer, modelSize, partFolder, partRow, partsList, partStats, partsToStl, printableStl, visiblePartCount, safeName } from './exportModel'
 import { buildDxf } from './exportDxf'
 import { analyse } from './solid'
 import { bridgeArt } from './bridges'
@@ -86,9 +86,9 @@ function check(parts: SignPart[], hidden = new Set<string>()) {
   const files = unzipSync(buildZip({ baseName: 'test', parts: visible, readme: list }))
   expect(strFromU8(files['รายการชิ้นส่วน.txt'])).toBe(list)
   expect(list.split('\n').length).toBe(visible.length)
-  const combined = decode(partsToStl(visible))
+  const combined = decode(printableStl(visible))
   const zipCombined = files[Object.keys(files).find(n => !n.includes('/') && n.endsWith('.stl'))!]
-  expect(Buffer.compare(zipCombined, partsToStl(visible))).toBe(0)
+  expect(Buffer.compare(zipCombined, printableStl(visible))).toBe(0)
   const expectedBox = new Box3()
   const expectedPositions: number[] = []
   for (const s of stats) {
@@ -98,9 +98,9 @@ function check(parts: SignPart[], hidden = new Set<string>()) {
     expect(position.count, p.label).toBeGreaterThan(0)
     expect(Array.from(position.array).every(Number.isFinite), p.label).toBe(true)
     const flat = geometry.index ? geometry.toNonIndexed() : geometry
-    for (const value of flat.getAttribute('position').array) expectedPositions.push(value)
+    if (p.material !== 'led') for (const value of flat.getAttribute('position').array) expectedPositions.push(value)
     geometry.computeBoundingBox()
-    expectedBox.union(geometry.boundingBox!)
+    if (p.material !== 'led') expectedBox.union(geometry.boundingBox!)
     const stem = `${partFolder(p)}/${p.code}-${safeName(p.label)}`
     const parsed = decode(files[`${stem}.stl`])
     nearBox(parsed.boundingBox!, geometry.boundingBox!)
@@ -109,6 +109,7 @@ function check(parts: SignPart[], hidden = new Set<string>()) {
     if (s.watertight) expect(analyse(parsed).watertight, p.label).toBe(true)
     if (p.cut) {
       checkDxf(strFromU8(files[`${stem}.dxf`]), p.cut)
+      expect(strFromU8(files[`${stem}.dxf`])).toContain(`\n8\n${p.code}_${p.material}\n`)
       checkDxf(buildDxf([{ layer: dxfLayer(p), region: p.cut }]), p.cut)
     } else expect(files[`${stem}.dxf`]).toBeUndefined()
     parsed.dispose()
@@ -118,7 +119,9 @@ function check(parts: SignPart[], hidden = new Set<string>()) {
   expect(Array.from(combined.getAttribute('position').array)).toEqual(expectedPositions)
   nearBox(combined.boundingBox!, expectedBox)
   const size = modelSize(visible)
-  const actual = combined.boundingBox!.getSize(new Vector3())
+  const previewBox = new Box3()
+  visible.forEach(p => previewBox.union(p.geometry.boundingBox!))
+  const actual = previewBox.getSize(new Vector3())
   expect([size.w, size.h, size.d]).toEqual(actual.toArray())
   expect(Object.keys(files).filter(n => n.endsWith('.stl')).length).toBe(visible.length + 1)
   expect(Object.keys(files).filter(n => n.endsWith('.dxf')).length).toBe(visible.filter(p => p.cut).length)
@@ -154,6 +157,33 @@ function check(parts: SignPart[], hidden = new Set<string>()) {
 }
 
 describe('preview / manufacturing file consistency', () => {
+  it('counts visible parts, ignoring stale hidden codes', () => {
+    const parts = buildStyle(STYLES[0], lettering(100), defaultValues(STYLES[0]))
+    try {
+      expect(visiblePartCount(parts, new Set())).toBe(parts.length + ' ชิ้น')
+      expect(visiblePartCount(parts, new Set([parts[0].code, 'stale']))).toBe((parts.length - 1) + ' ชิ้น (ซ่อน 1)')
+      expect(visiblePartCount(parts, new Set(parts.map(p => p.code)))).toBe('0 ชิ้น (ซ่อน ' + parts.length + ')')
+    } finally { parts.forEach(p => p.geometry.dispose()) }
+  })
+  it('keeps LED-only reference files and refuses an empty printable STL', () => {
+    const parts = buildLightbox({ width: 60, height: 40 }, [rect(30, -20, 20, 20)], [{ on: true, colour: '#123456', thick: .6 }], DEFAULT_LIGHTBOX).parts
+    try {
+      const leds = parts.filter(p => p.material === 'led')
+      expect(leds.length).toBeGreaterThan(0)
+      expect(() => printableStl(leds)).toThrow('ไม่มีชิ้นส่วนสำหรับพิมพ์ 3D')
+      expect(() => printableStl([])).toThrow('ไม่มีชิ้นส่วนสำหรับพิมพ์ 3D')
+      const list = partsList(partStats(leds))
+      const files = unzipSync(buildZip({ baseName: 'led', parts: leds, readme: list }))
+      expect(files['led-ทั้งหมด.stl']).toBeUndefined()
+      expect(list).toContain('ตำแหน่งอ้างอิง')
+      expect(list).toContain('ซื้อสำเร็จ')
+      for (const p of leds) {
+        const parsed = decode(files[partFolder(p) + '/' + p.code + '-' + safeName(p.label) + '.stl'])
+        nearBox(parsed.boundingBox!, p.geometry.boundingBox!)
+        parsed.dispose()
+      }
+    } finally { parts.forEach(p => p.geometry.dispose()) }
+  })
   it('covers the complete 51-style catalogue', () => expect(STYLES).toHaveLength(51))
   for (const style of STYLES) for (const height of [30, 600]) {
     it(`${style.code} ${height} mm: defaults and every geometry choice`, () => {
@@ -201,7 +231,13 @@ describe('preview / manufacturing file consistency', () => {
     const model = buildLightbox({ width: 60, height: 40 }, [rect(30, -20, 20, 20), rect(50, -20, 10, 10)], [{ on: true, colour: '#ff0000', thick: .6 }, { on: false, colour: '#00ff00', thick: .8 }], { ...DEFAULT_LIGHTBOX, shape })
     try {
       check(model.parts)
-      expect(model.parts.filter(p => p.material === 'accent')).toHaveLength(1)
+      const colours = model.parts.filter(p => p.material === 'accent')
+      expect(colours).toHaveLength(1)
+      for (const part of colours) {
+        expect(part.label).toContain(model.colours[part.code])
+        const files = unzipSync(buildZip({ baseName: 'colours', parts: model.parts, readme: '' }))
+        expect(Object.keys(files)).toContain(`${partFolder(part)}/${part.code}-${safeName(part.label)}.stl`)
+      }
       const length = stripLength(model.parts)
       expect(length).toBeGreaterThan(0)
       const readme = lightboxReadme(model.parts)
