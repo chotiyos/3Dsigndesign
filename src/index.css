@@ -1496,13 +1496,13 @@ input[type='range'] {
   margin: 0;
   padding: 12px 14px 14px;
   border: 1px solid var(--rule);
-  border-left: 4px solid var(--signal);
   border-radius: var(--radius);
   background: var(--sheet);
   min-width: 0;
 }
 
 .size-box legend {
+  border-bottom: 2px solid var(--signal);
   padding: 0 6px;
   margin-left: -6px;
   font-family: var(--display);
