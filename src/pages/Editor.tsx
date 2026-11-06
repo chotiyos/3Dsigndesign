@@ -422,7 +422,7 @@ export default function Editor() {
       return
     }
     const code = encodeShare({ ...portableDraft(draft, art), fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId })
-    if (code.length > SHARE_LIMIT) {
+    if (!code || code.length > SHARE_LIMIT) {
       setShareUrl(null)
       setMessage({ tone: 'error', text: 'แบบนี้ละเอียดเกินกว่าจะใส่ในลิงก์ (มักเป็นรูปหรือ SVG ที่มีเส้นมาก) ส่งไฟล์งาน .jjd แทน' })
       return

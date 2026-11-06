@@ -1,7 +1,8 @@
 import { unzipSync } from 'fflate'
+import { analyse } from './solid'
 import { describe, expect, it } from 'vitest'
 import { buildZip } from './exportModel'
-import { bounds, diff, offset, regionArea } from './geo2d'
+import { bounds, diff, offset, rect, regionArea } from './geo2d'
 import { borderColour, buildLightbox, DEFAULT_LIGHTBOX, quantize, stripLength, toHex, traceColours, type LightboxShape } from './lightbox'
 
 /** 60×40 navy picture with a large green field and a small yellow square, plus a few anti-aliased edge pixels. */
@@ -23,6 +24,14 @@ function picture() {
 }
 
 describe('quantize', () => {
+  it('keeps foreground colours when transparency dominates the image border', () => {
+    const q = quantize(picture(), 3)
+    for (let x = 0; x < q.width; x++) {
+      q.labels[x] = 255
+      q.labels[(q.height - 1) * q.width + x] = 255
+    }
+    expect(borderColour(q)).toBe(-1)
+  })
   it('finds the real colours rather than rare edge shades, the same way every time', () => {
     const q = quantize(picture(), 3)
     // Each real colour has a palette entry within a few levels (edge shades pull a little).
@@ -48,6 +57,34 @@ describe('quantize', () => {
 })
 
 describe('buildLightbox', () => {
+  it('joins the diffuser plug to the face as a manifold surface without internal caps', () => {
+    const { parts } = buildLightbox({ width: 60, height: 40 }, [], [], DEFAULT_LIGHTBOX)
+    try {
+      const face = parts.find(p => p.material === 'opalprint')!.geometry
+      expect(analyse(face).watertight).toBe(true)
+      const p = face.getAttribute('position')
+      const n = face.getAttribute('normal')
+      const seam = DEFAULT_LIGHTBOX.back + DEFAULT_LIGHTBOX.depth
+      // At the join there is only the exposed underside, never an upward cap.
+      for (let i = 0; i < p.count; i += 3) {
+        if (Math.abs(p.getZ(i) - seam) < 0.001) expect(n.getZ(i)).toBeLessThanOrEqual(0)
+      }
+    } finally { parts.forEach(p => p.geometry.dispose()) }
+  })
+  for (const shape of ['circle', 'hex'] as const) {
+    it(`keeps artwork upright in a small ${shape} box with maximum margin`, () => {
+      const { parts } = buildLightbox(
+        { width: 10, height: 10 }, [rect(7, -5, 10, 10)],
+        [{ on: true, colour: '#123456', thick: 0.6 }],
+        { ...DEFAULT_LIGHTBOX, shape, width: 60, margin: 30 },
+      )
+      try {
+        const art = parts.find(p => p.material === 'accent')
+        expect(art).toBeDefined()
+        expect(bounds(art!.profile!.region).cx).toBeGreaterThan(0)
+      } finally { parts.forEach(p => p.geometry.dispose()) }
+    })
+  }
   const q = quantize(picture(), 3)
   const colours = traceColours(q)
   const background = borderColour(q)
@@ -61,6 +98,7 @@ describe('buildLightbox', () => {
         const labels = parts.map((p) => p.label)
         expect(labels).toEqual(expect.arrayContaining(['ฝาหลังสวมใน', 'กรอบข้าง', 'แผ่นกระจายแสง', 'ไฟเส้น LED']))
         const printed = parts.filter((p) => p.material === 'accent')
+        expect(analyse(parts.find(p => p.material === 'opalprint')!.geometry).watertight).toBe(true)
         expect(printed).toHaveLength(2)
         expect(Object.values(tints).sort()).toEqual(layers.filter((l) => l.on).map((l) => l.colour).sort())
         expect(width).toBeCloseTo(shape === 'contour' ? width : 160, 0)

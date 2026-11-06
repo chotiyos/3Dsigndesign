@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { deflateSync, strToU8 } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { rect } from './geo2d'
 import { printGuide, printTip } from './printTips'
@@ -46,7 +47,12 @@ describe('print tips', () => {
 })
 
  it('rejects highly compressed designs above the expanded size limit', () => {
-   const code = encodeShare({ text: 'x'.repeat(1_000_001) })
+   const bytes = deflateSync(strToU8(JSON.stringify({ app: 'jjdesign', v: 1, d: { text: 'x'.repeat(1_000_001) } })))
+   const code = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
    expect(code.length).toBeLessThan(30_000)
    expect(decodeShare('#d=' + code)).toBeNull()
  })
+
+it('does not offer designs above the expanded byte limit even when they compress well', () => {
+  expect(encodeShare({ svgText: 'ก'.repeat(400_000) })).toBe('')
+})

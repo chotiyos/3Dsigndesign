@@ -1,5 +1,6 @@
 import { traceMask } from './artwork'
-import { band, bounds, hull, intersect, islands, ngon, offset, regionArea, ring, roundRect, union, type Region } from './geo2d'
+import { BufferGeometry, Float32BufferAttribute } from 'three'
+import { band, bounds, diff, hull, intersect, islands, ngon, offset, regionArea, ring, roundRect, union, type Region } from './geo2d'
 import { extrude, merge } from './solid'
 import { Parts } from './styles/kit'
 import { applyRear } from './styles/rear'
@@ -125,9 +126,11 @@ function majority(labels: Uint8Array, width: number, height: number, k: number) 
 /** The colour that covers most of the image's border: usually the background. */
 export function borderColour(q: Quantized) {
   const tally = q.palette.map(() => 0)
+  let transparent = 0
   const add = (x: number, y: number) => {
     const label = q.labels[y * q.width + x]
     if (label !== TRANSPARENT) tally[label]++
+    else transparent++
   }
   for (let x = 0; x < q.width; x++) {
     add(x, 0)
@@ -138,7 +141,7 @@ export function borderColour(q: Quantized) {
     add(q.width - 1, y)
   }
   const most = Math.max(...tally)
-  return most > 0 ? tally.indexOf(most) : -1
+  return most > transparent ? tally.indexOf(most) : -1
 }
 
 /** One outline per palette colour, in pixel units (see traceMask). */
@@ -190,13 +193,44 @@ export const DEFAULT_LIGHTBOX: LightboxOptions = {
 /** Removes slivers thinner than `size` mm, which will not print. */
 const opening = (region: Region, size: number) => offset(offset(region, -size / 2), size / 2)
 
+/** Join the face and its plug without the two buried, touching cap surfaces. */
+function diffuserSolid(shape: Region, plugRing: Region, thick: number, plug: number, z: number) {
+  const surface = (region: Region, depth: number, bottom: number, keep: (nz: number) => boolean) => {
+    const solid = extrude(region, depth, bottom)
+    const p = solid.getAttribute('position')
+    const n = solid.getAttribute('normal')
+    const positions: number[] = []
+    const normals: number[] = []
+    for (let i = 0; p && i < p.count; i += 3) {
+      if (!keep(n.getZ(i))) continue
+      for (let j = i; j < i + 3; j++) {
+        positions.push(p.getX(j), p.getY(j), p.getZ(j))
+        normals.push(n.getX(j), n.getY(j), n.getZ(j))
+      }
+    }
+    solid.dispose()
+    return new BufferGeometry()
+      .setAttribute('position', new Float32BufferAttribute(positions, 3))
+      .setAttribute('normal', new Float32BufferAttribute(normals, 3))
+  }
+  const surfaces = [
+    surface(shape, thick, z, nz => nz >= 0),
+    surface(plugRing, plug, z - plug, nz => nz <= 0),
+    surface(diff(shape, plugRing), thick, z, nz => nz < 0),
+  ]
+  const result = merge(surfaces)
+  surfaces.forEach(g => g.dispose())
+  return result
+}
+
 /**
  * Builds a lightbox from traced colours: a printed frame, a press-fit back
  * with wire and wall fixings, a white diffuser face that plugs into the frame,
  * and one part per printed colour on top of the diffuser.
  */
 export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: Region[], layers: LayerSetting[], o: LightboxOptions) {
-  const rim = o.wall + o.margin
+  // Keep a positive image span when the requested margin fills a small box.
+  const rim = Math.min(o.wall + o.margin, (o.width - 1) / 2)
   const printed = colours.map((region, j) => (layers[j]?.on ? region : []))
   const content = union(...printed)
   let scale: number
@@ -238,10 +272,7 @@ export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: R
   const z = o.back + o.depth
   const inner = offset(shape, -o.wall - o.gap)
   const plug = Math.min(3, o.depth - 2)
-  const diffuser = merge([
-    extrude(shape, o.diffuser, z),
-    extrude(ring(inner, 1.6), plug, z - plug),
-  ])
+  const diffuser = diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, z)
   const parts = new Parts()
     .back('ฝาหลังสวมใน', 'print', inner, o.back, 0, -1, offset(shape, -o.wall - 1))
     .slab('กรอบข้าง', 'print', ring(shape, o.wall), z, 0)

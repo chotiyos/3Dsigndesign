@@ -21,9 +21,13 @@ function fromBase64Url(text: string) {
 /**
  * Packs a design into a short code for the address bar. It travels after
  * "#", so it never reaches the server; whoever opens the link gets a copy.
+ * Returns an empty code when the expanded design exceeds the reader's limit.
  */
 export function encodeShare(design: object): string {
-  return toBase64Url(deflateSync(strToU8(JSON.stringify({ app: 'jjdesign', v: 1, d: design })), { level: 9 }))
+  const json = strToU8(JSON.stringify({ app: 'jjdesign', v: 1, d: design }))
+  // Never offer a link that our reader rejects, even if it compresses well.
+  if (json.length > SHARE_JSON_LIMIT) return ''
+  return toBase64Url(deflateSync(json, { level: 9 }))
 }
 
 /** The design inside a link's "#d=…" part, or null when there is none or it is damaged. */
