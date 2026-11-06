@@ -1,5 +1,4 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { Box3 } from 'three'
 import { containModalFocus } from '../ui/modalFocus'
 import { READY_FILES } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
@@ -11,7 +10,7 @@ import { jobSheetHtml } from '../lib/jobSheet'
 import { printGuide } from '../lib/printTips'
 import { decodeShare, encodeShare, SHARE_LIMIT } from '../lib/share'
 import { buildDxf } from '../lib/exportDxf'
-import { buildZip, downloadBlob, dxfLayer, MATERIAL_INFO, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
+import { modelSize, partRow, partsList, buildZip, downloadBlob, dxfLayer, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
 import { bounds, union, type Region } from '../lib/geo2d'
 import { planModules, powerFor, PSU_LOAD } from '../lib/ledPlan'
@@ -437,23 +436,13 @@ export default function Editor() {
   const setMaterial = (code: string, material: MaterialId) =>
     setDraft((d) => ({ ...d, materials: { ...d.materials, [style.id]: { ...d.materials[style.id], [code]: material } } }))
 
+  const visibleParts = useMemo(() => parts.filter(p => !hidden.has(p.code)), [parts, hidden])
   const stats = useMemo(() => (step === 4 ? partStats(parts.filter((part) => !part.addon).flatMap((part) =>
     [part, ...parts.filter((addon) => addon.addon?.wall === part.code)],
   )) : []), [parts, step])
   // Overall size comes from the finished parts, not the artwork: frames, bases,
   // and hardware styles are larger than (or unrelated to) the typed text.
-  const size = useMemo(() => {
-    const box = new Box3()
-    for (const part of parts) {
-      part.geometry.computeBoundingBox()
-      if (part.geometry.boundingBox) box.union(part.geometry.boundingBox)
-    }
-    if (box.isEmpty()) {
-      const b = bounds(layout)
-      return { w: b.w, h: b.h, d: 0 }
-    }
-    return { w: box.max.x - box.min.x, h: box.max.y - box.min.y, d: box.max.z - box.min.z }
-  }, [layout, parts])
+  const size = useMemo(() => modelSize(visibleParts), [visibleParts])
 
   const blocksPending = deferred.blocks.some((b) => b.text.trim() && !(b.fontId === CUSTOM_FONT_ID ? customFont?.font : blockFonts[b.fontId]))
   const blockError = deferred.blocks.some((b, i) => b.text.trim() && !blocksPending && !blockShapes[i]?.length)
@@ -499,9 +488,7 @@ export default function Editor() {
     if (visible.length === 0) return
     exportFile(EXPORT_COST.zip, 'zip', 'application/zip', () => {
       const listed = partStats(visible)
-      const list = listed
-        .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${partMethod(s.part)}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
-        .join('\n')
+      const list = partsList(listed)
       const readme = `JJDesign — ${style.code} ${style.name}\nข้อความ: ${draft.text}\nขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} × ${size.d.toFixed(1)} มม.\n\n${list}\n\n${printGuide(listed)}\n\nไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้าป้าย\n`
       return buildZip({ baseName, parts: visible, readme })
     })
@@ -673,14 +660,7 @@ export default function Editor() {
       style: `${style.code} ${style.name}`,
       text: style.usesArt && draft.source === 'text' ? draft.text : '',
       size,
-      parts: shownStats.map((s) => ({
-        code: s.part.code,
-        label: s.part.label,
-        material: MATERIAL_NAMES[s.part.material],
-        method: partMethod(s.part),
-        size: `${s.size.x.toFixed(0)}×${s.size.y.toFixed(0)}×${s.size.z.toFixed(1)}`,
-        grams: s.part.material === 'led' ? '—' : s.grams.toFixed(0),
-      })),
+      parts: shownStats.map(partRow),
       figures,
       cost: job.prices ? { ...cost, margin: rates.margin } : null,
     }))
@@ -1245,7 +1225,7 @@ export default function Editor() {
               <table className="spec">
                 <caption>รายการชิ้นส่วน · น้ำหนักโดยประมาณจากปริมาตรชิ้นงานตัน</caption>
                 <thead>
-                  <tr><th>ชิ้น</th><th>วัสดุ</th><th className="num">กรัม</th></tr>
+                  <tr><th>ชิ้น</th><th>วัสดุ</th><th className="num">ขนาด (มม.)</th><th className="num">กรัม</th></tr>
                 </thead>
                 <tbody>
                   {stats.map((s) => (
@@ -1283,7 +1263,8 @@ export default function Editor() {
                           </select>
                         )}
                       </td>
-                      <td className="num tabular">{s.part.material === 'led' ? '—' : s.grams.toFixed(0)}</td>
+                      <td className="num tabular">{partRow(s).size}</td>
+                      <td className="num tabular">{partRow(s).grams}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -102,3 +102,27 @@ export function partStats(parts: SignPart[]): PartStat[] {
     return { part, volumeCm3, grams: volumeCm3 * MATERIAL_INFO[part.material].density, watertight, size }
   })
 }
+
+/** Finished model bounds, independent of presentation/explode transforms. */
+export function modelSize(parts: SignPart[]) {
+  const box = new THREE.Box3()
+  for (const part of parts) {
+    part.geometry.computeBoundingBox()
+    if (part.geometry.boundingBox) box.union(part.geometry.boundingBox)
+  }
+  const size = box.getSize(new THREE.Vector3())
+  return { w: size.x, h: size.y, d: size.z }
+}
+
+export function partRow(s: PartStat) {
+  return {
+    code: s.part.code, label: s.part.label, material: MATERIAL_INFO[s.part.material].name,
+    method: partMethod(s.part),
+    size: [s.size.x, s.size.y, s.size.z].map(n => n.toFixed(1)).join('×'),
+    grams: s.part.material === 'led' ? '—' : s.grams.toFixed(0),
+  }
+}
+
+export function partsList(stats: PartStat[]) {
+  return stats.map(partRow).map(p => [p.code, p.label, p.material, p.method, p.size + ' มม.', p.grams === '—' ? '—' : '~' + p.grams + ' กรัม'].join('  ')).join('\n')
+}

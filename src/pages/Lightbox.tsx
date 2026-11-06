@@ -1,8 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
-import { buildZip, downloadBlob, MATERIAL_INFO, partMethod, partStats, partsToStl, safeName } from '../lib/exportModel'
-import { printGuide } from '../lib/printTips'
+import { buildZip, downloadBlob, partsToStl, safeName } from '../lib/exportModel'
+import { lightboxReadme } from '../lib/lightboxReadme'
 import {
   borderColour, buildLightbox, DEFAULT_LIGHTBOX, quantize, stripLength, toHex, traceColours,
   type LayerSetting, type LightboxOptions, type LightboxShape, type Quantized,
@@ -127,7 +127,7 @@ export default function Lightbox() {
     try {
       const data = kind === 'stl'
         ? partsToStl(parts)
-        : buildZip({ baseName, parts, readme: readme() })
+        : buildZip({ baseName, parts, readme: lightboxReadme(parts) })
       if (!spend(cost, `${kind.toUpperCase()} กล่องไฟ ${baseName}`)) {
         setMessage({ tone: 'error', text: `เครดิตทดลองไม่พอ ต้องใช้ ${cost} เครดิต เหลือ ${credits(demo)} เครดิต` })
         return
@@ -139,28 +139,6 @@ export default function Lightbox() {
     }
   }
 
-  function readme() {
-    const listed = partStats(parts)
-    const list = listed
-      .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${partMethod(s.part)}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
-      .join('\n')
-    return [
-      `JJDesign — กล่องไฟจากรูป`,
-      `ขนาด ${model?.width.toFixed(1)} × ${model?.height.toFixed(1)} มม. ลึก ${(options.back + options.depth + options.diffuser).toFixed(1)} มม.`,
-      '',
-      list,
-      '',
-      'วิธีพิมพ์หน้า: เปิดแผ่นกระจายแสงกับไฟล์สีทุกสีพร้อมกันเป็นชิ้นเดียว (ตำแหน่งตรงกันทุกไฟล์) กำหนดเส้นพลาสติกให้แต่ละชิ้น',
-      'แล้วพลิกคว่ำให้ด้านสีอยู่บนฐานพิมพ์ แผ่นกระจายแสงใช้เส้นสีขาว',
-      'กรอบข้างพิมพ์ตั้งตรง ฝาหลังสวมเข้าด้านในกรอบ แผ่นหน้ามีขอบสวมลงในกรอบ ถอดเปลี่ยนไฟได้',
-      `ไฟเส้น LED รอบด้านในกรอบยาวประมาณ ${(stripLength(parts) / 10).toFixed(0)} ซม.`,
-      '',
-      printGuide(listed),
-      '',
-      'ไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้า',
-      '',
-    ].join('\n')
-  }
 
   const strip = stripLength(parts)
 
