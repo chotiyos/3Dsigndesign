@@ -854,7 +854,10 @@ export function Range({ label, unit, value, min, max, step, hint, slider = true,
     const n = Number(raw)
     if (raw.trim() !== '' && Number.isFinite(n)) {
       const clamped = Math.min(max, Math.max(min, n))
-      setText(String(clamped))
+      // The parent may further constrain the request (e.g. the font size
+      // needed for an exact width). Show the current model value until its
+      // next value arrives, including when that constraint leaves it unchanged.
+      setText(String(value))
       if (clamped !== value) onChange(clamped)
     }
     else setText(String(value))

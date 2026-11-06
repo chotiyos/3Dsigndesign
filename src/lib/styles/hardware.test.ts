@@ -2,6 +2,30 @@ import { expect, it } from 'vitest'
 import { Vector3 } from 'three'
 import { buildStyle, findStyle } from './index'
 
+for (const wall of [1.2, 2.4, 6]) {
+  it(`joins the tee socket through the main tube wall (${wall} mm)`, () => {
+    const style = findStyle('pvc-fitting')
+    const straight = buildStyle(style, [], { tee: 0, wall })
+    const tee = buildStyle(style, [], { tee: 1, wall })
+    try {
+      const ri = 21.5 / 2 + 0.2
+      const ro = ri + wall
+      const positions = tee[0].geometry.getAttribute('position')
+      const branchStart = straight[0].geometry.getAttribute('position').count
+      let insideWall = 0
+      let mouth = -Infinity
+      for (let i = branchStart; i < positions.count; i++) {
+        const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i)
+        const radius = Math.hypot(y, z)
+        if (Math.abs(x) < 22 && radius > ri + 0.001 && radius < ro - 0.001) insideWall++
+        mouth = Math.max(mouth, y)
+      }
+      expect(insideWall, 'branch penetrates the main tube wall').toBeGreaterThan(0)
+      expect(mouth).toBeCloseTo(ro + 20, 4)
+    } finally { [...straight, ...tee].forEach(p => p.geometry.dispose()) }
+  })
+}
+
 it('keeps coarse threads on small bolts outside the axis with outward faces', () => {
   const parts = buildStyle(findStyle('bolt-nut'), [], { dia: 4, pitch: 5, length: 8 })
   try {

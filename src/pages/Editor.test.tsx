@@ -190,6 +190,18 @@ it('commits Enter through blur once and does not commit unchanged sizes', () => 
   expect(onChange).toHaveBeenCalledExactlyOnceWith(20)
 })
 
+it('restores the measured size when a parent cannot apply the requested dimension', () => {
+  const onChange = vi.fn()
+  const input = nodes(Range({ label: 'กว้างจริง', unit: 'มม.', value: 400, min: 1, max: 100000, step: 0.01, slider: false, onChange })).find(n => n.type === 'input')!
+  input.props.onFocus()
+  input.props.onChange({ target: { value: '9000' } })
+  input.props.onBlur({ target: { value: '9000' } })
+  expect(onChange).toHaveBeenCalledExactlyOnceWith(9000)
+  // A font already at its upper limit can leave the actual width at 400.
+  // No changed-value effect runs in that case, so blur must restore it.
+  expect(harness.setters[0]).toHaveBeenLastCalledWith('400')
+})
+
 it('retains old opal picks and new printed-opal picks through project sanitation', () => {
   const id = STYLES[0].id
   expect(cleanDraft({ materials: { [id]: { A: 'opal', B: 'opalprint' } } }).materials).toEqual({ [id]: { A: 'opal', B: 'opalprint' } })

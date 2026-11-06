@@ -81,7 +81,7 @@ export class Parts {
    * `floor`. When switched off it still takes its letter, so the parts after
    * it keep their codes (and any material picks saved against them).
    */
-  seat(on: number, label: string, outline: Region, wall: number, width: number, thick: number, panelBottom: number, floor = -Infinity, explode = 0) {
+  seat(on: number, label: string, outline: Region, wall: number, width: number, thick: number, panelBottom: number, floor = -Infinity, explode?: number) {
     const host = lipHost(this.list)
     // A segmented wall can start above the panel underside. Keep the ledge
     // within its actual host rather than printing it into the light band.
@@ -94,7 +94,7 @@ export class Parts {
     }
     // The lip is printed onto the wall, and follows its material.
     const before = this.list.length
-    this.slab(label, host.material, band(outline, wall - 0.01, width), t, panelBottom - t, explode)
+    this.slab(label, host.material, band(outline, wall - 0.01, width), t, panelBottom - t, explode ?? host.explode)
     if (this.list.length > before) this.list[before].addon = { kind: 'lip', wall: host.code }
     return this
   }

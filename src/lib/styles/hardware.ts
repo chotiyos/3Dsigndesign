@@ -312,7 +312,10 @@ export const HARDWARE_STYLES: StyleDef[] = [
       rotY(stop, Math.PI / 2)
       const parts = [straight, stop]
       if (v.tee >= 0.5) {
-        const branch = radial(v.socket, 1, 64, () => ro, () => ri, ro)
+        // Reach through the main tube's wall: starting at ro only touches
+        // its outside tangentially and leaves the branch disconnected.
+        // Keep the mouth at ro + socket so insertion depth is unchanged.
+        const branch = radial(v.socket + v.wall, 1, 64, () => ro, () => ri, ri)
         rotX(branch, -Math.PI / 2)
         parts.push(branch)
       }

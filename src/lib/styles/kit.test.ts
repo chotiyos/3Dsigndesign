@@ -4,6 +4,18 @@ import { rect } from '../geo2d'
 import { buildStyle, findStyle } from './index'
 import { Parts } from './kit'
 
+it('keeps the mini-cup lip attached to its cup at every explode distance', () => {
+  const parts = buildStyle(findStyle('mini-cup'), rect(0, 0, 100, 50), { seatLip: 1 })
+  try {
+    const lip = parts.find(p => p.addon)!
+    const cup = parts.find(p => p.code === lip.addon!.wall)!
+    expect(cup.explode).toBe(-0.6)
+    for (const distance of [0, 30, 100]) {
+      expect(lip.explode * distance).toBe(cup.explode * distance)
+    }
+  } finally { parts.forEach(p => p.geometry.dispose()) }
+})
+
 it('reserves letters for empty parts and disposes rejected geometry', () => {
   const empty = new BufferGeometry()
   const dispose = vi.spyOn(empty, 'dispose')
