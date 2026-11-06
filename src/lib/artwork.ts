@@ -78,10 +78,10 @@ export function imageToRegion(
     }
   }
   if (squares.length === 0) return []
-  const merged = union(squares)
-  const b = bounds(merged)
-  const s = heightMM / Math.max(b.h, 1)
-  return merged.map((poly) => smooth(poly).map(([x, y]) => [x * s, y * s] as [number, number]))
+  const smoothed = union(squares).map(smooth)
+  const b = bounds(smoothed)
+  const s = heightMM / b.h
+  return smoothed.map((poly) => poly.map(([x, y]) => [x * s, y * s] as [number, number]))
 }
 
 /** Removes the stair-steps of a pixel outline by averaging neighbours, keeping the winding. */

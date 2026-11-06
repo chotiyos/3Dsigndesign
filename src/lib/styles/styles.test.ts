@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { circle, diff, rect, union } from '../geo2d'
 import { analyse } from '../solid'
 import { applyMaterials, buildStyle, defaultValues, lipHost, STYLES, type SignPart } from './index'
+import { READY_FILES } from '../../data/shop'
 
 /** Stand-in artwork with a hole, a thin stroke, and a separate island, like real lettering. */
 const ART = union(
@@ -9,6 +10,18 @@ const ART = union(
   rect(40, 0, 18, 120),
   circle(90, 50, 12, 32),
 )
+
+it('the ready-file OPEN sign description matches its lip-free model', () => {
+  const file = READY_FILES.find(f => f.id === 'open-sign')!
+  const style = STYLES.find(s => s.id === file.styleId)!
+  const parts = buildStyle(style, ART, { ...defaultValues(style), ...file.values })
+  try {
+    expect(parts.some(p => p.addon)).toBe(false)
+    expect(file.note).not.toContain('มีบ่า')
+    expect(parts.some(p => p.material === 'opal')).toBe(true)
+    expect(file.note).toContain('อะคริลิก')
+  } finally { parts.forEach(p => p.geometry.dispose()) }
+})
 
 describe('style catalogue', () => {
   it('has at least 49 styles with unique ids and codes', () => {

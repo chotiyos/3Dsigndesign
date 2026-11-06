@@ -61,7 +61,9 @@ export const HARDWARE_STYLES: StyleDef[] = [
     params: [p('dia', 'ขนาดเกลียว', 10, 4, 30, 0.5), p('pitch', 'ระยะเกลียว', 2, 0.8, 5, 0.1), p('length', 'ความยาวสกรู', 30, 8, 120, 1), p('fit', 'ระยะเผื่อเกลียว', 0.3, 0.1, 0.8, 0.05)],
     build: ({ v }) => {
       const R = v.dia / 2
-      const depth = v.pitch * 0.6
+      // A coarse pitch on a small bolt must not put the thread root through
+      // the axis. Use the same bounded depth for its mating nut.
+      const depth = Math.min(v.pitch * 0.6, R - 0.2)
       const flats = v.dia * 1.6
       const head = radial(v.dia * 0.65, 1, 6, () => flats / Math.sqrt(3))
       const bolt = merge([head, threaded(R, R - depth, v.pitch, v.length, v.dia * 0.65)])
@@ -75,7 +77,9 @@ export const HARDWARE_STYLES: StyleDef[] = [
         (theta, z) => threadRadius(R + v.fit, R - depth + v.fit, v.pitch)(theta, z),
       )
       nut.translate(v.dia * 1.6, 0, 0)
-      return new Parts().solid('สกรูหัวหกเหลี่ยม', 'print', bolt).solid('น็อตตัวเมีย', 'accent', nut, 0.6).done()
+      const parts = new Parts().solid('สกรูหัวหกเหลี่ยม', 'print', bolt).solid('น็อตตัวเมีย', 'accent', nut, 0.6).done()
+      if (depth < v.pitch * 0.6) parts[0].warning = 'ลดความลึกร่องเกลียวเพื่อให้แกนสกรูมีเนื้อวัสดุ เพิ่มขนาดเกลียวหรือลดระยะเกลียวเพื่อใช้ร่องเต็มความลึก'
+      return parts
     },
   },
   {
