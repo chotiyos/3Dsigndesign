@@ -67,7 +67,7 @@ export function Files() {
                 <button type="button" className="btn btn-primary" onClick={() => download(file)}>
                   <Icon name="download" size={16} /> STL <span className="cost">{EXPORT_COST.file}</span>
                 </button>
-                <Link href={`/app?style=${style.id}${file.text ? `&text=${encodeURIComponent(file.text)}` : ''}`} className="btn btn-ghost">
+                <Link href={`/app?style=${style.id}&file=${encodeURIComponent(file.id)}`} className="btn btn-ghost">
                   แก้ในตัวออกแบบ
                 </Link>
               </div>

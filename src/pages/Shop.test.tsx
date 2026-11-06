@@ -25,6 +25,19 @@ import { spend } from '../lib/account'
 import { downloadBlob, partsToStl } from '../lib/exportModel'
 import { buildStyle } from '../lib/styles'
 import { Files } from './Shop'
+import { READY_FILES } from '../data/shop'
+
+it('links every ready file to its own editor preset', () => {
+  const links: string[] = []
+  const visit = (node: ReactNode): void => {
+    if (Array.isArray(node)) { node.forEach(visit); return }
+    if (!isValidElement<{ children?: ReactNode; href?: string }>(node)) return
+    if (node.type === 'a' && node.props.href) links.push(node.props.href)
+    visit(node.props.children)
+  }
+  visit(Files())
+  expect(links).toEqual(READY_FILES.map(file => `/app?style=${file.styleId}&file=${encodeURIComponent(file.id)}`))
+})
 
 function firstDownload(node: ReactNode): (() => Promise<void>) | undefined {
   if (Array.isArray(node)) return node.map(firstDownload).find(Boolean)

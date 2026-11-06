@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useId, type ChangeEvent } from 'react'
 import { Box3 } from 'three'
+import { READY_FILES } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
 import { buildDxf } from '../lib/exportDxf'
@@ -102,6 +103,17 @@ function initialDraft(query: URLSearchParams): Draft {
   }
   if (base.fontId === CUSTOM_FONT_ID) base.fontId = FONT_OPTIONS[0].id
   if (base.source === 'image') base.source = 'text'
+  const readyFile = READY_FILES.find((file) => file.id === query.get('file'))
+  if (readyFile) {
+    Object.assign(base, {
+      source: 'text', text: readyFile.text, styleId: readyFile.styleId,
+      fontId: FONT_OPTIONS[0].id, heightMM: 150, spacingMM: 0, lineGap: 1.15, align: 'center',
+      // Reset only this style's settings; the customer's work on other styles stays.
+      values: { ...base.values, [readyFile.styleId]: readyFile.values ?? {} },
+      materials: Object.fromEntries(Object.entries(base.materials).filter(([id]) => id !== readyFile.styleId)),
+      colors: {},
+    })
+  }
   const text = query.get('text')
   const style = query.get('style')
   if (text !== null) {

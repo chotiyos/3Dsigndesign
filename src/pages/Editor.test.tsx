@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { isValidElement, type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const harness = vi.hoisted(() => ({ index: 0, id: 0, states: [] as unknown[], setters: [] as ReturnType<typeof vi.fn>[], effects: [] as (() => unknown)[] }))
+const harness = vi.hoisted(() => ({ query: '', index: 0, id: 0, states: [] as unknown[], setters: [] as ReturnType<typeof vi.fn>[], effects: [] as (() => unknown)[] }))
 vi.mock('react', async (original) => ({
   ...await original<typeof import('react')>(),
   useState: (initial: unknown) => {
@@ -17,7 +17,7 @@ vi.mock('react', async (original) => ({
   useEffect: (effect: () => unknown) => harness.effects.push(effect), useDeferredValue: (value: unknown) => value,
   useMemo: (fn: () => unknown) => fn(), useRef: (value: unknown) => ({ current: value }),
 }))
-vi.mock('../router', () => ({ useTitle() {}, useLocation: () => ({ query: new URLSearchParams() }), Link: 'a' }))
+vi.mock('../router', () => ({ useTitle() {}, useLocation: () => ({ query: new URLSearchParams(harness.query) }), Link: 'a' }))
 vi.mock('../lib/account', () => ({ useDemo: () => ({}), credits: () => 100, EXPORT_COST: {}, spend: vi.fn() }))
 vi.mock('../lib/artwork', () => ({
   textToRegion: vi.fn((_font: unknown, text: string, height: number, spacing: number) => {
@@ -39,7 +39,26 @@ function nodes(node: ReactNode): { type: unknown; props: Record<string, any> }[]
   if (!isValidElement<{ children?: ReactNode }>(node)) return []
   return [node as any, ...nodes(node.props.children)]
 }
-beforeEach(() => { harness.index = 0; harness.id = 0; harness.states = []; harness.setters = []; harness.effects = [] })
+beforeEach(() => { harness.query = ''; harness.index = 0; harness.id = 0; harness.states = []; harness.setters = []; harness.effects = [] })
+
+it('opens a ready file with its preset instead of unrelated saved dimensions and materials', () => {
+  harness.query = 'style=front-lit-lip&file=open-sign'
+  vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({
+    source: 'svg', text: 'OLD', heightMM: 900, spacingMM: 50, fontId: FONT_OPTIONS[1].id,
+    values: { 'front-lit-lip': { depth: 180 } }, materials: { 'front-lit-lip': { B: 'metal' } }, colors: { B: '#123456' },
+  }) })
+  try {
+    const tree = nodes(Editor())
+    expect(tree.find(n => n.type === Range && n.props.label === 'ขนาดตัวอักษร (ขนาดฟอนต์)')?.props.value).toBe(150)
+    expect(tree.find(n => n.type === Range && n.props.label === 'ความลึกตัวอักษร')?.props.value).toBe(50)
+    vi.useFakeTimers()
+    const setItem = vi.fn()
+    vi.stubGlobal('localStorage', { setItem })
+    harness.effects[1]()
+    vi.runAllTimers()
+    expect(JSON.parse(setItem.mock.calls[0][1])).toMatchObject({ source: 'text', text: 'OPEN', fontId: FONT_OPTIONS[0].id, heightMM: 150, spacingMM: 0, materials: {}, colors: {} })
+  } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
+})
 
 it('does not replace a recoverable autosave with an oversized SVG missing its artwork', () => {
   vi.useFakeTimers()
