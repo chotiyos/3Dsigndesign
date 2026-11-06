@@ -82,16 +82,16 @@ export class Parts {
    * it keep their codes (and any material picks saved against them).
    */
   seat(on: number, label: string, outline: Region, wall: number, width: number, thick: number, panelBottom: number, floor = -Infinity, explode = 0) {
+    const host = lipHost(this.list)
     const t = Math.min(thick, panelBottom - floor)
-    if (!on || !(t > 0.2)) {
+    if (!on || !host || !(t > 0.2)) {
       this.nextCode++
       return this
     }
     // The lip is printed onto the wall, and follows its material.
-    const host = lipHost(this.list)
     const before = this.list.length
-    this.slab(label, host?.material ?? 'print', band(outline, wall - 0.01, width), t, panelBottom - t, explode)
-    if (this.list.length > before && host) this.list[before].addon = { kind: 'lip', wall: host.code }
+    this.slab(label, host.material, band(outline, wall - 0.01, width), t, panelBottom - t, explode)
+    if (this.list.length > before) this.list[before].addon = { kind: 'lip', wall: host.code }
     return this
   }
 

@@ -217,7 +217,9 @@ export default function Editor() {
   const setMaterial = (code: string, material: MaterialId) =>
     setDraft((d) => ({ ...d, materials: { ...d.materials, [style.id]: { ...d.materials[style.id], [code]: material } } }))
 
-  const stats = useMemo(() => (step === 4 ? partStats(parts) : []), [parts, step])
+  const stats = useMemo(() => (step === 4 ? partStats(parts.filter((part) => !part.addon).flatMap((part) =>
+    [part, ...parts.filter((addon) => addon.addon?.wall === part.code)],
+  )) : []), [parts, step])
   // Overall size comes from the finished parts, not the artwork: frames, bases,
   // and hardware styles are larger than (or unrelated to) the typed text.
   const size = useMemo(() => {

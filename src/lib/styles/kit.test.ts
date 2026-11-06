@@ -25,3 +25,16 @@ it('keeps stencil material and visibility keys stable when backing disappears', 
   expect(bare[0].label).toBe(backed[1].label)
   ;[...backed, ...bare].forEach(p => p.geometry.dispose())
 })
+
+for (const id of ['two-tier-light', 'two-tier-full-colour']) {
+  it(`${id} does not create an orphan lip when the light replaces both walls`, () => {
+    const style = findStyle(id)
+    const art = rect(0, 0, 100, 50)
+    const on = buildStyle(style, art, { depth: 20, glow: 20, seatLip: 1 })
+    const off = buildStyle(style, art, { depth: 20, glow: 20, seatLip: 0 })
+    try {
+      expect(on.map(p => [p.code, p.label])).toEqual(off.map(p => [p.code, p.label]))
+      expect(on.some(p => /บ่า/.test(p.label))).toBe(false)
+    } finally { [...on, ...off].forEach(p => p.geometry.dispose()) }
+  })
+}

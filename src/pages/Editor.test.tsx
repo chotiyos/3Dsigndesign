@@ -176,6 +176,27 @@ it('retains old opal picks and new printed-opal picks through project sanitation
   expect(cleanDraft({ materials: { [id]: { A: 'opal', B: 'opalprint' } } }).materials).toEqual({ [id]: { A: 'opal', B: 'opalprint' } })
 })
 
+for (const style of STYLES.filter(s => s.params.some(p => p.key === 'seatLip'))) {
+  it(`${style.code} lists each lip immediately after its wall in step 4`, () => {
+    harness.states[0] = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, styleId: style.id, values: { [style.id]: { seatLip: 1 } } }
+    harness.states[1] = 4
+    harness.states[3] = { id: FONT_OPTIONS[0].id, font: {} }
+    const tree = nodes(Editor())
+    const rows = tree.filter(n => n.type === 'tr' && nodes(n.props.children).some(c => c.props.className === 'addon-note'))
+    expect(rows.length).toBeGreaterThan(0)
+    const allRows = tree.filter(n => n.type === 'tr')
+    for (const row of rows) {
+      const note = nodes(row.props.children).find(n => n.type === 'small')!
+      const wall = note.props.children[1]
+      const preceding = allRows.slice(0, allRows.indexOf(row)).reverse()
+      const previousPart = preceding.find(r => !nodes(r.props.children).some(c => c.props.className === 'addon-note'))!
+      expect(nodes(previousPart.props.children).some(n => n.props.className === 'layer-code' && n.props.children === wall)).toBe(true)
+    }
+    const viewer = tree.find(n => n.type === 'viewer')!
+    ;(viewer.props.parts as { geometry: { dispose(): void } }[]).forEach(p => p.geometry.dispose())
+  })
+}
+
 it('disables DXF when every sheet is hidden and allows changing export visibility in step 4', () => {
   harness.states[0] = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, styleId: STYLES[0].id }
   harness.states[1] = 4
