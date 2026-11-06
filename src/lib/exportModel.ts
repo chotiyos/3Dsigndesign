@@ -70,7 +70,8 @@ export function downloadBlob(data: BlobPart | Uint8Array, filename: string, mime
 
 export const MATERIAL_INFO: Record<MaterialId, { name: string; folder: string; density: number }> = {
   print: { name: 'เส้นพลาสติกพิมพ์ 3D (PETG)', folder: 'พลาสติกพิมพ์', density: 1.27 },
-  opal: { name: 'อะคริลิก/เส้นพิมพ์ขาวขุ่น', folder: 'ขาวขุ่น', density: 1.19 },
+  opal: { name: 'อะคริลิกขาวขุ่น (แผ่น)', folder: 'อะคริลิกขาวขุ่น', density: 1.19 },
+  opalprint: { name: 'เส้นพลาสติกพิมพ์ขาวขุ่น (PETG)', folder: 'พลาสติกพิมพ์ขาวขุ่น', density: 1.27 },
   acrylic: { name: 'อะคริลิกใส', folder: 'อะคริลิกใส', density: 1.19 },
   accent: { name: 'เส้นพลาสติกสีหลัก', folder: 'พลาสติกสีหลัก', density: 1.24 },
   metal: { name: 'อะลูมิเนียม หรือพิมพ์สีโลหะ', folder: 'โลหะ', density: 2.7 },

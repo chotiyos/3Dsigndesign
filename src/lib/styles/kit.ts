@@ -6,9 +6,13 @@ import type { MaterialId, ParamDef, SignPart } from './types'
 const CODES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
 const SHEET = new Set<MaterialId>(['acrylic', 'opal', 'plaswood', 'mirror', 'metal'])
 
-/** Whether a flat part of this material and thickness can be laser- or CNC-cut from sheet. */
+/**
+ * Whether a flat part is cut from sheet (DXF). Only sheet materials are:
+ * printed plastics, accent filament and TPU are 3D-printed (STL) however
+ * thin the part is.
+ */
 export function isCuttable(material: MaterialId, depth: number) {
-  return material !== 'led' && depth <= 12 && (SHEET.has(material) || depth <= 6)
+  return SHEET.has(material) && depth <= 12
 }
 
 /**

@@ -203,7 +203,7 @@ export function Viewer(props: ViewerProps) {
     state.meshes = []
     for (const part of parts) {
       const mesh = new THREE.Mesh(part.geometry, makeMaterial(part.material, MATERIAL_COLORS[part.material], false))
-      mesh.renderOrder = part.material === 'acrylic' || part.material === 'opal' ? 2 : 1
+      mesh.renderOrder = part.material === 'acrylic' || part.material === 'opal' || part.material === 'opalprint' ? 2 : 1
       state.model.add(mesh)
       state.meshes.push({ part, mesh })
     }

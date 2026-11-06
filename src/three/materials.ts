@@ -4,6 +4,7 @@ import type { MaterialId } from '../lib/styles'
 export const MATERIAL_COLORS: Record<MaterialId, string> = {
   print: '#3d5a99',
   opal: '#f6f8fc',
+  opalprint: '#eef1f6',
   acrylic: '#bcd5ff',
   accent: '#f2a20c',
   metal: '#a3adbb',
@@ -15,7 +16,8 @@ export const MATERIAL_COLORS: Record<MaterialId, string> = {
 
 export const MATERIAL_NAMES: Record<MaterialId, string> = {
   print: 'พลาสติกพิมพ์',
-  opal: 'ขาวขุ่นโปร่งแสง',
+  opal: 'อะคริลิกขาวขุ่น',
+  opalprint: 'พลาสติกพิมพ์ขาวขุ่น',
   acrylic: 'อะคริลิกใส',
   accent: 'พลาสติกสีหลัก',
   metal: 'โลหะ',
@@ -30,6 +32,7 @@ export function makeMaterial(material: MaterialId, color: string, night: boolean
   const c = new THREE.Color(color)
   switch (material) {
     case 'opal':
+    case 'opalprint':
       return new THREE.MeshStandardMaterial({
         color: c,
         roughness: 0.35,

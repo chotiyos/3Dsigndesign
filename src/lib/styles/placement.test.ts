@@ -36,7 +36,7 @@ for (const id of ['ping-pong-bulbs', 'perforated-face', 'front-brow']) {
   it(id + ' face fits inside the wall opening', () => {
     check(id, (parts) => {
       const face = parts.find((p) => p.material === (id === 'front-brow' ? 'opal' : 'accent'))!
-      expect(diff(face.cut!, offset(art, id === 'front-brow' ? -5 : -2)).length).toBe(0)
+      expect(diff(face.profile!.region, offset(art, id === 'front-brow' ? -5 : -2)).length).toBe(0)
     })
   })
 }

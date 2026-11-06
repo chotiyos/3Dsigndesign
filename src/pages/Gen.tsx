@@ -50,7 +50,7 @@ const SAMPLES: Sample[] = [
     build: () => {
       const base = upright(revolve([[0, 0], [40, 0], [40, 10], [8, 16], [6, 90], [0, 90]], 64))
       const shade = upright(revolve([[0, 86], [18, 86], [48, 140], [0, 140]], 64))
-      return new Parts().solid('ฐานโคม', 'print', base).solid('โป๊ะไฟ', 'opal', shade, 0.5).done()
+      return new Parts().solid('ฐานโคม', 'print', base).solid('โป๊ะไฟ', 'opalprint', shade, 0.5).done()
     },
   },
   {

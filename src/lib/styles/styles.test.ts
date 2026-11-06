@@ -75,9 +75,27 @@ for (const id of ['two-tier-light', 'two-tier-full-colour']) {
     const style = STYLES.find((s) => s.id === id)!
     const values: Record<string, number> = { ...defaultValues(style), depth: 5, glow: 60 }
     const parts = buildStyle(style, ART, values)
-    const light = parts.find((p) => p.material === 'opal')!
+    const light = parts.find((p) => p.material === 'opalprint')!
     light.geometry.computeBoundingBox()
     expect(light.geometry.boundingBox!.min.z).toBeGreaterThanOrEqual(values.back)
     expect(light.geometry.boundingBox!.max.z).toBeLessThanOrEqual(values.back + values.depth)
   })
 }
+
+describe('files follow materials', () => {
+  const SHEET = new Set(['acrylic', 'opal', 'plaswood', 'mirror', 'metal'])
+  for (const style of STYLES) {
+    it(`${style.code} gives DXF only to sheet parts, and its make label matches`, () => {
+      const parts = buildStyle(style, ART, defaultValues(style))
+      try {
+        for (const part of parts) {
+          if (part.cut) expect(SHEET.has(part.material), `${part.code} ${part.label} is ${part.material} but has a DXF`).toBe(true)
+        }
+        const made = parts.filter((p) => p.material !== 'led')
+        const cut = made.filter((p) => p.cut).length
+        const actual = cut === 0 ? 'print' : cut === made.length ? 'cut' : 'mixed'
+        expect(actual, `${style.id} make label`).toBe(style.make)
+      } finally { parts.forEach((p) => p.geometry.dispose()) }
+    })
+  }
+})

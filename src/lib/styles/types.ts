@@ -4,6 +4,7 @@ import type { Bounds, Region } from '../geo2d'
 export type MaterialId =
   | 'acrylic'
   | 'opal'
+  | 'opalprint'
   | 'print'
   | 'accent'
   | 'metal'

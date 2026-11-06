@@ -2,7 +2,7 @@
 import { Box3, Vector3 } from 'three'
 import { strFromU8, unzipSync } from 'fflate'
 import { rect } from './geo2d'
-import { buildZip, partFolder, partStats, partsToStl, safeName } from './exportModel'
+import { buildZip, partFolder, partMethod, partStats, partsToStl, safeName } from './exportModel'
 import { buildDxf } from './exportDxf'
 import { buildStyle, defaultValues, findStyle, withMaterial, type SignPart } from './styles'
 
@@ -82,8 +82,11 @@ describe('changing a part material', () => {
   it('moves a flat sheet part between DXF and STL with its material', () => {
     const printed = withMaterial(face, 'print')
     expect(printed.material).toBe('print')
-    // A 3 mm face printed in plastic is still thin enough to cut, so it keeps its outline...
-    expect(Boolean(printed.cut)).toBe(face.profile!.depth <= 6)
+    // Printed plastic is 3D-printed however thin, so it loses its DXF outline...
+    expect(printed.cut).toBeUndefined()
+    expect(partMethod(printed)).toBe('พิมพ์ 3D · STL')
+    // ...and switching back to a sheet material brings the outline back.
+    expect(withMaterial(printed, 'acrylic').cut).toBe(face.profile!.region)
     const plaswood = withMaterial(face, 'plaswood')
     expect(plaswood.cut).toBe(face.profile!.region)
     const files = unzipSync(buildZip({ baseName: 's', parts: [plaswood], readme: '' }))

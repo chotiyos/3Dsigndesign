@@ -74,7 +74,7 @@ export const MINI_STYLES: StyleDef[] = [
     build: ({ art, v }) =>
       new Parts()
         .solid('ถ้วยตัวอักษร', 'print', merge([extrude(art, v.back, 0), extrude(ring(art, v.wall), v.depth, v.back)]), -0.6)
-        .slab('ฝาหน้าโปร่งแสง', 'opal', offset(art, -v.wall - v.gap), v.front, v.back + v.depth - v.front, 1)
+        .slab('ฝาหน้าโปร่งแสง', 'opalprint', offset(art, -v.wall - v.gap), v.front, v.back + v.depth - v.front, 1)
         .slab('ไฟเส้นจิ๋ว', 'led', band(art, v.wall + 1.5, 3), 1.5, v.back, -0.2)
         .done(),
   },
@@ -90,7 +90,7 @@ export const MINI_STYLES: StyleDef[] = [
     build: ({ art, v }) =>
       new Parts()
         .slab('ตัวอักษร', 'print', art, v.depth - v.face, 0)
-        .slab('ชั้นหน้าสีโปร่งแสง', 'opal', art, v.face, v.depth - v.face, 0.6)
+        .slab('ชั้นหน้าสีโปร่งแสง', 'opalprint', art, v.face, v.depth - v.face, 0.6)
         .done(),
   },
   {
@@ -99,7 +99,7 @@ export const MINI_STYLES: StyleDef[] = [
     group: 'mini',
     name: 'อักษรตันคลาสสิก',
     blurb: 'ตัวอักษรตันเรียบ ใช้ติดผนัง ตั้งโชว์ หรือส่งเข้าเครื่อง CNC ตัดจากแผ่นหนา',
-    make: 'mixed',
+    make: 'print',
     usesArt: true,
     params: [common.depth(20)],
     build: ({ art, v }) => new Parts().slab('ตัวอักษรตัน', 'accent', art, v.depth, 0).done(),
@@ -198,7 +198,7 @@ export const BOX_STYLES: StyleDef[] = [
       return new Parts()
         .slab('แผ่นหลัง', 'print', outline, 3, 0, -1)
         .slab('ผนังกล่อง', 'print', ring(outline, v.wall), v.depth, 3)
-        .slab('หน้าพื้น', 'opal', diff(face, art), v.front, z - v.front, 0.8)
+        .slab('หน้าพื้น', 'opalprint', diff(face, art), v.front, z - v.front, 0.8)
         .slab('ตัวอักษรฝังหน้า', 'accent', intersect(art, face), v.front, z - v.front, 1.2)
         .slab('แผงไฟ LED', 'led', band(outline, v.wall + 8, 8), 2, 3, -0.4)
         .done()
@@ -287,7 +287,7 @@ export const DECO_STYLES: StyleDef[] = [
       const plate = roundRect(0, 0, box.w + v.margin * 2 + v.outline * 2, box.h + v.margin * 2 + v.outline * 2, 10)
       return new Parts()
         .slab('แผ่นพื้น', 'print', plate, v.base, 0, -0.6)
-        .slab('ชั้นเส้นขอบ', 'opal', offset(art, v.outline), v.step, v.base, 0)
+        .slab('ชั้นเส้นขอบ', 'opalprint', offset(art, v.outline), v.step, v.base, 0)
         .slab('ชั้นตัวอักษร', 'accent', art, v.step, v.base + v.step, 0.8)
         .done()
     },
@@ -298,7 +298,7 @@ export const DECO_STYLES: StyleDef[] = [
     group: 'deco',
     name: 'อักษรฉลุลาย',
     blurb: 'ตัวอักษรตันที่ฉลุลายข้าวหลามตัดข้างใน เหลือขอบรอบตัว แสงลอดเป็นลายสวยเมื่อมีไฟหลัง',
-    make: 'mixed',
+    make: 'print',
     usesArt: true,
     params: [common.depth(10), p('border', 'ความกว้างขอบ', 4, 1.5, 20), p('cell', 'ขนาดช่องลาย', 12, 4, 60), p('bar', 'ความหนาเส้นลาย', 2.4, 0.8, 10, 0.2)],
     build: ({ art, box, v }) => {
@@ -477,7 +477,7 @@ export const GIFT_STYLES: StyleDef[] = [
       stand.rotateX(Math.PI / 6)
       stand.translate(0, h * 0.15, 0)
       return new Parts()
-        .slab('แผ่นหลังมีร่อง', 'opal',diff(outer, rect(0, h / 2 - 2, v.photoW + 1, 6)), 2, 0, -0.8)
+        .slab('แผ่นหลังมีร่อง', 'opalprint',diff(outer, rect(0, h / 2 - 2, v.photoW + 1, 6)), 2, 0, -0.8)
         .slab('กรอบหน้า', 'print', diff(outer, window), v.thick, 2, 0)
         .slab('ชื่อนูน', 'accent', name, 2, 2 + v.thick, 0.8)
         .solid('ขาตั้ง', 'print', stand, -1.6)
