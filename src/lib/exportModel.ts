@@ -26,14 +26,31 @@ export interface ZipOptions {
   readme: string
 }
 
-/** One STL per part, one DXF per cuttable part, plus a combined STL and a parts list. */
+/** Where a part's files go inside the ZIP: one folder per material, so each shop gets its own pile. */
+export function partFolder(part: SignPart) {
+  return MATERIAL_INFO[part.material].folder
+}
+
+/** How a part is made with its current material. */
+export function partMethod(part: SignPart) {
+  if (part.material === 'led') return 'ซื้อสำเร็จ'
+  return part.cut ? 'ตัดแผ่น · DXF' : 'พิมพ์ 3D · STL'
+}
+
+/** DXF layer name: part letter plus material id, ASCII so every CAM program accepts it. */
+export const dxfLayer = (part: SignPart) => `${part.code}_${part.material}`
+
+/**
+ * A combined STL, plus a folder per material: every part gets an STL, and
+ * parts cut from sheet in that material also get a DXF.
+ */
 export function buildZip({ baseName, parts, readme }: ZipOptions): Uint8Array {
   const files: Record<string, Uint8Array> = {}
   files[`${baseName}-ทั้งหมด.stl`] = partsToStl(parts)
   for (const part of parts) {
-    const stem = `${part.code}-${safeName(part.label)}`
-    files[`stl/${stem}.stl`] = partsToStl([part])
-    if (part.cut) files[`dxf/${stem}.dxf`] = strToU8(buildDxf([{ layer: part.code, region: part.cut }]))
+    const stem = `${partFolder(part)}/${part.code}-${safeName(part.label)}`
+    files[`${stem}.stl`] = partsToStl([part])
+    if (part.cut) files[`${stem}.dxf`] = strToU8(buildDxf([{ layer: dxfLayer(part), region: part.cut }]))
   }
   files['รายการชิ้นส่วน.txt'] = strToU8(readme)
   return zipSync(files, { level: 6 })
@@ -51,17 +68,20 @@ export function downloadBlob(data: BlobPart | Uint8Array, filename: string, mime
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export const MATERIAL_INFO: Record<MaterialId, { name: string; density: number }> = {
-  print: { name: 'เส้นพลาสติกพิมพ์ 3D (PETG)', density: 1.27 },
-  opal: { name: 'อะคริลิก/เส้นพิมพ์ขาวขุ่น', density: 1.19 },
-  acrylic: { name: 'อะคริลิกใส', density: 1.19 },
-  accent: { name: 'เส้นพลาสติกสีหลัก', density: 1.24 },
-  metal: { name: 'อะลูมิเนียม หรือพิมพ์สีโลหะ', density: 2.7 },
-  plaswood: { name: 'พลาสวูด', density: 0.55 },
-  led: { name: 'ไฟ LED (ตำแหน่งอ้างอิง)', density: 0 },
-  mirror: { name: 'อะคริลิกกระจกเงา', density: 1.19 },
-  rubber: { name: 'ยาง หรือเส้น TPU', density: 1.21 },
+export const MATERIAL_INFO: Record<MaterialId, { name: string; folder: string; density: number }> = {
+  print: { name: 'เส้นพลาสติกพิมพ์ 3D (PETG)', folder: 'พลาสติกพิมพ์', density: 1.27 },
+  opal: { name: 'อะคริลิก/เส้นพิมพ์ขาวขุ่น', folder: 'ขาวขุ่น', density: 1.19 },
+  acrylic: { name: 'อะคริลิกใส', folder: 'อะคริลิกใส', density: 1.19 },
+  accent: { name: 'เส้นพลาสติกสีหลัก', folder: 'พลาสติกสีหลัก', density: 1.24 },
+  metal: { name: 'อะลูมิเนียม หรือพิมพ์สีโลหะ', folder: 'โลหะ', density: 2.7 },
+  plaswood: { name: 'พลาสวูด', folder: 'พลาสวูด', density: 0.55 },
+  led: { name: 'ไฟ LED (ตำแหน่งอ้างอิง)', folder: 'ไฟ LED', density: 0 },
+  mirror: { name: 'อะคริลิกกระจกเงา', folder: 'กระจกเงา', density: 1.19 },
+  rubber: { name: 'ยาง หรือเส้น TPU', folder: 'ยาง TPU', density: 1.21 },
 }
+
+/** Materials a customer may pick for a part (lights stay lights). */
+export const PICKABLE_MATERIALS: readonly MaterialId[] = (Object.keys(MATERIAL_INFO) as MaterialId[]).filter((m) => m !== 'led')
 
 export interface PartStat {
   part: SignPart

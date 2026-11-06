@@ -17,7 +17,7 @@ export const MATERIAL_NAMES: Record<MaterialId, string> = {
   print: 'พลาสติกพิมพ์',
   opal: 'ขาวขุ่นโปร่งแสง',
   acrylic: 'อะคริลิกใส',
-  accent: 'สีหลัก',
+  accent: 'พลาสติกสีหลัก',
   metal: 'โลหะ',
   plaswood: 'พลาสวูด',
   led: 'ไฟ LED',

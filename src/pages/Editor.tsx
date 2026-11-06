@@ -3,11 +3,11 @@ import { Box3 } from 'three'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
 import { buildDxf } from '../lib/exportDxf'
-import { buildZip, downloadBlob, MATERIAL_INFO, partStats, partsToStl, safeName } from '../lib/exportModel'
+import { buildZip, downloadBlob, dxfLayer, MATERIAL_INFO, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
 import { bounds, type Region } from '../lib/geo2d'
 import { fontFromArrayBuffer, loadFont, type LoadedFont } from '../lib/hb'
-import { buildStyle, cleanValues, findStyle, GROUPS, STYLES, type SignPart, type StyleGroup } from '../lib/styles'
+import { buildStyle, cleanValues, findStyle, GROUPS, STYLES, withMaterial, type MaterialId, type SignPart, type StyleGroup } from '../lib/styles'
 import { Link, useLocation, useTitle } from '../router'
 import { MATERIAL_COLORS, MATERIAL_NAMES } from '../three/materials'
 import { Viewer } from '../three/Viewer'
@@ -29,6 +29,8 @@ interface Draft {
   styleId: string
   values: Record<string, Record<string, number>>
   colors: Record<string, string>
+  /** Customer's material choice per style, per part letter. */
+  materials: Record<string, Record<string, MaterialId>>
   svgText?: string
   threshold: number
   invert: boolean
@@ -55,6 +57,14 @@ function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
   out.invert = input.invert === true
   out.values = input.values && typeof input.values === 'object' ? input.values : {}
   out.colors = input.colors && typeof input.colors === 'object' ? input.colors : {}
+  out.materials = {}
+  if (input.materials && typeof input.materials === 'object') {
+    for (const [styleId, choices] of Object.entries(input.materials)) {
+      if (!choices || typeof choices !== 'object') continue
+      const kept = Object.fromEntries(Object.entries(choices).filter(([, m]) => PICKABLE_MATERIALS.includes(m)))
+      if (Object.keys(kept).length) out.materials[styleId] = kept
+    }
+  }
   return out
 }
 
@@ -76,6 +86,7 @@ function initialDraft(query: URLSearchParams): Draft {
     styleId: STYLES[0].id,
     values: {},
     colors: {},
+    materials: {},
     threshold: 128,
     invert: false,
     ...cleanDraft(saved),
@@ -176,7 +187,7 @@ export default function Editor() {
   const deferredStyle = findStyle(deferred.styleId)
   const deferredValues = cleanValues(deferredStyle, deferred.values[deferredStyle.id])
   const valuesKey = JSON.stringify(deferredValues)
-  const { parts, buildError } = useMemo((): { parts: SignPart[]; buildError: string | null } => {
+  const { parts: builtParts, buildError } = useMemo((): { parts: SignPart[]; buildError: string | null } => {
     if (deferredStyle.usesArt && art.length === 0) return { parts: [], buildError: null }
     try {
       return { parts: buildStyle(deferredStyle, art, JSON.parse(valuesKey)), buildError: null }
@@ -184,6 +195,16 @@ export default function Editor() {
       return { parts: [], buildError: `สร้างชิ้นส่วนไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }
     }
   }, [deferredStyle, art, valuesKey])
+
+  // The customer's material picks: same geometry, new material, and the cut
+  // outline (DXF) appears or disappears to suit how that material is made.
+  const materialPicks = draft.materials[deferredStyle.id]
+  const parts = useMemo(
+    () => builtParts.map((part) => (materialPicks?.[part.code] ? withMaterial(part, materialPicks[part.code]) : part)),
+    [builtParts, materialPicks],
+  )
+  const setMaterial = (code: string, material: MaterialId) =>
+    setDraft((d) => ({ ...d, materials: { ...d.materials, [style.id]: { ...d.materials[style.id], [code]: material } } }))
 
   const stats = useMemo(() => (step === 4 ? partStats(parts) : []), [parts, step])
   // Overall size comes from the finished parts, not the artwork: frames, bases,
@@ -234,7 +255,7 @@ export default function Editor() {
   function exportDxf() {
     const cuts = parts.filter((p) => p.cut && !hidden.has(p.code))
     if (cuts.length === 0) return setMessage({ tone: 'error', text: 'แบบนี้ไม่มีชิ้นส่วนแบนที่ตัดด้วยเลเซอร์หรือ CNC ได้' })
-    exportFile(EXPORT_COST.dxf, 'dxf', 'application/dxf', () => buildDxf(cuts.map((p) => ({ layer: p.code, region: p.cut! }))))
+    exportFile(EXPORT_COST.dxf, 'dxf', 'application/dxf', () => buildDxf(cuts.map((p) => ({ layer: dxfLayer(p), region: p.cut! }))))
   }
 
   function exportZip() {
@@ -242,7 +263,7 @@ export default function Editor() {
     if (visible.length === 0) return
     exportFile(EXPORT_COST.zip, 'zip', 'application/zip', () => {
       const list = partStats(visible)
-        .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
+        .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${partMethod(s.part)}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
         .join('\n')
       const readme = `JJDesign — ${style.code} ${style.name}\nข้อความ: ${draft.text}\nขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} × ${size.d.toFixed(1)} มม.\n\n${list}\n\nไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้าป้าย\n`
       return buildZip({ baseName, parts: visible, readme })
@@ -327,7 +348,7 @@ export default function Editor() {
 
   useEffect(() => () => { if (backdrop) URL.revokeObjectURL(backdrop) }, [backdrop])
 
-  useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
+  useEffect(() => () => { builtParts.forEach((part) => part.geometry.dispose()) }, [builtParts])
 
   const setValue = (key: string, value: number) =>
     setDraft((d) => ({ ...d, values: { ...d.values, [style.id]: { ...cleanValues(style, d.values[style.id]), [key]: value } } }))
@@ -626,13 +647,34 @@ export default function Editor() {
                 <tbody>
                   {stats.map((s) => (
                     <tr key={s.part.id} data-off={hidden.has(s.part.code) || undefined}>
-                      <td><span className="layer-code">{s.part.code}</span> {s.part.label}{!s.watertight && <span className="warn" title="ผิวชิ้นงานมีรอยต่อ ให้ตรวจหรือซ่อมใน slicer ก่อนพิมพ์">ตรวจใน slicer</span>}</td>
-                      <td>{MATERIAL_NAMES[s.part.material]}</td>
+                      <td>
+                        <span className="layer-code">{s.part.code}</span> {s.part.label}
+                        <span className="method" data-cut={s.part.cut ? true : undefined}>{partMethod(s.part)}</span>
+                        {!s.watertight && <span className="warn" title="ผิวชิ้นงานมีรอยต่อ ให้ตรวจหรือซ่อมใน slicer ก่อนพิมพ์">ตรวจใน slicer</span>}
+                      </td>
+                      <td>
+                        {s.part.material === 'led' ? MATERIAL_NAMES.led : (
+                          <select
+                            className="material-pick"
+                            aria-label={`วัสดุของ ${s.part.code} ${s.part.label}`}
+                            value={s.part.material}
+                            onChange={(e) => setMaterial(s.part.code, e.target.value as MaterialId)}
+                          >
+                            {PICKABLE_MATERIALS.map((m) => <option key={m} value={m}>{MATERIAL_NAMES[m]}</option>)}
+                          </select>
+                        )}
+                      </td>
                       <td className="num tabular">{s.part.material === 'led' ? '—' : s.grams.toFixed(0)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {materialPicks && Object.keys(materialPicks).length > 0 && (
+                <button type="button" className="btn btn-ghost" onClick={() => setDraft((d) => { const next = { ...d.materials }; delete next[style.id]; return { ...d, materials: next } })}>
+                  <Icon name="reset" size={16} /> วัสดุตามแบบเดิม
+                </button>
+              )}
+              <p className="note">เปลี่ยนวัสดุแล้วน้ำหนักและไฟล์จะเปลี่ยนตาม ชิ้นแบนบางที่ใช้วัสดุแผ่นได้ไฟล์ DXF สำหรับตัด ส่วนชิ้นที่มีรูปทรงได้ไฟล์ STL สำหรับพิมพ์ ใน ZIP แยกโฟลเดอร์ตามวัสดุ</p>
               <label className="field field-inline">
                 <span className="field-label">ราคาวัสดุพิมพ์ (บาท/กก.)</span>
                 <input type="number" min={0} max={100000} value={pricePerKg} onChange={(e) => setPricePerKg(Math.min(100000, Math.max(0, Number(e.target.value) || 0)))} />

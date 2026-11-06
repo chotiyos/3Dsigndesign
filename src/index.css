@@ -2059,6 +2059,40 @@ input[type='range'] {
   white-space: nowrap;
 }
 
+.method {
+  display: block;
+  width: fit-content;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  padding: 0 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.method[data-cut] {
+  color: var(--navy-600);
+  border-color: var(--navy-600);
+}
+
+.material-pick {
+  width: 100%;
+  min-width: 7.5em;
+  padding: 6px 24px 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.material-pick:focus-visible {
+  outline: 2px solid var(--navy-600);
+  outline-offset: -1px;
+}
+
 .ed[data-night] .ed-readout,
 .ed[data-night] .ed-layers {
   background: rgb(10 31 71 / 0.92);

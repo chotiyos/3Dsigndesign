@@ -22,6 +22,8 @@ export interface SignPart {
   geometry: THREE.BufferGeometry
   /** Flat outline in mm when this part can be laser- or CNC-cut. */
   cut?: Region
+  /** Outline and thickness of a flat extruded part, so a material change can re-derive `cut`. */
+  profile?: { region: Region; depth: number }
   /** How far this part travels per mm of the explode slider, along Z. */
   explode: number
   /** Shown in the editor when the style had to adjust the user's settings. */

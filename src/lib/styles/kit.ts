@@ -6,6 +6,21 @@ import type { MaterialId, ParamDef, SignPart } from './types'
 const CODES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
 const SHEET = new Set<MaterialId>(['acrylic', 'opal', 'plaswood', 'mirror', 'metal'])
 
+/** Whether a flat part of this material and thickness can be laser- or CNC-cut from sheet. */
+export function isCuttable(material: MaterialId, depth: number) {
+  return material !== 'led' && depth <= 12 && (SHEET.has(material) || depth <= 6)
+}
+
+/**
+ * The same part made from another material. Flat parts gain or lose their
+ * cutting outline to match; shaped parts stay printed (STL only).
+ */
+export function withMaterial(part: SignPart, material: MaterialId): SignPart {
+  if (part.material === material || part.material === 'led' || material === 'led') return part
+  const cut = part.profile && isCuttable(material, part.profile.depth) ? part.profile.region : undefined
+  return { ...part, material, cut }
+}
+
 /** Collects parts and hands out catalogue letters in order. */
 export class Parts {
   private list: SignPart[] = []
@@ -15,8 +30,10 @@ export class Parts {
    * for laser or CNC cutting; deep printed walls do not.
    */
   slab(label: string, material: MaterialId, region: Region, depth: number, z: number, explode = 0) {
-    const cuttable = material !== 'led' && depth <= 12 && (SHEET.has(material) || depth <= 6)
-    return this.solid(label, material, extrude(region, depth, z), explode, cuttable ? region : undefined)
+    const before = this.list.length
+    this.solid(label, material, extrude(region, depth, z), explode, isCuttable(material, depth) ? region : undefined)
+    if (this.list.length > before) this.list[before].profile = { region, depth }
+    return this
   }
 
   solid(label: string, material: MaterialId, geometry: THREE.BufferGeometry, explode = 0, cut?: Region) {
