@@ -1,4 +1,6 @@
+import { unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
+import { buildZip } from './exportModel'
 import { bounds, diff, offset, regionArea } from './geo2d'
 import { borderColour, buildLightbox, DEFAULT_LIGHTBOX, quantize, stripLength, toHex, traceColours, type LightboxShape } from './lightbox'
 
@@ -74,6 +76,24 @@ describe('buildLightbox', () => {
       }
     })
   }
+
+  it('joins separate pieces of a picture into one contour box, with backlit colour layers', () => {
+    const { parts } = buildLightbox(q, colours, layers, { ...DEFAULT_LIGHTBOX, shape: 'contour' })
+    const wall = parts.find((p) => p.label === 'กรอบข้าง')!.profile!.region
+    expect(wall.filter((poly) => regionArea([poly]) > 0)).toHaveLength(1)
+    const printed = parts.filter((p) => p.material === 'accent')
+    expect(printed.every((p) => p.backlit! > 0 && p.backlit! <= 1)).toBe(true)
+    parts.forEach((p) => p.geometry.dispose())
+  })
+
+  it('exports one STL per part and per colour in the ZIP', () => {
+    const { parts } = buildLightbox(q, colours, layers, DEFAULT_LIGHTBOX)
+    const names = Object.keys(unzipSync(buildZip({ baseName: 'box', parts, readme: 'x' })))
+    expect(names.filter((n) => n.startsWith('พลาสติกสีหลัก/') && n.endsWith('.stl'))).toHaveLength(2)
+    expect(names).toEqual(expect.arrayContaining(['box-ทั้งหมด.stl', 'รายการชิ้นส่วน.txt']))
+    expect(names.some((n) => n.includes('แผ่นกระจายแสง'))).toBe(true)
+    parts.forEach((p) => p.geometry.dispose())
+  })
 
   it('sizes a rectangle from the width and the picture aspect', () => {
     const { parts, height } = buildLightbox(q, colours, layers, DEFAULT_LIGHTBOX)

@@ -251,7 +251,7 @@ export function Viewer(props: ViewerProps) {
       mesh.position.z = part.explode * explodeMM
       const color = colors?.[part.code] ?? MATERIAL_COLORS[part.material]
       ;(mesh.material as THREE.Material).dispose()
-      mesh.material = makeMaterial(part.material, color, night)
+      mesh.material = makeMaterial(part.material, color, night, part.backlit)
       if (edges && !entry.edges) {
         entry.edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(part.geometry, 35),

@@ -1,5 +1,5 @@
 import { traceMask } from './artwork'
-import { band, bounds, intersect, islands, ngon, offset, regionArea, ring, roundRect, union, type Region } from './geo2d'
+import { band, bounds, hull, intersect, islands, ngon, offset, regionArea, ring, roundRect, union, type Region } from './geo2d'
 import { extrude, merge } from './solid'
 import { Parts } from './styles/kit'
 import { applyRear } from './styles/rear'
@@ -221,10 +221,16 @@ export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: R
   if (o.shape === 'contour') {
     const all = union(...placed)
     if (all.length === 0) return { parts: [] as SignPart[], colours: {} as Record<string, string>, width: 0, height: 0 }
-    // Close small gaps so the frame follows the picture's silhouette, not every notch.
-    const solid = islands(offset(offset(all, rim + 6), -6))
+    // Close gaps so the frame follows the picture's silhouette, not every
+    // notch, and widen the closing until separate pieces (a moon above hills)
+    // join into one box. Pictures that still fall apart get their outer hull.
+    let solid: Region[] = []
+    for (const close of [6, 12, 20, 30, 45]) {
+      solid = islands(offset(offset(all, rim + close), -close))
+      if (solid.length === 1) break
+    }
     // Holes inside the silhouette stay part of the window.
-    shape = union(...solid.map((piece) => [piece[0]]))
+    shape = solid.length === 1 ? [solid[0][0]] : offset(hull(all), rim)
   }
   const window = offset(shape, -o.wall)
   placed = placed.map((region) => (region.length ? intersect(region, window) : []))
@@ -251,7 +257,10 @@ export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: R
   // Preview colour per part letter, for the viewer.
   const tints: Record<string, string> = {}
   built.filter((part) => part.material === 'accent').forEach((part, i) => {
-    tints[part.code] = layers[order[i]].colour
+    const { colour, thick } = layers[order[i]]
+    tints[part.code] = colour
+    // Thin layers pass more light; at 0.4 mm about full strength.
+    part.backlit = Math.min(1, Math.max(0.15, Math.exp(-(thick - 0.4) / 1.2)))
   })
   const b = bounds(shape)
   return { parts: built, colours: tints, width: b.w, height: b.h }

@@ -28,8 +28,10 @@ export const MATERIAL_NAMES: Record<MaterialId, string> = {
 }
 
 /** Scene material for a part. At night, light-carrying parts glow. */
-export function makeMaterial(material: MaterialId, color: string, night: boolean): THREE.Material {
+export function makeMaterial(material: MaterialId, color: string, night: boolean, backlit = 0): THREE.Material {
   const c = new THREE.Color(color)
+  // A thin colour layer in front of a light passes that colour.
+  if (night && backlit > 0) return new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.75 * backlit, roughness: 0.4 })
   switch (material) {
     case 'opal':
     case 'opalprint':

@@ -39,6 +39,11 @@ export interface SignPart {
    * where those holes may go, and `z` is where the plate starts.
    */
   rear?: { cavity: Region; z: number }
+  /**
+   * A thin printed colour layer lit from behind (lightbox faces): at night it
+   * glows in its own colour at this strength, 0 to 1.
+   */
+  backlit?: number
   /** Shown in the editor when the style had to adjust the user's settings. */
   warning?: string
 }
