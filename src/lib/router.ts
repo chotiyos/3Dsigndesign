@@ -14,3 +14,11 @@ export function routeLocation(href: string) {
 export function hashId(hash: string): string {
   try { return decodeURIComponent(hash.slice(1)) } catch { return hash.slice(1) }
 }
+
+/** Remove one-time editor launch inputs only after the draft is safely saved. */
+export function consumedEditorUrl(href: string): string {
+  const url = new URL(href)
+  for (const key of ['style', 'text', 'file']) url.searchParams.delete(key)
+  if (url.hash.startsWith('#d=')) url.hash = ''
+  return url.pathname + url.search + url.hash
+}

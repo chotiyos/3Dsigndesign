@@ -2,6 +2,15 @@ import { expect, it } from 'vitest'
 import { imageToRegion } from './artwork'
 import { bounds } from './geo2d'
 
+it('does not turn a transparent PNG background into solid artwork when inverted', () => {
+  const image = { width: 3, height: 3, data: new Uint8ClampedArray(36) } as ImageData
+  expect(imageToRegion(image, 100, 128, true)).toEqual([])
+  image.data.set([255, 255, 255, 255], 16)
+  const b = bounds(imageToRegion(image, 100, 128, true))
+  expect(b.w).toBeCloseTo(100)
+  expect(b.h).toBeCloseTo(100)
+})
+
 it('scales the smoothed image outline to the requested physical height', () => {
   // A cross has enough corners to be smoothed, unlike a rectangle.
   const data = new Uint8ClampedArray(3 * 3 * 4)

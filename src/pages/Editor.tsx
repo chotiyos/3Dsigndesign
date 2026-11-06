@@ -18,6 +18,7 @@ import { planModules, powerFor, PSU_LOAD } from '../lib/ledPlan'
 import { fontFromArrayBuffer, loadFont, type LoadedFont } from '../lib/hb'
 import { applyMaterials, buildStyle, cleanValues, findStyle, GROUPS, lipHost, PLASTIC, STYLES, type MaterialId, type SignPart, type StyleGroup } from '../lib/styles'
 import { Link, useLocation, useTitle } from '../router'
+import { consumedEditorUrl } from '../lib/router'
 import { MATERIAL_COLORS, MATERIAL_NAMES } from '../three/materials'
 import { Viewer } from '../three/Viewer'
 import { MOUNT_HEIGHT, MOUNTS, sceneActive, type SceneOptions } from '../three/scene'
@@ -44,6 +45,8 @@ interface Draft {
   styleId: string
   values: Record<string, Record<string, number>>
   colors: Record<string, string>
+  styleColors?: Record<string, Record<string, string>>
+  hiddenParts?: string[]
   /** Customer's material choice per style, per part letter. */
   materials: Record<string, Record<string, MaterialId>>
   svgText?: string
@@ -89,6 +92,8 @@ export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
     if (typeof input[key] === 'string') out[key] = input[key]
   }
   if (out.fontId === CUSTOM_FONT_ID) out.fontId = FONT_OPTIONS[0].id
+  if (out.fontId && !FONT_OPTIONS.some((f) => f.id === out.fontId)) out.fontId = FONT_OPTIONS[0].id
+  out.hiddenParts = Array.isArray(input.hiddenParts) ? input.hiddenParts.filter((code) => typeof code === 'string' && /^(?:[A-HJ-NP-Z]|Z\d+)$/.test(code)) : []
   if (out.text) out.text = out.text.slice(0, 200)
   for (const [key, min, max, fallback] of [
     ['heightMM', 10, 1500, 200], ['spacingMM', -30, 150, 0],
@@ -106,6 +111,14 @@ export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
   out.invert = input.invert === true
   out.values = input.values && typeof input.values === 'object' ? input.values : {}
   out.colors = Object.fromEntries(Object.entries(input.colors && typeof input.colors === 'object' ? input.colors : {}).filter(([, color]) => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)))
+  out.styleColors = {}
+  if (input.styleColors && typeof input.styleColors === 'object') {
+    for (const [id, colors] of Object.entries(input.styleColors)) {
+      if (STYLES.some((s) => s.id === id) && colors && typeof colors === 'object') {
+        out.styleColors[id] = Object.fromEntries(Object.entries(colors).filter(([, color]) => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)))
+      }
+    }
+  }
   out.materials = {}
   if (input.materials && typeof input.materials === 'object' && !Array.isArray(input.materials)) {
     for (const [styleId, choices] of Object.entries(input.materials)) {
@@ -115,6 +128,13 @@ export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
     }
   }
   return out
+}
+
+/** Keep colours with their style, just like dimensions and materials. */
+export function switchDraftStyle(draft: Draft, styleId: string): Draft {
+  if (draft.styleId === styleId) return draft
+  const styleColors = { ...draft.styleColors, [draft.styleId]: draft.colors }
+  return { ...draft, styleId, styleColors, colors: styleColors[styleId] ?? {}, hiddenParts: [] }
 }
 
 function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = null): Draft {
@@ -162,6 +182,8 @@ function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = nu
       values: { ...base.values, [readyFile.styleId]: readyFile.values ?? {} },
       materials: Object.fromEntries(Object.entries(base.materials).filter(([id]) => id !== readyFile.styleId)),
       colors: {},
+      styleColors: { ...base.styleColors, [readyFile.styleId]: {} },
+      hiddenParts: [],
     })
   }
   const text = query.get('text')
@@ -170,7 +192,7 @@ function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = nu
     base.text = text.slice(0, 200)
     base.source = 'text'
   }
-  if (style && STYLES.some((s) => s.id === style)) base.styleId = style
+  if (style && STYLES.some((s) => s.id === style)) return switchDraftStyle(base, style)
   return base
 }
 
@@ -200,7 +222,7 @@ export default function Editor() {
   const [night, setNight] = useState(false)
   const [edges, setEdges] = useState(false)
   const [grid, setGrid] = useState(true)
-  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set(draft.hiddenParts))
   const [backdrop, setBackdrop] = useState<string | null>(null)
   const [filter, setFilter] = useState<StyleGroup | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -265,33 +287,61 @@ export default function Editor() {
       if (deferred.source === 'text') {
         if (!font) return { art: [], artError: null }
         if (!deferred.text.trim()) return { art: [], artError: 'พิมพ์ข้อความอย่างน้อยหนึ่งตัวอักษร' }
-        return { art: textToRegion(font, deferred.text, deferred.heightMM, deferred.spacingMM, deferred.lineGap, deferred.align), artError: null }
+        const region = textToRegion(font, deferred.text, deferred.heightMM, deferred.spacingMM, deferred.lineGap, deferred.align)
+        return { art: region, artError: region.length ? null : 'ไม่พบรูปทรงตัวอักษร ลองเปลี่ยนข้อความหรือฟอนต์' }
       }
       if (deferred.source === 'svg') {
         if (!deferred.svgText) return { art: [], artError: 'เลือกไฟล์ SVG เพื่อเริ่ม' }
-        return { art: svgToRegion(deferred.svgText, deferred.heightMM), artError: null }
+        const region = svgToRegion(deferred.svgText, deferred.heightMM)
+        return { art: region, artError: region.length ? null : 'ไม่พบรูปทรงใน SVG ใช้ไฟล์ที่มีเส้นปิดและเติมสีแล้ว' }
       }
       if (!image) return { art: [], artError: 'เลือกรูปภาพเพื่อเริ่ม' }
       const traced = imageToRegion(image, deferred.heightMM, deferred.threshold, deferred.invert)
-      return { art: traced, artError: traced.length ? null : 'ไม่พบส่วนสีเข้มในรูป ลองปรับค่าความเข้ม' }
+      return { art: traced, artError: traced.length ? null : 'ไม่พบเส้นในรูป ลองปรับค่าความเข้มหรือกลับสี' }
     } catch (err) {
       return { art: [], artError: `อ่านข้อมูลไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }
     }
   }, [deferred.source, deferred.text, deferred.heightMM, deferred.spacingMM, deferred.lineGap, deferred.align, deferred.svgText, deferred.threshold, deferred.invert, font, image])
 
+  const persistDraft = useRef<() => boolean>(() => false)
+  persistDraft.current = () => {
+    // A traced image must match its settings; text and SVG carry their own source.
+    if (draft.source === 'image' && (deferred !== draft || !art.length)) return false
+    try {
+      const saved = portableDraft({ ...draft, hiddenParts: [...hidden] }, art)
+      if (saved.svgText && saved.svgText.length >= 400_000) return false
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(saved))
+      return true
+    } catch {
+      // Saving the draft is a convenience only.
+      return false
+    }
+  }
   useEffect(() => {
     if (deferred !== draft) return
     const id = setTimeout(() => {
-      try {
-        const saved = portableDraft(draft, art)
-        if (saved.svgText && saved.svgText.length >= 400_000) return
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(saved))
-      } catch {
-        // Saving the draft is a convenience only.
+      // Launch inputs seed a design once. Refresh must restore later edits.
+      // Keep the input URL if saving failed (e.g. storage is full).
+      if (persistDraft.current() && typeof window !== 'undefined') {
+        window.history.replaceState(window.history.state, '', consumedEditorUrl(window.location.href))
       }
     }, 400)
     return () => clearTimeout(id)
-  }, [draft, deferred, art])
+  }, [draft, deferred, art, hidden])
+
+  useEffect(() => {
+    // Preserve imported work before consuming its URL, including a refresh or
+    // navigation during the first debounce interval.
+    if ((query.has('style') || query.has('text') || query.has('file') || window.location.hash.startsWith('#d=')) && persistDraft.current()) {
+      window.history.replaceState(window.history.state, '', consumedEditorUrl(window.location.href))
+    }
+    const flush = () => persistDraft.current()
+    window.addEventListener('pagehide', flush)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      flush()
+    }
+  }, [])
 
 
   useEffect(() => {
@@ -302,11 +352,9 @@ export default function Editor() {
     }
   }, [rates])
 
-  // Take the share code out of the address bar once read, so a refresh or a
-  // later copy of the address does not bring back the original design.
+  // Explain share imports; autosave removes the launch URL after saving.
   useEffect(() => {
     if (!window.location.hash.startsWith('#d=')) return
-    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
     setMessage(shared
       ? { tone: 'ok', text: 'เปิดแบบจากลิงก์แชร์แล้ว แก้ต่อได้เลย แบบเดิมของผู้ส่งไม่เปลี่ยน' }
       : { tone: 'error', text: 'ลิงก์แชร์นี้ไม่สมบูรณ์ อาจถูกตัดตอนคัดลอก ขอลิงก์ใหม่จากผู้ส่ง' })
@@ -464,9 +512,9 @@ export default function Editor() {
       setMessage({ tone: 'error', text: 'เลือกรูปภาพและปรับให้พบเส้นก่อนบันทึกไฟล์งาน' })
       return
     }
-    const data = JSON.stringify({ app: 'jjdesign', version: 1, draft: { ...portableDraft(draft, art), fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId } })
+    const data = JSON.stringify({ app: 'jjdesign', version: 1, draft: { ...portableDraft(draft, art), hiddenParts: [...hidden], fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId } })
     downloadBlob(data, `${baseName}.jjd`, 'application/json')
-    setMessage({ tone: 'ok', text: 'บันทึกไฟล์งาน .jjd แล้ว เปิดกลับมาแก้ได้จากขั้นที่ 1' })
+    setMessage({ tone: 'ok', text: 'บันทึกไฟล์งาน .jjd แล้ว เปิดกลับมาแก้ได้จากขั้นที่ 1' + (draft.fontId === CUSTOM_FONT_ID || draft.blocks.some((b) => b.fontId === CUSTOM_FONT_ID) ? ' ฟอนต์ของคุณไม่รวมในไฟล์ ต้องเลือกฟอนต์ใหม่เมื่อเปิดงาน' : '') })
   }
 
   async function shareDesign() {
@@ -475,7 +523,7 @@ export default function Editor() {
       setMessage({ tone: 'error', text: 'เลือกรูปภาพและปรับให้พบเส้นก่อนแชร์แบบ' })
       return
     }
-    const code = encodeShare({ ...portableDraft(draft, art), fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId })
+    const code = encodeShare({ ...portableDraft(draft, art), hiddenParts: [...hidden], fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId })
     if (!code || code.length > SHARE_LIMIT) {
       setShareUrl(null)
       setMessage({ tone: 'error', text: 'แบบนี้ละเอียดเกินกว่าจะใส่ในลิงก์ (มักเป็นรูปหรือ SVG ที่มีเส้นมาก) ส่งไฟล์งาน .jjd แทน' })
@@ -507,7 +555,7 @@ export default function Editor() {
       const cleaned = cleanDraft(parsed.draft)
       if (cleaned.fontId === CUSTOM_FONT_ID) cleaned.fontId = FONT_OPTIONS[0].id
       setDraft((d) => ({ ...d, ...cleaned }))
-      setHidden(new Set())
+      setHidden(new Set(cleaned.hiddenParts))
       setMessage({ tone: 'ok', text: `เปิดไฟล์ ${file.name} แล้ว` })
     } catch (err) {
       setMessage({ tone: 'error', text: `เปิดไฟล์ไม่ได้: ${err instanceof Error ? err.message : 'ไฟล์เสีย'}` })
@@ -1047,7 +1095,7 @@ export default function Editor() {
               <ul className="pick-grid">
                 {shownStyles.map((s) => (
                   <li key={s.id}>
-                    <button type="button" className="pick" aria-pressed={s.id === style.id} onClick={() => { update({ styleId: s.id }); setHidden(new Set()) }}>
+                    <button type="button" className="pick" aria-pressed={s.id === style.id} onClick={() => { setDraft((d) => switchDraftStyle(d, s.id)); setHidden(new Set()) }}>
                       <StyleThumb style={s} />
                       <span className="pick-code">{s.code}</span>
                       <span className="pick-name">{s.name}</span>
@@ -1206,6 +1254,13 @@ export default function Editor() {
                           onChange={() => setHidden((h) => { const next = new Set(h); if (next.has(s.part.code)) next.delete(s.part.code); else next.add(s.part.code); return next })}
                         />{' '}
                         <span className="layer-code">{s.part.code}</span> {s.part.label}
+                        <input
+                          className="part-color"
+                          type="color"
+                          aria-label={`สีของ ${s.part.label}`}
+                          value={draft.colors[s.part.code] ?? MATERIAL_COLORS[s.part.material]}
+                          onChange={(e) => { const color = e.target.value; setDraft((d) => ({ ...d, colors: { ...d.colors, [s.part.code]: color } })) }}
+                        />
                         <span className="method" data-cut={s.part.cut ? true : undefined}>{partMethod(s.part)}</span>
                         {!s.watertight && <span className="warn" title="ผิวชิ้นงานมีรอยต่อ ให้ตรวจหรือซ่อมใน slicer ก่อนพิมพ์">ตรวจใน slicer</span>}
                       </td>

@@ -17,7 +17,7 @@ const MARGIN = 16
  * this screen size) are skipped.
  */
 export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => void }) {
-  const shown = steps.filter((step) => typeof document === 'undefined' || document.querySelector(step.target))
+  const shown = steps.filter((step) => typeof document === 'undefined' || (document.querySelector(step.target)?.getClientRects().length ?? 0) > 0)
   const [index, setIndex] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const [card, setCard] = useState({ w: 340, h: 180 })

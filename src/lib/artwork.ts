@@ -60,6 +60,7 @@ export function imageToRegion(
     if (x < 0 || y < 0 || x >= width || y >= height) return false
     const i = (y * width + x) * 4
     const alpha = data[i + 3] / 255
+    if (alpha === 0) return false
     const lum = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) * alpha + 255 * (1 - alpha)
     return invert ? lum >= threshold : lum < threshold
   }

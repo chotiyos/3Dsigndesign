@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { hashId, localDestination, routeLocation } from './router'
+import { consumedEditorUrl, hashId, localDestination, routeLocation } from './router'
 
 const current = 'https://jjdesign.test/styles?text=old#details'
+
+it('consumes launch inputs after autosave without removing unrelated URL state', () => {
+  expect(consumedEditorUrl('https://jjdesign.test/app?style=a&text=OLD&file=open-sign&keep=1#d=abc')).toBe('/app?keep=1')
+  expect(consumedEditorUrl('https://jjdesign.test/app?text=#content')).toBe('/app#content')
+})
 
 describe('local router destinations', () => {
   it('preserves queries and hashes and resolves same-page links', () => {

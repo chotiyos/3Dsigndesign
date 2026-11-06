@@ -20,13 +20,13 @@ function Loading() {
 }
 
 export default function App() {
-  const { path, search } = useLocation()
+  const { path, search, hash } = useLocation()
   useNavigationScroll()
 
   if (path === '/app') {
     return (
       <Suspense fallback={<Loading />}>
-        <Editor key={search} />
+        <Editor key={search + hash} />
       </Suspense>
     )
   }

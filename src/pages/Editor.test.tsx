@@ -27,7 +27,7 @@ vi.mock('../lib/artwork', () => ({
   svgToRegion: () => [], imageToRegion: () => [], readImage: vi.fn(),
 }))
 vi.mock('../three/Viewer', () => ({ Viewer: 'viewer' }))
-import Editor, { cleanDraft, portableDraft, Range } from './Editor'
+import Editor, { cleanDraft, portableDraft, Range, switchDraftStyle } from './Editor'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
 import { STYLES } from '../lib/styles'
 import { textToRegion } from '../lib/artwork'
@@ -40,6 +40,75 @@ function nodes(node: ReactNode): { type: unknown; props: Record<string, any> }[]
   return [node as any, ...nodes(node.props.children)]
 }
 beforeEach(() => { harness.query = ''; harness.index = 0; harness.id = 0; harness.states = []; harness.setters = []; harness.effects = [] })
+
+it('removes launch inputs only after autosave succeeds, so refresh keeps later edits', () => {
+  vi.useFakeTimers()
+  const replaceState = vi.fn(), setItem = vi.fn()
+  vi.stubGlobal('localStorage', { getItem: () => null, setItem })
+  vi.stubGlobal('window', { location: { href: 'https://jjdesign.test/app?style=front-lit-lip&text=OLD#d=abc', hash: '' }, history: { state: null, replaceState } })
+  try {
+    Editor()
+    harness.effects[1]()
+    expect(replaceState).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(setItem).toHaveBeenCalled()
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/app')
+    replaceState.mockClear()
+    setItem.mockImplementation(() => { throw new Error('quota') })
+    harness.effects[1]()
+    vi.runAllTimers()
+    expect(replaceState).not.toHaveBeenCalled()
+  } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
+})
+
+it('flushes pending text edits on leaving the editor before the autosave timer', () => {
+  const setItem = vi.fn(), addEventListener = vi.fn(), removeEventListener = vi.fn()
+  vi.stubGlobal('localStorage', { getItem: () => null, setItem })
+  vi.stubGlobal('window', { location: { hash: '' }, addEventListener, removeEventListener })
+  try {
+    Editor()
+    const cleanup = harness.effects[2]() as () => void
+    expect(setItem).not.toHaveBeenCalled()
+    cleanup()
+    expect(JSON.parse(setItem.mock.calls[0][1]).text).toBe('ร้านของฉัน')
+    expect(removeEventListener).toHaveBeenCalledWith('pagehide', addEventListener.mock.calls[0][1])
+  } finally { vi.unstubAllGlobals() }
+})
+
+it('keeps colours separate between styles and restores them after a project round trip', () => {
+  const first = STYLES[0].id, second = STYLES[1].id
+  const draft = { ...cleanDraft({}), styleId: first, colors: { A: '#123456' } } as Parameters<typeof switchDraftStyle>[0]
+  const changed = switchDraftStyle(draft, second)
+  expect(changed.colors).toEqual({})
+  const restored = cleanDraft(JSON.parse(JSON.stringify({ ...changed, colors: { A: '#abcdef' } })))
+  const back = switchDraftStyle(restored as typeof draft, first)
+  expect(back.colors).toEqual({ A: '#123456' })
+  expect(switchDraftStyle(back, second).colors).toEqual({ A: '#abcdef' })
+})
+
+it('explains empty outlines instead of leaving a blank viewer with disabled exports', () => {
+  harness.states[0] = { ...cleanDraft({}), source: 'text', text: '\u200b', fontId: FONT_OPTIONS[0].id, styleId: STYLES[0].id }
+  harness.states[3] = { id: FONT_OPTIONS[0].id, font: {} }
+  vi.mocked(textToRegion).mockReturnValueOnce([])
+  expect(nodes(Editor()).some(n => n.props.role === 'alert' && n.props.children === 'ไม่พบรูปทรงตัวอักษร ลองเปลี่ยนข้อความหรือฟอนต์')).toBe(true)
+  harness.index = 0
+  harness.states[0] = { ...harness.states[0] as object, source: 'svg', svgText: '<svg/>' }
+  expect(nodes(Editor()).some(n => n.props.role === 'alert' && n.props.children === 'ไม่พบรูปทรงใน SVG ใช้ไฟล์ที่มีเส้นปิดและเติมสีแล้ว')).toBe(true)
+  expect(cleanDraft({ fontId: 'missing-font' }).fontId).toBe(FONT_OPTIONS[0].id)
+})
+
+it('restores hidden parts and offers a colour control in the export table on phones', async () => {
+  harness.states[0] = { ...cleanDraft({}), source: 'text', text: 'AB', fontId: FONT_OPTIONS[0].id, styleId: STYLES[0].id }
+  harness.states[1] = 4
+  harness.states[3] = { id: FONT_OPTIONS[0].id, font: {} }
+  expect(nodes(Editor()).some(n => n.type === 'input' && n.props.className === 'part-color')).toBe(true)
+  harness.index = 0
+  harness.states[1] = 1
+  const input = nodes(Editor()).find(n => n.type === 'input' && n.props.accept === '.jjd,application/json')!
+  await input.props.onChange({ target: { files: [{ name: 'hidden.jjd', text: async () => JSON.stringify({ app: 'jjdesign', version: 1, draft: { hiddenParts: ['A'] } }) }], value: '' } })
+  expect(harness.setters[10]).toHaveBeenCalledWith(new Set(['A']))
+  expect(cleanDraft({ hiddenParts: ['A', 'Z25', 'bad'] }).hiddenParts).toEqual(['A', 'Z25'])
+})
 
 it('opens a ready file with its preset instead of unrelated saved dimensions and materials', () => {
   harness.query = 'style=front-lit-lip&file=open-sign'
