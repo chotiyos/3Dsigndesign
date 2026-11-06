@@ -30,6 +30,8 @@ const PATHS = {
   save: 'M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7',
   explode: 'M12 3v5m0 8v5M7 8h10M7 16h10M9 12h6',
   camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  link: 'M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1',
+  help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-2.5-11.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14m0 3.5h.01',
 } as const
 
 export type IconName = keyof typeof PATHS

@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
 import { buildZip, downloadBlob, MATERIAL_INFO, partMethod, partStats, partsToStl, safeName } from '../lib/exportModel'
+import { printGuide } from '../lib/printTips'
 import {
   borderColour, buildLightbox, DEFAULT_LIGHTBOX, quantize, stripLength, toHex, traceColours,
   type LayerSetting, type LightboxOptions, type LightboxShape, type Quantized,
@@ -139,7 +140,8 @@ export default function Lightbox() {
   }
 
   function readme() {
-    const list = partStats(parts)
+    const listed = partStats(parts)
+    const list = listed
       .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${partMethod(s.part)}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
       .join('\n')
     return [
@@ -152,6 +154,9 @@ export default function Lightbox() {
       'แล้วพลิกคว่ำให้ด้านสีอยู่บนฐานพิมพ์ แผ่นกระจายแสงใช้เส้นสีขาว',
       'กรอบข้างพิมพ์ตั้งตรง ฝาหลังสวมเข้าด้านในกรอบ แผ่นหน้ามีขอบสวมลงในกรอบ ถอดเปลี่ยนไฟได้',
       `ไฟเส้น LED รอบด้านในกรอบยาวประมาณ ${(stripLength(parts) / 10).toFixed(0)} ซม.`,
+      '',
+      printGuide(listed),
+      '',
       'ไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้า',
       '',
     ].join('\n')

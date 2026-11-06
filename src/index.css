@@ -2736,3 +2736,69 @@ input[type='range'] {
     flex-basis: 100%;
   }
 }
+
+/* Share link field */
+.share-field input {
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+
+/* First-visit tour */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+}
+
+.tour-ring {
+  position: fixed;
+  border: 2px solid var(--signal);
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgb(6 20 48 / 0.6);
+  pointer-events: none;
+  transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+}
+
+.tour-card {
+  position: fixed;
+  width: min(340px, calc(100vw - 32px));
+  padding: 16px 18px;
+  background: var(--sheet);
+  color: var(--ink);
+  border-top: 4px solid var(--signal);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(6 20 48 / 0.35);
+}
+
+.tour-count {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+}
+
+.tour-card h2 {
+  margin: 2px 0 6px;
+  font-family: var(--display);
+  font-size: 1.15rem;
+}
+
+.tour-card p {
+  margin: 0;
+}
+
+.tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tour-actions .btn:first-child {
+  margin-right: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-ring {
+    transition: none;
+  }
+}

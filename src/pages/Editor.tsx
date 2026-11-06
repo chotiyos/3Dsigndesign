@@ -6,6 +6,8 @@ import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artw
 import { bridgeArt, floatingCount, type BridgeMode } from '../lib/bridges'
 import { artMeasures, baht, cleanRates, costSheet, type Rates } from '../lib/estimate'
 import { jobSheetHtml } from '../lib/jobSheet'
+import { printGuide } from '../lib/printTips'
+import { decodeShare, encodeShare, SHARE_LIMIT } from '../lib/share'
 import { buildDxf } from '../lib/exportDxf'
 import { buildZip, downloadBlob, dxfLayer, MATERIAL_INFO, partMethod, partStats, partsToStl, PICKABLE_MATERIALS, safeName } from '../lib/exportModel'
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
@@ -20,6 +22,7 @@ import { Icon } from '../ui/Icon'
 import { Brand } from '../ui/Brand'
 import { StyleThumb } from '../ui/StyleThumb'
 import { Range } from '../ui/Range'
+import { Tour, type TourStep } from '../ui/Tour'
 
 export { Range }
 
@@ -53,6 +56,17 @@ interface Draft {
 const DRAFT_KEY = 'jjdesign-draft-v1'
 /** The shop's own prices and name, kept in this browser only. */
 const RATES_KEY = 'jjdesign-rates-v1'
+/** Set once the first-visit tour is finished or skipped. */
+const TOUR_KEY = 'jjdesign-tour-v1'
+
+const TOUR: TourStep[] = [
+  { target: '.ed-steps', title: 'ทำป้ายใน 4 ขั้น', text: 'ใส่ข้อความหรือรูป เลือกแบบป้าย ปรับขนาด แล้วส่งออกไฟล์ กดที่ขั้นไหนก็ได้เพื่อย้อนกลับไปแก้' },
+  { target: '.ed-panel', title: 'แผงตั้งค่า', text: 'ตั้งค่าของขั้นที่เลือกอยู่ตรงนี้ ทุกอย่างที่แก้จะเห็นผลในโมเดลทันที งานบันทึกไว้ในเครื่องให้อัตโนมัติ' },
+  { target: '.ed-viewer', title: 'โมเดล 3 มิติ', text: 'ลากเพื่อหมุน เลื่อนล้อเมาส์หรือถ่างนิ้วเพื่อซูม คลิกขวาค้างแล้วลากเพื่อเลื่อนภาพ' },
+  { target: '.ed-tools', title: 'มุมมองต่างๆ', text: 'ดูตอนเปิดไฟกลางคืน แยกชิ้นดูด้านใน หรือใส่รูปหน้าร้านจริงเพื่อดูป้ายในที่ติดตั้ง' },
+  { target: '.ed-layers', title: 'ชิ้นส่วน', text: 'ซ่อนหรือเปลี่ยนสีแต่ละชิ้น ชิ้นที่ซ่อนอยู่จะไม่ถูกส่งออก' },
+  { target: '.ed-steps button:last-child', title: 'ส่งออกและส่งต่อ', text: 'ขั้นที่ 4 มีไฟล์ ZIP, STL, DXF ประมาณต้นทุน ใบงานให้ลูกค้าเซ็น และลิงก์แชร์แบบ' },
+]
 
 /** Images are persisted as their traced outline; pixel data stays in memory. */
 export function portableDraft(draft: Draft, art: Region): Draft {
@@ -96,7 +110,7 @@ export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
   return out
 }
 
-function initialDraft(query: URLSearchParams): Draft {
+function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = null): Draft {
   let saved: Partial<Draft> = {}
   try {
     saved = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '{}') as Partial<Draft>
@@ -122,6 +136,11 @@ function initialDraft(query: URLSearchParams): Draft {
     bridge: 0,
     bridgeW: 2,
     ...cleanDraft(saved),
+  }
+  if (shared) {
+    // A shared link wins, but this browser keeps its own work on other styles.
+    const incoming = cleanDraft(shared)
+    Object.assign(base, incoming, { values: { ...base.values, ...incoming.values }, materials: { ...base.materials, ...incoming.materials } })
   }
   if (base.fontId === CUSTOM_FONT_ID) base.fontId = FONT_OPTIONS[0].id
   if (base.source === 'image') base.source = 'text'
@@ -157,8 +176,13 @@ export default function Editor() {
   useTitle('ตัวออกแบบป้าย')
   const { query } = useLocation()
   const demo = useDemo()
-  const [draft, setDraft] = useState<Draft>(() => initialDraft(query))
-  const [step, setStep] = useState<Step>(query.get('style') ? 3 : 1)
+  // A design opened from a share link (#d=…), read once. Kept out of state so
+  // the editor's other hooks keep their order.
+  const sharedRef = useRef<Partial<Draft> | null | undefined>(undefined)
+  if (sharedRef.current === undefined) sharedRef.current = typeof window === 'undefined' ? null : (decodeShare(window.location.hash) as Partial<Draft> | null)
+  const shared = sharedRef.current
+  const [draft, setDraft] = useState<Draft>(() => initialDraft(query, shared))
+  const [step, setStep] = useState<Step>(query.get('style') || shared ? 3 : 1)
   const [customFont, setCustomFont] = useState<{ name: string; font: LoadedFont } | null>(null)
   const [loadedFont, setLoadedFont] = useState<{ id: string; font: LoadedFont } | null>(null)
   const [image, setImage] = useState<ImageData | null>(null)
@@ -183,6 +207,22 @@ export default function Editor() {
   const [sheet, setSheet] = useState<string | null>(null)
   const sheetFrame = useRef<HTMLIFrameElement>(null)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [tour, setTour] = useState(() => {
+    try {
+      return !localStorage.getItem(TOUR_KEY)
+    } catch {
+      return false
+    }
+  })
+  const endTour = () => {
+    setTour(false)
+    try {
+      localStorage.setItem(TOUR_KEY, '1')
+    } catch {
+      // Without storage the tour simply shows again next visit.
+    }
+  }
 
   const style = findStyle(draft.styleId)
   const values = cleanValues(style, draft.values[style.id])
@@ -256,6 +296,16 @@ export default function Editor() {
       // Remembering prices is a convenience only.
     }
   }, [rates])
+
+  // Take the share code out of the address bar once read, so a refresh or a
+  // later copy of the address does not bring back the original design.
+  useEffect(() => {
+    if (!window.location.hash.startsWith('#d=')) return
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+    setMessage(shared
+      ? { tone: 'ok', text: 'เปิดแบบจากลิงก์แชร์แล้ว แก้ต่อได้เลย แบบเดิมของผู้ส่งไม่เปลี่ยน' }
+      : { tone: 'error', text: 'ลิงก์แชร์นี้ไม่สมบูรณ์ อาจถูกตัดตอนคัดลอก ขอลิงก์ใหม่จากผู้ส่ง' })
+  }, [shared])
 
   const deferredStyle = findStyle(deferred.styleId)
   const deferredValues = cleanValues(deferredStyle, deferred.values[deferredStyle.id])
@@ -343,10 +393,11 @@ export default function Editor() {
     const visible = parts.filter((p) => !hidden.has(p.code))
     if (visible.length === 0) return
     exportFile(EXPORT_COST.zip, 'zip', 'application/zip', () => {
-      const list = partStats(visible)
+      const listed = partStats(visible)
+      const list = listed
         .map((s) => `${s.part.code}  ${s.part.label}  ${MATERIAL_INFO[s.part.material].name}  ${partMethod(s.part)}  ${s.size.x.toFixed(1)}×${s.size.y.toFixed(1)}×${s.size.z.toFixed(1)} มม.  ~${s.grams.toFixed(0)} กรัม`)
         .join('\n')
-      const readme = `JJDesign — ${style.code} ${style.name}\nข้อความ: ${draft.text}\nขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} × ${size.d.toFixed(1)} มม.\n\n${list}\n\nไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้าป้าย\n`
+      const readme = `JJDesign — ${style.code} ${style.name}\nข้อความ: ${draft.text}\nขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} × ${size.d.toFixed(1)} มม.\n\n${list}\n\n${printGuide(listed)}\n\nไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ออกด้านหน้าป้าย\n`
       return buildZip({ baseName, parts: visible, readme })
     })
   }
@@ -360,6 +411,29 @@ export default function Editor() {
     const data = JSON.stringify({ app: 'jjdesign', version: 1, draft: { ...portableDraft(draft, art), fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId } })
     downloadBlob(data, `${baseName}.jjd`, 'application/json')
     setMessage({ tone: 'ok', text: 'บันทึกไฟล์งาน .jjd แล้ว เปิดกลับมาแก้ได้จากขั้นที่ 1' })
+  }
+
+  async function shareDesign() {
+    if (busy) return
+    if (draft.source === 'image' && !art.length) {
+      setMessage({ tone: 'error', text: 'เลือกรูปภาพและปรับให้พบเส้นก่อนแชร์แบบ' })
+      return
+    }
+    const code = encodeShare({ ...portableDraft(draft, art), fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId })
+    if (code.length > SHARE_LIMIT) {
+      setShareUrl(null)
+      setMessage({ tone: 'error', text: 'แบบนี้ละเอียดเกินกว่าจะใส่ในลิงก์ (มักเป็นรูปหรือ SVG ที่มีเส้นมาก) ส่งไฟล์งาน .jjd แทน' })
+      return
+    }
+    const url = `${window.location.origin}/app#d=${code}`
+    setShareUrl(url)
+    const font = draft.fontId === CUSTOM_FONT_ID ? ' ฟอนต์ของคุณไม่ได้ไปกับลิงก์ ผู้รับจะเห็นฟอนต์มาตรฐานแทน' : ''
+    try {
+      await navigator.clipboard.writeText(url)
+      setMessage({ tone: 'ok', text: `คัดลอกลิงก์แล้ว ส่งให้ลูกค้าหรือเพื่อนเปิดดูและแก้ต่อได้${font}` })
+    } catch {
+      setMessage({ tone: 'ok', text: `สร้างลิงก์แล้ว กดค้างที่ช่องลิงก์เพื่อคัดลอก${font}` })
+    }
   }
 
   async function openProject(e: ChangeEvent<HTMLInputElement>) {
@@ -592,6 +666,9 @@ export default function Editor() {
           ))}
         </nav>
         <div className="ed-top-end">
+          <button type="button" className="icon-link" aria-label="ดูวิธีใช้อีกครั้ง" title="ดูวิธีใช้อีกครั้ง" onClick={() => setTour(true)}>
+            <Icon name="help" />
+          </button>
           <Link href="/account" className="credit-chip" title="เครดิตทดลอง ไม่ใช่เงินจริง">
             <span className="tabular">{balance}</span> เครดิตทดลอง
           </Link>
@@ -1097,6 +1174,15 @@ export default function Editor() {
                 <button type="button" className="btn btn-ghost btn-block" onClick={saveProject}>
                   <Icon name="save" size={16} /> บันทึกไฟล์งาน .jjd <span className="cost">ฟรี</span>
                 </button>
+                <button type="button" className="btn btn-ghost btn-block" onClick={shareDesign}>
+                  <Icon name="link" size={16} /> คัดลอกลิงก์แชร์แบบ <span className="cost">ฟรี</span>
+                </button>
+                {shareUrl && (
+                  <label className="field share-field">
+                    <span className="field-label">ลิงก์แชร์แบบ <small>ใครเปิดก็ได้สำเนาไปแก้ต่อ แบบของคุณไม่เปลี่ยน</small></span>
+                    <input type="text" readOnly value={shareUrl} onFocus={(e) => e.target.select()} />
+                  </label>
+                )}
               </div>
               <p className="note">
                 ระบบเครดิตบนเว็บนี้เป็นการสาธิต ไม่มีการเก็บเงินจริง ชิ้นส่วนที่ซ่อนอยู่จะไม่ถูกส่งออก ตรวจขนาดในโปรแกรม slicer ก่อนสั่งผลิตทุกครั้ง{' '}
@@ -1106,6 +1192,7 @@ export default function Editor() {
           )}
         </div>
       </aside>
+      {tour && <Tour steps={TOUR} onClose={endTour} />}
       {sheet && (
         <div className="sheet-modal" role="dialog" aria-modal="true" aria-label="ใบงานและใบยืนยันแบบ" onKeyDown={(e) => e.key === 'Escape' && setSheet(null)}>
           <div className="sheet-bar">
