@@ -40,6 +40,10 @@ export interface ParamDef {
   step: number
   value: number
   hint?: string
+  /** 'toggle' shows an on/off switch (value 0 or 1) instead of a slider. */
+  kind?: 'toggle'
+  /** Only shown while the toggle with this key is on. */
+  when?: string
 }
 
 export interface StyleContext {

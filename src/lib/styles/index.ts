@@ -31,7 +31,8 @@ export function cleanValues(style: StyleDef, values: Record<string, number> | un
   for (const param of style.params) {
     const raw = values?.[param.key]
     if (typeof raw === 'number' && Number.isFinite(raw)) {
-      out[param.key] = Math.min(param.max, Math.max(param.min, raw))
+      const clamped = Math.min(param.max, Math.max(param.min, raw))
+      out[param.key] = param.kind === 'toggle' ? (clamped >= 0.5 ? 1 : 0) : clamped
     }
   }
   return out

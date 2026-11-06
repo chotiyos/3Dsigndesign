@@ -70,12 +70,13 @@ export const MINI_STYLES: StyleDef[] = [
     blurb: 'ผนังกับหลังพิมพ์เป็นถ้วยชิ้นเดียว ฝาหน้าโปร่งแสงกดสวม เหมาะกับป้ายเล็กติดในร้าน',
     make: 'print',
     usesArt: true,
-    params: [common.depth(20), common.wall(1.6), common.front(1.6), common.back(1.6), common.gap(0.15)],
+    params: [common.depth(20), common.wall(1.6), common.front(1.6), common.back(1.6), common.gap(0.15), common.seatLip(), common.lipWidth(1.5), common.lipThick(1)],
     build: ({ art, v }) =>
       new Parts()
         .solid('ถ้วยตัวอักษร', 'print', merge([extrude(art, v.back, 0), extrude(ring(art, v.wall), v.depth, v.back)]), -0.6)
         .slab('ฝาหน้าโปร่งแสง', 'opalprint', offset(art, -v.wall - v.gap), v.front, v.back + v.depth - v.front, 1)
         .slab('ไฟเส้นจิ๋ว', 'led', band(art, v.wall + 1.5, 3), 1.5, v.back, -0.2)
+        .seat(v.seatLip, 'บ่ารับฝาหน้า', art, v.wall, v.lip, v.lipT, v.back + v.depth - v.front, v.back + 1.5)
         .done(),
   },
   {
@@ -169,7 +170,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟที่ขอบตามรูปข้อความหรือโลโก้ หน้าโปร่งแสง ตัวอักษรนูนสีเข้มติดบนหน้า',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(60), p('margin', 'ขอบเผื่อรอบรูป', 15, 4, 80), common.wall(2), common.front(3), common.back(3), p('raise', 'ตัวอักษรนูนบนหน้า', 2, 0.6, 10)],
+    params: [common.depth(60), p('margin', 'ขอบเผื่อรอบรูป', 15, 4, 80), common.wall(2), common.front(3), common.back(3), p('raise', 'ตัวอักษรนูนบนหน้า', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick()],
     build: ({ art, v }) => {
       const shape = offset(union(art, offset(art, v.margin)), 0)
       const z = v.back + v.depth
@@ -179,6 +180,7 @@ export const BOX_STYLES: StyleDef[] = [
         .slab('หน้าโปร่งแสง', 'opal', offset(shape, -v.wall - 0.2), v.front, z - v.front, 0.6)
         .slab('ตัวอักษรบนหน้า', 'accent', art, v.raise, z, 1.2)
         .slab('แผงไฟ LED', 'led', band(shape, v.wall + 6, 6), 2, v.back, -0.4)
+        .seat(v.seatLip, 'บ่ารับหน้า', shape, v.wall, v.lip, v.lipT, z - v.front, v.back)
         .done()
     },
   },
@@ -190,7 +192,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟสี่เหลี่ยม หน้าพิมพ์สองสีเป็นแผ่นเดียว ตัวอักษรฝังเรียบเสมอหน้า ไม่มีรอยต่อ',
     make: 'print',
     usesArt: true,
-    params: [common.depth(50), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), p('radius', 'มุมโค้ง', 10, 0, 60), common.wall(2), common.front(2.4)],
+    params: [common.depth(50), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), p('radius', 'มุมโค้ง', 10, 0, 60), common.wall(2), common.front(2.4), common.seatLip(), common.lipWidth(4), common.lipThick()],
     build: ({ art, box, v }) => {
       const outline = roundRect(0, 0, box.w + v.margin * 2, box.h + v.margin * 2, v.radius)
       const face = offset(outline, -v.wall - 0.2)
@@ -201,6 +203,7 @@ export const BOX_STYLES: StyleDef[] = [
         .slab('หน้าพื้น', 'opalprint', diff(face, art), v.front, z - v.front, 0.8)
         .slab('ตัวอักษรฝังหน้า', 'accent', intersect(art, face), v.front, z - v.front, 1.2)
         .slab('แผงไฟ LED', 'led', band(outline, v.wall + 8, 8), 2, 3, -0.4)
+        .seat(v.seatLip, 'บ่ารับหน้า', outline, v.wall, v.lip, v.lipT, z - v.front, 3)
         .done()
     },
   },
@@ -212,7 +215,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟอ่านได้ทั้งสองด้าน ติดแขนยื่นออกจากผนังให้เห็นจากทางเดินทั้งสองทิศ',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(80), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10)],
+    params: [common.depth(80), p('margin', 'ขอบรอบข้อความ', 25, 5, 120), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick()],
     build: ({ art, box, v }) => {
       const w = box.w + v.margin * 2
       const h = box.h + v.margin * 2
@@ -227,6 +230,9 @@ export const BOX_STYLES: StyleDef[] = [
         .slab('หน้าหน้าโปร่งแสง', 'opal', face, v.front, v.depth - v.front, 1)
         .slab('ตัวอักษรด้านหน้า', 'accent', art, v.raise, v.depth, 1.4)
         .slab('แผงไฟกลาง', 'led', band(outline, v.wall + 10, 6), 4, v.depth / 2 - 2, 0)
+        .seat(v.seatLip, 'บ่ารับหน้าหน้า', outline, v.wall, v.lip, v.lipT, v.depth - v.front, v.depth / 2 + 3)
+        // The back face is mirrored: its ledge sits just inside it, from v.front up.
+        .seat(v.seatLip, 'บ่ารับหน้าหลัง', outline, v.wall, v.lip, v.lipT, v.front + v.lipT, v.front)
         .done()
     },
   },
@@ -255,7 +261,7 @@ export const BOX_STYLES: StyleDef[] = [
     blurb: 'กล่องไฟทรงขวด ข้อความอยู่ตรงฉลาก ใช้กับร้านเครื่องดื่ม คาเฟ่ หรือร้านคราฟต์เบียร์',
     make: 'mixed',
     usesArt: true,
-    params: [p('bottleW', 'ความกว้างขวด', 240, 80, 900, 5), common.depth(50), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10)],
+    params: [p('bottleW', 'ความกว้างขวด', 240, 80, 900, 5), common.depth(50), common.wall(2), common.front(3), p('raise', 'ตัวอักษรนูน', 2, 0.6, 10), common.seatLip(), common.lipWidth(4), common.lipThick()],
     build: ({ art, box, v }) => {
       const h = v.bottleW * 2.6
       const outline = bottleOutline(v.bottleW, h)
@@ -268,6 +274,7 @@ export const BOX_STYLES: StyleDef[] = [
         .slab('หน้าโปร่งแสง', 'opal', offset(outline, -v.wall - 0.2), v.front, z - v.front, 0.6)
         .slab('ข้อความบนฉลาก', 'accent', label, v.raise, z, 1.2)
         .slab('แผงไฟ LED', 'led', band(outline, v.wall + 10, 6), 2, 3, -0.4)
+        .seat(v.seatLip, 'บ่ารับหน้า', outline, v.wall, v.lip, v.lipT, z - v.front, 3)
         .done()
     },
   },

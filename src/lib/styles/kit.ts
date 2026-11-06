@@ -1,5 +1,5 @@
 import type * as THREE from 'three'
-import type { Region } from '../geo2d'
+import { band, type Region } from '../geo2d'
 import { extrude } from '../solid'
 import type { MaterialId, ParamDef, SignPart } from './types'
 
@@ -52,6 +52,22 @@ export class Parts {
     return this
   }
 
+  /**
+   * The ledge inside a wall that a front panel rests on (the "lip").
+   * `outline` is the wall's outer outline; the ledge runs inward from the
+   * wall's inner face and sits directly under `panelBottom`, never lower than
+   * `floor`. When switched off it still takes its letter, so the parts after
+   * it keep their codes (and any material picks saved against them).
+   */
+  seat(on: number, label: string, outline: Region, wall: number, width: number, thick: number, panelBottom: number, floor = -Infinity, explode = 0) {
+    const t = Math.min(thick, panelBottom - floor)
+    if (!on || !(t > 0.2)) {
+      this.nextCode++
+      return this
+    }
+    return this.slab(label, 'print', band(outline, wall - 0.01, width), t, panelBottom - t, explode)
+  }
+
   done() {
     return this.list
   }
@@ -76,4 +92,11 @@ export const common = {
   back: (value = 3) => p('back', 'ความหนาแผ่นหลัง', value, 1, 10, 0.5),
   lip: (value = 4) => p('lip', 'ความกว้างบ่า', value, 1, 15, 0.5),
   gap: (value = 0.2) => p('gap', 'ระยะเผื่อสวม', value, 0, 1, 0.05, 'มม.', 'เผื่อให้ชิ้นสวมเข้ากันได้'),
+  /** On/off switch for the ledge that holds the front panel (see Parts.seat). */
+  seatLip: (on = 0): ParamDef => ({
+    ...p('seatLip', 'บ่ารับแผ่นหน้า', on, 0, 1, 1, '', 'ขอบด้านในผนังสำหรับวางแผ่นหน้า พิมพ์ติดไปกับผนัง'),
+    kind: 'toggle',
+  }),
+  lipWidth: (value = 3): ParamDef => ({ ...p('lip', 'ความกว้างบ่า', value, 1, 15, 0.5), when: 'seatLip' }),
+  lipThick: (value = 2): ParamDef => ({ ...p('lipT', 'ความหนาบ่า', value, 0.8, 6, 0.1), when: 'seatLip' }),
 }

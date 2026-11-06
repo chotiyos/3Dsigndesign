@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { circle, diff, rect, union } from '../geo2d'
 import { analyse } from '../solid'
-import { buildStyle, defaultValues, STYLES } from './index'
+import { buildStyle, defaultValues, STYLES, type SignPart } from './index'
 
 /** Stand-in artwork with a hole, a thin stroke, and a separate island, like real lettering. */
 const ART = union(
@@ -109,4 +109,39 @@ it('does not advertise CNC files for the default printed classic solid', () => {
   expect(style.make).toBe('print')
   expect(style.blurb).toContain('พิมพ์ 3D')
   expect(style.blurb).not.toContain('CNC')
+})
+
+describe('front panel lip switch', () => {
+  const withSwitch = STYLES.filter((s) => s.params.some((p) => p.key === 'seatLip'))
+  it('is offered on every style with a front panel', () => {
+    expect(withSwitch.map((s) => s.code)).toEqual(['A01', 'A02', 'A04', 'A05', 'A06', 'A07', 'A08', 'A11', 'A12', 'A15', 'A16', 'B01', 'D01', 'D02', 'D03', 'D05'])
+  })
+  for (const style of withSwitch) {
+    it(`${style.code} adds a printed lip under the panel without renaming other parts`, () => {
+      const on = buildStyle(style, ART, { ...defaultValues(style), seatLip: 1 })
+      const off = buildStyle(style, ART, { ...defaultValues(style), seatLip: 0 })
+      try {
+        const lips = on.filter((p) => !off.some((o) => o.code === p.code))
+        expect(lips.length, 'lip parts').toBeGreaterThan(0)
+        expect(lips.every((p) => p.material === 'print' && /บ่า/.test(p.label))).toBe(true)
+        // Every other part keeps its letter, so saved material picks still match.
+        for (const part of off) expect(on.find((p) => p.code === part.code)?.label).toBe(part.label)
+        const box = (g: SignPart['geometry']) => { g.computeBoundingBox(); return g.boundingBox! }
+        const all = on.map((p) => box(p.geometry))
+        const minZ = Math.min(...all.map((b) => b.min.z))
+        const maxZ = Math.max(...all.map((b) => b.max.z))
+        for (const lip of lips) {
+          const b = box(lip.geometry)
+          expect(b.min.z).toBeGreaterThanOrEqual(minZ - 1e-6)
+          expect(b.max.z).toBeLessThanOrEqual(maxZ + 1e-6)
+          // The lip touches a panel face: some non-lip part starts where it ends, or ends where it starts.
+          const touches = on.some((p) => !lips.includes(p) && p.material !== 'led' && (Math.abs(box(p.geometry).min.z - b.max.z) < 0.01 || Math.abs(box(p.geometry).max.z - b.min.z) < 0.01))
+          expect(touches, `${lip.label} touches a panel`).toBe(true)
+        }
+      } finally {
+        on.forEach((p) => p.geometry.dispose())
+        off.forEach((p) => p.geometry.dispose())
+      }
+    })
+  }
 })

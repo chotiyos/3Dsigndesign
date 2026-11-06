@@ -701,19 +701,36 @@ export default function Editor() {
                 <strong>{style.code} {style.name}</strong> {style.blurb}
               </p>
               {style.usesArt && sizeBox}
-              {style.params.map((param) => (
-                <Range
-                  key={param.key}
-                  label={param.label}
-                  unit={param.unit}
-                  hint={param.hint}
-                  value={values[param.key]}
-                  min={param.min}
-                  max={param.max}
-                  step={param.step}
-                  onChange={(v) => setValue(param.key, v)}
-                />
-              ))}
+              {style.params.filter((param) => !param.when).map((param) => {
+                const range = (def: typeof param) => (
+                  <Range
+                    key={def.key}
+                    label={def.label}
+                    unit={def.unit}
+                    hint={def.hint}
+                    value={values[def.key]}
+                    min={def.min}
+                    max={def.max}
+                    step={def.step}
+                    onChange={(v) => setValue(def.key, v)}
+                  />
+                )
+                if (param.kind !== 'toggle') return range(param)
+                const on = values[param.key] > 0
+                const children = style.params.filter((child) => child.when === param.key)
+                return (
+                  <div key={param.key} className="option-card" data-on={on || undefined}>
+                    <label className="option-head">
+                      <span>
+                        <span className="option-title">{param.label}</span>
+                        {param.hint && <small className="range-hint">{param.hint}</small>}
+                      </span>
+                      <input type="checkbox" role="switch" className="switch" checked={on} onChange={(e) => setValue(param.key, e.target.checked ? 1 : 0)} />
+                    </label>
+                    {on && children.map(range)}
+                  </div>
+                )
+              })}
               <div className="row">
                 <button type="button" className="btn btn-ghost" onClick={() => setDraft((d) => { const next = { ...d.values }; delete next[style.id]; return { ...d, values: next } })}>
                   <Icon name="reset" size={16} /> ค่าเริ่มต้น
