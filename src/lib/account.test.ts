@@ -6,6 +6,17 @@ async function account(raw = '{}') {
   return import('./account')
 }
 describe('demo balances and cart', () => {
+  it('tops up guests and signed-in accounts despite obsolete cart data', async () => {
+    const a = await account(JSON.stringify({ guestCredits: 5, cart: [null, {}, { id: 'removed-product', qty: 99 }] }))
+    a.topUp(a.STARTING_CREDITS, 'เติมเครดิตทดลอง')
+    expect(a.credits()).toBe(105)
+    a.signIn('ร้านทดสอบ', 'test@example.com')
+    a.topUp(a.STARTING_CREDITS, 'เติมเครดิตทดลอง')
+    expect(a.credits()).toBe(205)
+    const saved = JSON.parse(vi.mocked(localStorage.setItem).mock.lastCall![1])
+    expect(saved.account.history[0]).toMatchObject({ text: 'เติมเครดิตทดลอง', delta: 100 })
+    expect(saved.cart).toEqual([])
+  })
   it('rejects negative and non-finite credit operations', async () => {
     const a = await account()
     for (const amount of [-1, NaN, Infinity]) {

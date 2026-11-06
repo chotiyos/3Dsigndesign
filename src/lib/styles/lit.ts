@@ -287,7 +287,9 @@ export const LIT_STYLES: StyleDef[] = [
         .slab('อะคริลิกหน้า', 'opal', offset(art, -v.wall - 3.2), v.front, z - v.front, 1)
         .slab('แถบไฟ LED', 'led', band(art, v.wall + 4, 5), 2, v.back, -0.4)
         // The face sits 3.2 mm inside the wall, so the ledge must reach past it.
-        .seat(v.seatLip, 'บ่ารับอะคริลิก', art, v.wall, Math.max(v.lip, 4.2), v.lipT, Math.min(z - v.front, z - v.browT), v.back)
+        // If the brow leaves the panel above the wall, seat omits the ledge
+        // instead of lowering it away from the panel it is meant to support.
+        .seat(v.seatLip, 'บ่ารับอะคริลิก', art, v.wall, Math.max(v.lip, 4.2), v.lipT, z - v.front, v.back)
         .done()
     },
   },

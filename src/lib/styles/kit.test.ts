@@ -37,6 +37,25 @@ it('omits a lip above its wall while reserving its letter', () => {
   } finally { parts.forEach(p => p.geometry.dispose()) }
 })
 
+it('A12 omits a lip that cannot reach the front panel above the wall', () => {
+  const style = findStyle('front-brow')
+  for (const browT of [3, 6, 10]) {
+    const parts = buildStyle(style, rect(0, 0, 100, 50), { front: 3, browT, seatLip: 1 })
+    try {
+      const lip = parts.find(p => p.addon)
+      if (browT > 3) {
+        expect(lip).toBeUndefined()
+      } else {
+        expect(lip).toBeDefined()
+        const panel = parts.find(p => p.material === 'opal')!
+        panel.geometry.computeBoundingBox()
+        lip!.geometry.computeBoundingBox()
+        expect(lip!.geometry.boundingBox!.max.z).toBeCloseTo(panel.geometry.boundingBox!.min.z)
+      }
+    } finally { parts.forEach(p => p.geometry.dispose()) }
+  }
+})
+
 for (const id of ['two-tier-light', 'two-tier-full-colour']) {
   for (const glow of [12, 16, 19]) {
     it(`${id} keeps its lip attached to the upper wall with a ${glow} mm light band`, () => {
