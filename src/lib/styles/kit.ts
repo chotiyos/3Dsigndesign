@@ -24,6 +24,7 @@ export function withMaterial(part: SignPart, material: MaterialId): SignPart {
 /** Collects parts and hands out catalogue letters in order. */
 export class Parts {
   private list: SignPart[] = []
+  private nextCode = 0
 
   /**
    * An extruded flat part. Thin sheet-material parts also carry their outline
@@ -37,9 +38,13 @@ export class Parts {
   }
 
   solid(label: string, material: MaterialId, geometry: THREE.BufferGeometry, explode = 0, cut?: Region) {
-    if (!geometry.getAttribute('position') || geometry.getAttribute('position').count === 0) return this
-    const code = CODES[this.list.length] ?? `Z${this.list.length}`
-    this.list.push({ id: `${code}-${this.list.length}`, code, label, material, geometry, cut, explode })
+    const index = this.nextCode++
+    if (!geometry.getAttribute('position') || geometry.getAttribute('position').count === 0) {
+      geometry.dispose()
+      return this
+    }
+    const code = CODES[index] ?? `Z${index}`
+    this.list.push({ id: `${code}-${index}`, code, label, material, geometry, cut, explode })
     return this
   }
 

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useId, type ChangeEvent } from 'react'
 import { Box3 } from 'three'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
@@ -38,12 +38,21 @@ interface Draft {
 
 const DRAFT_KEY = 'jjdesign-draft-v1'
 
-function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
-  if (!input || typeof input !== 'object') return {}
+/** Images are persisted as their traced outline; pixel data stays in memory. */
+export function portableDraft(draft: Draft, art: Region): Draft {
+  if (draft.source !== 'image' || art.length === 0) return draft
+  const b = bounds(art)
+  const d = art.map(poly => `M${poly.map(([x, y]) => `${x},${-y}`).join('L')}Z`).join('')
+  return { ...draft, source: 'svg', heightMM: b.h, svgText: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${b.minX} ${-b.maxY} ${b.w} ${b.h}"><path d="${d}"/></svg>` }
+}
+
+export function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
   const out: Partial<Draft> = {}
   for (const key of ['text', 'fontId', 'styleId', 'svgText'] as const) {
     if (typeof input[key] === 'string') out[key] = input[key]
   }
+  if (out.fontId === CUSTOM_FONT_ID) out.fontId = FONT_OPTIONS[0].id
   if (out.text) out.text = out.text.slice(0, 200)
   for (const [key, min, max, fallback] of [
     ['heightMM', 10, 1500, 200], ['spacingMM', -30, 150, 0],
@@ -56,12 +65,12 @@ function cleanDraft(input: Partial<Draft> | undefined): Partial<Draft> {
   out.align = input.align === 'left' || input.align === 'right' ? input.align : 'center'
   out.invert = input.invert === true
   out.values = input.values && typeof input.values === 'object' ? input.values : {}
-  out.colors = input.colors && typeof input.colors === 'object' ? input.colors : {}
+  out.colors = Object.fromEntries(Object.entries(input.colors && typeof input.colors === 'object' ? input.colors : {}).filter(([, color]) => typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)))
   out.materials = {}
-  if (input.materials && typeof input.materials === 'object') {
+  if (input.materials && typeof input.materials === 'object' && !Array.isArray(input.materials)) {
     for (const [styleId, choices] of Object.entries(input.materials)) {
-      if (!choices || typeof choices !== 'object') continue
-      const kept = Object.fromEntries(Object.entries(choices).filter(([, m]) => PICKABLE_MATERIALS.includes(m)))
+      if (!STYLES.some((s) => s.id === styleId) || !choices || typeof choices !== 'object' || Array.isArray(choices)) continue
+      const kept = Object.fromEntries(Object.entries(choices).filter(([code, m]) => /^(?:[A-HJ-NP-Z]|Z\d+)$/.test(code) && PICKABLE_MATERIALS.includes(m)))
       if (Object.keys(kept).length) out.materials[styleId] = kept
     }
   }
@@ -136,18 +145,6 @@ export default function Editor() {
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      try {
-        const { svgText, ...rest } = draft
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(svgText && svgText.length < 400_000 ? draft : rest))
-      } catch {
-        // Saving the draft is a convenience only.
-      }
-    }, 400)
-    return () => clearTimeout(id)
-  }, [draft])
-
-  useEffect(() => {
     if (draft.fontId === CUSTOM_FONT_ID) {
       setLoadedFont(customFont ? { id: CUSTOM_FONT_ID, font: customFont.font } : null)
       return
@@ -183,6 +180,20 @@ export default function Editor() {
       return { art: [], artError: `อ่านข้อมูลไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }
     }
   }, [deferred.source, deferred.text, deferred.heightMM, deferred.spacingMM, deferred.lineGap, deferred.align, deferred.svgText, deferred.threshold, deferred.invert, font, image])
+
+  useEffect(() => {
+    if (deferred !== draft) return
+    const id = setTimeout(() => {
+      try {
+        const saved = portableDraft(draft, art)
+        if (saved.svgText && saved.svgText.length >= 400_000) return
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(saved))
+      } catch {
+        // Saving the draft is a convenience only.
+      }
+    }, 400)
+    return () => clearTimeout(id)
+  }, [draft, deferred, art])
 
   const deferredStyle = findStyle(deferred.styleId)
   const deferredValues = cleanValues(deferredStyle, deferred.values[deferredStyle.id])
@@ -271,7 +282,12 @@ export default function Editor() {
   }
 
   function saveProject() {
-    const data = JSON.stringify({ app: 'jjdesign', version: 1, draft: { ...draft, fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId } })
+    if (busy) return
+    if (draft.source === 'image' && !art.length) {
+      setMessage({ tone: 'error', text: 'เลือกรูปภาพและปรับให้พบเส้นก่อนบันทึกไฟล์งาน' })
+      return
+    }
+    const data = JSON.stringify({ app: 'jjdesign', version: 1, draft: { ...portableDraft(draft, art), fontId: draft.fontId === CUSTOM_FONT_ID ? FONT_OPTIONS[0].id : draft.fontId } })
     downloadBlob(data, `${baseName}.jjd`, 'application/json')
     setMessage({ tone: 'ok', text: 'บันทึกไฟล์งาน .jjd แล้ว เปิดกลับมาแก้ได้จากขั้นที่ 1' })
   }
@@ -288,7 +304,10 @@ export default function Editor() {
         throw new Error('ไฟล์เสียหรือไม่ใช่ไฟล์งาน .jjd')
       }
       if (!parsed || parsed.app !== 'jjdesign' || parsed.version !== 1 || !parsed.draft || typeof parsed.draft !== 'object' || Array.isArray(parsed.draft)) throw new Error('ไม่ใช่ไฟล์งานของ JJDesign รุ่นที่รองรับ')
-      setDraft((d) => ({ ...d, ...cleanDraft(parsed.draft) }))
+      const cleaned = cleanDraft(parsed.draft)
+      if (cleaned.fontId === CUSTOM_FONT_ID) cleaned.fontId = FONT_OPTIONS[0].id
+      setDraft((d) => ({ ...d, ...cleaned }))
+      setHidden(new Set())
       setMessage({ tone: 'ok', text: `เปิดไฟล์ ${file.name} แล้ว` })
     } catch (err) {
       setMessage({ tone: 'error', text: `เปิดไฟล์ไม่ได้: ${err instanceof Error ? err.message : 'ไฟล์เสีย'}` })
@@ -367,20 +386,34 @@ export default function Editor() {
   const artBox = bounds(art)
   const artReady = art.length > 0 && artBox.w > 0 && artBox.h > 0
   const setHeight = (mm: number) => update({ heightMM: Math.round(Math.min(1500, Math.max(10, mm))) })
-  const fitTo = (mm: number, measured: number) => {
-    if (artReady) setHeight((deferred.heightMM * mm) / measured)
+  // Size is affine in font size (glyphs scale, letter spacing stays fixed):
+  // size = a * height + b. One extra measurement on commit pins down a and b,
+  // so typing an exact size costs a single re-shape, never one per render.
+  const solveHeight = (mm: number, axis: 'w' | 'h') => {
+    const h0 = deferred.heightMM
+    const s0 = artBox[axis]
+    if (deferred.source !== 'text' || !font || deferred.spacingMM === 0) return (h0 * mm) / s0
+    const h1 = h0 >= 750 ? h0 / 2 : h0 * 2
+    const s1 = bounds(textToRegion(font, deferred.text, h1, deferred.spacingMM, deferred.lineGap, deferred.align))[axis]
+    const slope = (s1 - s0) / (h1 - h0)
+    return slope > 0 ? h0 + (mm - s0) / slope : (h0 * mm) / s0
   }
   const sizeLabel = draft.source === 'text' ? 'ขนาดตัวอักษร (ขนาดฟอนต์)' : 'ความสูงชิ้นงาน'
-  const exact = (label: string, measured: number) => (
+  const exact = (label: string, axis: 'w' | 'h') => (
     <Range
       label={label}
       unit="มม."
-      value={Math.round(measured)}
-      min={Math.ceil((measured * 10) / deferred.heightMM)}
-      max={Math.floor((measured * 1500) / deferred.heightMM)}
-      step={1}
+      value={Math.round(artBox[axis] * 100) / 100}
+      // Loose bounds: the font size is clamped to 10–1500 mm after solving.
+      min={1}
+      max={100000}
+      step={0.01}
       slider={false}
-      onChange={(mm) => fitTo(mm, measured)}
+      onChange={(mm) => {
+        if (busy || !artReady) return
+        const height = solveHeight(mm, axis)
+        if (Number.isFinite(height)) update({ heightMM: Math.round(Math.min(1500, Math.max(10, height)) * 100) / 100 })
+      }}
     />
   )
   const sizeBox = (
@@ -394,14 +427,14 @@ export default function Editor() {
         ))}
       </div>
       <Range label={sizeLabel} unit="มม." value={draft.heightMM} min={10} max={1500} step={1} onChange={setHeight} />
-      {artReady && (
+      {artReady && !busy && (
         <div className="size-exact">
           <p className="size-sum">
             {draft.source === 'text' ? 'หรือสั่งตามขนาดจริงของข้อความ' : 'หรือสั่งตามขนาดจริง'}
-            {draft.source === 'text' && draft.text.includes('\n') && ' (รวมทุกบรรทัด)'} ใส่ตัวเลขแล้วกด Enter สัดส่วนคงเดิม
+            {draft.source === 'text' && draft.text.includes('\n') && ' (รวมทุกบรรทัด)'} ใส่ตัวเลขแล้วกด Enter เพื่อปรับขนาด
           </p>
-          {exact('กว้างจริง', artBox.w)}
-          {exact('สูงจริง', artBox.h)}
+          {exact('กว้างจริง', 'w')}
+          {exact('สูงจริง', 'h')}
         </div>
       )}
     </fieldset>
@@ -635,7 +668,7 @@ export default function Editor() {
               <ul className="pick-grid">
                 {shownStyles.map((s) => (
                   <li key={s.id}>
-                    <button type="button" className="pick" aria-pressed={s.id === style.id} onClick={() => update({ styleId: s.id })}>
+                    <button type="button" className="pick" aria-pressed={s.id === style.id} onClick={() => { update({ styleId: s.id }); setHidden(new Set()) }}>
                       <StyleThumb style={s} />
                       <span className="pick-code">{s.code}</span>
                       <span className="pick-name">{s.name}</span>
@@ -703,6 +736,7 @@ export default function Editor() {
                         {s.part.material === 'led' ? MATERIAL_NAMES.led : (
                           <select
                             className="material-pick"
+                            disabled={busy}
                             aria-label={`วัสดุของ ${s.part.code} ${s.part.label}`}
                             value={s.part.material}
                             onChange={(e) => setMaterial(s.part.code, e.target.value as MaterialId)}
@@ -756,7 +790,8 @@ export default function Editor() {
   )
 }
 
-function Range({ label, unit, value, min, max, step, hint, slider = true, onChange }: { label: string; unit: string; value: number; min: number; max: number; step: number; hint?: string; slider?: boolean; onChange: (v: number) => void }) {
+export function Range({ label, unit, value, min, max, step, hint, slider = true, onChange }: { label: string; unit: string; value: number; min: number; max: number; step: number; hint?: string; slider?: boolean; onChange: (v: number) => void }) {
+  const id = useId()
   const [text, setText] = useState(String(value))
   const focused = useRef(false)
   useEffect(() => {
@@ -774,10 +809,10 @@ function Range({ label, unit, value, min, max, step, hint, slider = true, onChan
   return (
     <div className="range">
       <div className="range-head">
-        <label className="field-label" htmlFor={`r-${label}`}>{label}</label>
+        <label className="field-label" htmlFor={id}>{label}</label>
         <span className="range-value">
           <input
-            id={slider ? undefined : `r-${label}`}
+            id={slider ? undefined : id}
             type="number"
             inputMode="decimal"
             value={text}
@@ -793,7 +828,7 @@ function Range({ label, unit, value, min, max, step, hint, slider = true, onChan
           {unit && <span>{unit}</span>}
         </span>
       </div>
-      {slider && <input id={`r-${label}`} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />}
+      {slider && <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />}
       {hint && <small className="range-hint">{hint}</small>}
     </div>
   )

@@ -424,7 +424,7 @@ export const GIFT_STYLES: StyleDef[] = [
       const holeAt = box.minX - v.margin - v.hole / 2 - 2
       const plate = diff(tag, circle(holeAt, 0, v.hole / 2, 24))
       const parts = new Parts()
-      if (v.backing > 0) parts.slab('ชั้นรองสี', 'accent', plate, v.backing, 0, -0.6)
+      parts.slab('ชั้นรองสี', 'accent', plate, v.backing, 0, -0.6)
       return parts.slab('ป้ายฉลุ', 'print', diff(plate, art), v.thick, v.backing, 0.4).done()
     },
   },
