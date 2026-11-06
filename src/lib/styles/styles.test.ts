@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { circle, diff, rect, union } from '../geo2d'
 import { analyse } from '../solid'
-import { buildStyle, defaultValues, STYLES, type SignPart } from './index'
+import { applyMaterials, buildStyle, defaultValues, lipHost, STYLES, type SignPart } from './index'
 
 /** Stand-in artwork with a hole, a thin stroke, and a separate island, like real lettering. */
 const ART = union(
@@ -114,7 +114,7 @@ it('does not advertise CNC files for the default printed classic solid', () => {
 describe('front panel lip switch', () => {
   const withSwitch = STYLES.filter((s) => s.params.some((p) => p.key === 'seatLip'))
   it('is offered on every style with a front panel', () => {
-    expect(withSwitch.map((s) => s.code)).toEqual(['A01', 'A02', 'A04', 'A05', 'A06', 'A07', 'A08', 'A11', 'A12', 'A15', 'A16', 'B01', 'D01', 'D02', 'D03', 'D05'])
+    expect(withSwitch.map((s) => s.code)).toEqual(['A01', 'A02', 'A04', 'A05', 'A06', 'A11', 'A12', 'A15', 'A16', 'B01', 'D01', 'D02', 'D03', 'D05'])
   })
   for (const style of withSwitch) {
     it(`${style.code} adds a printed lip under the panel without renaming other parts`, () => {
@@ -142,6 +142,49 @@ describe('front panel lip switch', () => {
         on.forEach((p) => p.geometry.dispose())
         off.forEach((p) => p.geometry.dispose())
       }
+    })
+  }
+})
+
+describe('lip is an add-on for plastic walls', () => {
+  const withSwitch = STYLES.filter((s) => s.params.some((p) => p.key === 'seatLip'))
+  it('is off by default in every style', () => {
+    for (const style of withSwitch) {
+      expect(defaultValues(style).seatLip, style.code).toBe(0)
+      const parts = buildStyle(style, ART, defaultValues(style))
+      expect(parts.some((p) => p.addon), style.code).toBe(false)
+      parts.forEach((p) => p.geometry.dispose())
+    }
+  })
+  it('A07 and A08 keep their lips as part of the design', () => {
+    for (const id of ['front-back-lips', 'infinity-mirror']) {
+      const style = STYLES.find((s) => s.id === id)!
+      const parts = buildStyle(style, ART, defaultValues(style))
+      expect(parts.filter((p) => p.label === 'บ่าหน้า')).toHaveLength(1)
+      expect(style.params.some((p) => p.key === 'seatLip')).toBe(false)
+      parts.forEach((p) => p.geometry.dispose())
+    }
+  })
+  for (const style of withSwitch) {
+    it(`${style.code} lip follows its wall's material and drops for non-plastic walls`, () => {
+      const parts = buildStyle(style, ART, { ...defaultValues(style), seatLip: 1 })
+      try {
+        const wall = lipHost(parts)!
+        const lips = parts.filter((p) => p.addon)
+        expect(wall, 'has a wall').toBeTruthy()
+        expect(lips.length).toBeGreaterThan(0)
+        expect(lips.every((p) => p.addon!.wall === wall.code && p.material === wall.material)).toBe(true)
+        const accent = applyMaterials(parts, { [wall.code]: 'accent' })
+        expect(accent.filter((p) => p.addon).every((p) => p.material === 'accent')).toBe(true)
+        expect(accent.filter((p) => p.addon)).toHaveLength(lips.length)
+        for (const sheet of ['metal', 'acrylic', 'plaswood'] as const) {
+          const applied = applyMaterials(parts, { [wall.code]: sheet })
+          expect(applied.some((p) => p.addon), `${sheet} wall`).toBe(false)
+          expect(applied).toHaveLength(parts.length - lips.length)
+        }
+        // A pick saved against the lip itself is ignored: it always follows the wall.
+        expect(applyMaterials(parts, { [lips[0].code]: 'metal' }).find((p) => p.code === lips[0].code)!.material).toBe(wall.material)
+      } finally { parts.forEach((p) => p.geometry.dispose()) }
     })
   }
 })

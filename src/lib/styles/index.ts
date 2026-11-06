@@ -5,7 +5,7 @@ import { BOX_STYLES, DECO_STYLES, DESK_STYLES, GIFT_STYLES, MINI_STYLES } from '
 import type { SignPart, StyleDef } from './types'
 
 export * from './types'
-export { isCuttable, withMaterial } from './kit'
+export { applyMaterials, isCuttable, lipHost, PLASTIC, withMaterial } from './kit'
 
 export const STYLES: StyleDef[] = [
   ...LIT_STYLES,

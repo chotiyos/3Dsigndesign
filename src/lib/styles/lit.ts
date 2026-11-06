@@ -39,11 +39,11 @@ export const LIT_STYLES: StyleDef[] = [
     id: 'front-lit-lip',
     code: 'A01',
     group: 'lit',
-    name: 'ไฟหน้า มีบ่ารับอะคริลิก',
-    blurb: 'ผนังพิมพ์ 3D มีบ่าด้านในรับแผ่นอะคริลิกหน้า หลังปิดด้วยแผ่นเรียบ งานป้ายหน้าร้านแบบมาตรฐาน',
+    name: 'ไฟหน้า หน้าอะคริลิก',
+    blurb: 'ผนังพิมพ์ 3D หน้าเป็นแผ่นอะคริลิกโปร่งแสง หลังปิดด้วยแผ่นเรียบ งานป้ายหน้าร้านแบบมาตรฐาน',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(), common.wall(), common.seatLip(1), common.lip(), common.lipThick(), common.front(), common.back(), common.gap()],
+    params: [common.depth(), common.wall(), common.seatLip(), common.lipWidth(4), common.lipThick(), common.front(), common.back(), common.gap()],
     build: ({ art, v }) => {
       const z = top(v)
       return new Parts()
@@ -102,7 +102,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'ขอบผนังยื่นเลยหน้าอะคริลิกเล็กน้อยเป็นเส้นบาง หลังเป็นพลาสวูดตัดด้วยเครื่อง CNC',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(), p('rim', 'ความหนาขอบ', 1.2, 0.8, 4, 0.1), p('rise', 'ขอบยื่นเลยหน้า', 1.5, 0, 6), common.seatLip(1), common.lipWidth(3), common.lipThick(1.5), common.front(), common.back(5), common.gap()],
+    params: [common.depth(), p('rim', 'ความหนาขอบ', 1.2, 0.8, 4, 0.1), p('rise', 'ขอบยื่นเลยหน้า', 1.5, 0, 6), common.seatLip(), common.lipWidth(3), common.lipThick(1.5), common.front(), common.back(5), common.gap()],
     build: ({ art, v }) => {
       const z = top(v)
       return new Parts()
@@ -122,7 +122,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'ไฟออกทั้งหน้าและแถบรอบตัวอักษร ผนังกลางเป็นวัสดุโปร่งแสงคั่นระหว่างผนังทึบบนล่าง',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), common.seatLip(1), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap()],
+    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), common.seatLip(), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap()],
     build: ({ art, v }) => {
       const z = top(v)
       const glow = Math.min(v.glow, v.depth)
@@ -147,7 +147,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'เหมือนไฟสองชั้น แต่หน้าตัวอักษรแบ่งเป็นขอบสีกับไส้สีอ่อน พิมพ์สองสีเป็นแผ่นเดียว',
     make: 'print',
     usesArt: true,
-    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), p('edge', 'ความกว้างขอบสี', 4, 1, 20), common.seatLip(1), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap()],
+    params: [common.depth(60), common.wall(), p('glow', 'ความสูงแถบไฟรอบ', 15, 4, 60), p('edge', 'ความกว้างขอบสี', 4, 1, 20), common.seatLip(), common.lipWidth(3), common.lipThick(), common.front(), common.back(), common.gap()],
     build: ({ art, v }) => {
       const z = top(v)
       const glow = Math.min(v.glow, v.depth)
@@ -174,7 +174,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'ผนังมีบ่าทั้งสองด้าน หน้าใส่อะคริลิก หลังใส่แผ่นพลาสวูดสวมใน ถอดเปลี่ยนไฟได้ง่าย',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(), common.wall(), common.lip(), common.seatLip(1), common.lipThick(), common.front(), common.back(), common.gap()],
+    params: [common.depth(), common.wall(), common.lip(), common.front(), common.back(), common.gap()],
     build: ({ art, v }) => {
       const z = v.depth
       const inner = offset(art, -v.wall - v.gap)
@@ -182,7 +182,7 @@ export const LIT_STYLES: StyleDef[] = [
         .slab('หลังพลาสวูดสวมใน', 'plaswood', inner, v.back, 0, -1)
         .slab('ผนังตัวอักษร', 'print', ring(art, v.wall), v.depth, 0)
         .slab('บ่าหลัง', 'print', band(art, v.wall - 0.01, v.lip), 2, v.back)
-        .seat(v.seatLip, 'บ่าหน้า', art, v.wall, v.lip, v.lipT, z - v.front, v.back + 2)
+        .slab('บ่าหน้า', 'print', band(art, v.wall - 0.01, v.lip), 2, z - v.front - 2)
         .slab('อะคริลิกหน้า', 'opal', inner, v.front, z - v.front, 1)
         .slab('แถบไฟ LED', 'led', band(art, v.wall + v.lip + 1, 5), 2, v.back + 2, -0.2)
         .done()
@@ -196,7 +196,7 @@ export const LIT_STYLES: StyleDef[] = [
     blurb: 'กระจกเงาด้านหลังและกระจกสะท้อนแสงด้านหน้าส่องไฟกลับไปมา เห็นเป็นอุโมงค์ไฟลึกเข้าไปในตัวอักษร',
     make: 'mixed',
     usesArt: true,
-    params: [common.depth(30), common.wall(2.4), common.lip(5), common.seatLip(1), common.lipThick(), common.front(3), common.back(3), common.gap()],
+    params: [common.depth(30), common.wall(2.4), common.lip(5), common.front(3), common.back(3), common.gap()],
     build: ({ art, v }) => {
       const z = 2 + v.back + v.depth
       const inner = offset(art, -v.wall - v.gap)
@@ -207,7 +207,7 @@ export const LIT_STYLES: StyleDef[] = [
         .slab('ผนังตัวอักษร', 'print', ring(art, v.wall), z, 0)
         .slab('บ่าหลัง', 'print', lip, 2, 2 + v.back)
         .slab('บ่าล็อกไฟ', 'print', lip, 2, 2 + v.back + v.depth / 2)
-        .seat(v.seatLip, 'บ่าหน้า', art, v.wall, v.lip, v.lipT, z - v.front, 2 + v.back + v.depth / 2 + 2)
+        .slab('บ่าหน้า', 'print', lip, 2, z - v.front - 2)
         .slab('กระจกสะท้อนหน้า', 'acrylic', inner, v.front, z - v.front, 1)
         .slab('ไฟ LED รอบใน', 'led', band(art, v.wall + 0.2, 2), 4, 2 + v.back + v.depth / 2 + 2, 0.3)
         .done()

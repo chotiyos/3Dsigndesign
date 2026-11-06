@@ -25,6 +25,28 @@ export function withMaterial(part: SignPart, material: MaterialId): SignPart {
   return { ...part, material, cut }
 }
 
+/** Plastics a lip can be printed in, as one piece with the wall. */
+export const PLASTIC = new Set<MaterialId>(['print', 'accent', 'opalprint'])
+
+/** The wall a front panel lip is printed onto: the last wall (or cup) part. */
+export function lipHost(parts: SignPart[]) {
+  return [...parts].reverse().find((part) => !part.addon && /^(ผนัง|ถ้วย)/.test(part.label))
+}
+
+/**
+ * Applies the customer's material picks. A lip add-on always takes its
+ * wall's material, and is left out entirely when that wall is not plastic.
+ */
+export function applyMaterials(parts: SignPart[], picks: Record<string, MaterialId> | undefined): SignPart[] {
+  const picked = parts.map((part) => (!part.addon && picks?.[part.code] ? withMaterial(part, picks[part.code]) : part))
+  return picked.flatMap((part) => {
+    if (!part.addon) return [part]
+    const wall = picked.find((p) => p.code === part.addon!.wall)
+    if (!wall || !PLASTIC.has(wall.material)) return []
+    return [withMaterial(part, wall.material)]
+  })
+}
+
 /** Collects parts and hands out catalogue letters in order. */
 export class Parts {
   private list: SignPart[] = []
@@ -65,7 +87,12 @@ export class Parts {
       this.nextCode++
       return this
     }
-    return this.slab(label, 'print', band(outline, wall - 0.01, width), t, panelBottom - t, explode)
+    // The lip is printed onto the wall, and follows its material.
+    const host = lipHost(this.list)
+    const before = this.list.length
+    this.slab(label, host?.material ?? 'print', band(outline, wall - 0.01, width), t, panelBottom - t, explode)
+    if (this.list.length > before && host) this.list[before].addon = { kind: 'lip', wall: host.code }
+    return this
   }
 
   done() {

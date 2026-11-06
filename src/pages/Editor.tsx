@@ -7,7 +7,7 @@ import { buildZip, downloadBlob, dxfLayer, MATERIAL_INFO, partMethod, partStats,
 import { CUSTOM_FONT_ID, FONT_OPTIONS } from '../lib/fonts'
 import { bounds, type Region } from '../lib/geo2d'
 import { fontFromArrayBuffer, loadFont, type LoadedFont } from '../lib/hb'
-import { buildStyle, cleanValues, findStyle, GROUPS, STYLES, withMaterial, type MaterialId, type SignPart, type StyleGroup } from '../lib/styles'
+import { applyMaterials, buildStyle, cleanValues, findStyle, GROUPS, lipHost, PLASTIC, STYLES, type MaterialId, type SignPart, type StyleGroup } from '../lib/styles'
 import { Link, useLocation, useTitle } from '../router'
 import { MATERIAL_COLORS, MATERIAL_NAMES } from '../three/materials'
 import { Viewer } from '../three/Viewer'
@@ -210,10 +210,10 @@ export default function Editor() {
   // The customer's material picks: same geometry, new material, and the cut
   // outline (DXF) appears or disappears to suit how that material is made.
   const materialPicks = draft.materials[deferredStyle.id]
-  const parts = useMemo(
-    () => builtParts.map((part) => (materialPicks?.[part.code] ? withMaterial(part, materialPicks[part.code]) : part)),
-    [builtParts, materialPicks],
-  )
+  const parts = useMemo(() => applyMaterials(builtParts, materialPicks), [builtParts, materialPicks])
+  // The lip add-on is offered only while the wall it prints onto is plastic.
+  const lipWall = lipHost(parts)
+  const lipAllowed = Boolean(lipWall && PLASTIC.has(lipWall.material))
   const setMaterial = (code: string, material: MaterialId) =>
     setDraft((d) => ({ ...d, materials: { ...d.materials, [style.id]: { ...d.materials[style.id], [code]: material } } }))
 
@@ -716,12 +716,15 @@ export default function Editor() {
                   />
                 )
                 if (param.kind !== 'toggle') return range(param)
+                // The lip is an add-on for plastic walls only: hidden for metal or sheet walls.
+                if (param.key === 'seatLip' && !lipAllowed) return null
                 const on = values[param.key] > 0
                 const children = style.params.filter((child) => child.when === param.key)
                 return (
                   <div key={param.key} className="option-card" data-on={on || undefined}>
                     <label className="option-head">
                       <span>
+                        <span className="option-kicker">ออปชั่นเสริม · ผนังพลาสติก</span>
                         <span className="option-title">{param.label}</span>
                         {param.hint && <small className="range-hint">{param.hint}</small>}
                       </span>
@@ -767,7 +770,9 @@ export default function Editor() {
                         {!s.watertight && <span className="warn" title="ผิวชิ้นงานมีรอยต่อ ให้ตรวจหรือซ่อมใน slicer ก่อนพิมพ์">ตรวจใน slicer</span>}
                       </td>
                       <td>
-                        {s.part.material === 'led' ? MATERIAL_NAMES.led : (
+                        {s.part.material === 'led' ? MATERIAL_NAMES.led : s.part.addon ? (
+                          <span className="addon-note">{MATERIAL_NAMES[s.part.material]}<small>ออปชั่นเสริม ตามผนัง {s.part.addon.wall}</small></span>
+                        ) : (
                           <select
                             className="material-pick"
                             disabled={busy}

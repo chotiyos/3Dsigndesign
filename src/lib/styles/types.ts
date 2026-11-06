@@ -27,6 +27,12 @@ export interface SignPart {
   profile?: { region: Region; depth: number }
   /** How far this part travels per mm of the explode slider, along Z. */
   explode: number
+  /**
+   * Optional add-on printed onto another part: a front panel lip belongs to
+   * the wall with code `wall`, takes that wall's material, and is only made
+   * when that wall is plastic.
+   */
+  addon?: { kind: 'lip'; wall: string }
   /** Shown in the editor when the style had to adjust the user's settings. */
   warning?: string
 }

@@ -2451,3 +2451,20 @@ input[type='range'] {
     transition: none;
   }
 }
+
+.option-kicker {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+
+.addon-note {
+  display: grid;
+  gap: 2px;
+}
+
+.addon-note small {
+  font-size: 0.75rem;
+  color: var(--ink-2);
+}
