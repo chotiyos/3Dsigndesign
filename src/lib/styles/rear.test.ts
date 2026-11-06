@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { bounds, circle, diff, islands, rect, regionArea, union, type Region } from '../geo2d'
 import { partStats } from '../exportModel'
+import { holeGrid } from './lit'
 import { planModules, powerFor } from '../ledPlan'
 import { applyMaterials, buildStyle, findStyle, keyhole, rearHoles, STYLES } from './index'
 
@@ -102,6 +103,19 @@ it('gives nearby separate hollows at least one module each', () => {
   expect(modules).toHaveLength(2)
   expect(modules.some(([x]) => x < 8)).toBe(true)
   expect(modules.some(([x]) => x > 12)).toBe(true)
+})
+
+it('lights a small round hollow even when the grid misses its usable centre', () => {
+  const modules = planModules(circle(0, 0, 6, 48), 60)
+  expect(modules).toHaveLength(1)
+  expect(Math.hypot(...modules[0])).toBeLessThan(0.01)
+})
+
+it('keeps the centre fallback inside the safe region and respects a zero limit', () => {
+  const pocket = circle(0, 0, 6, 48)
+  expect(holeGrid(pocket, 60, 5)).toHaveLength(1)
+  expect(holeGrid(diff(pocket, circle(0, 0, 1)), 60, 0)).toEqual([])
+  expect(holeGrid(pocket, 60, 5, 0)).toEqual([])
 })
 
 it('exports the desk plinth and rails with no overlapping volume', () => {

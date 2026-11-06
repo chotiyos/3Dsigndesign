@@ -29,6 +29,9 @@ export function holeGrid(region: Region, pitch: number, radius: number, limit = 
       if (contains(x, y)) centres.push([x, y])
     }
   }
+  // A usable pocket smaller than one grid cell can fall between every probe.
+  // Only use its centre when it passes the same inset-region containment test.
+  if (!centres.length && limit > 0 && contains(b.cx, b.cy)) centres.push([b.cx, b.cy])
   return centres
 }
 
