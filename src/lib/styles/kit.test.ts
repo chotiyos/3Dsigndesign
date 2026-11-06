@@ -26,7 +26,38 @@ it('keeps stencil material and visibility keys stable when backing disappears', 
   ;[...backed, ...bare].forEach(p => p.geometry.dispose())
 })
 
+it('omits a lip above its wall while reserving its letter', () => {
+  const outline = rect(0, 0, 100, 50)
+  const parts = new Parts().slab('ผนัง', 'print', outline, 5, 0)
+    .seat(1, 'บ่า', outline, 2, 3, 2, 10)
+    .slab('หน้า', 'opal', outline, 3, 10).done()
+  try {
+    expect(parts.map(p => p.code)).toEqual(['A', 'C'])
+    expect(parts.some(p => p.addon)).toBe(false)
+  } finally { parts.forEach(p => p.geometry.dispose()) }
+})
+
 for (const id of ['two-tier-light', 'two-tier-full-colour']) {
+  for (const glow of [12, 16, 19]) {
+    it(`${id} keeps its lip attached to the upper wall with a ${glow} mm light band`, () => {
+      const parts = buildStyle(findStyle(id), rect(0, 0, 100, 50), { depth: 20, glow, seatLip: 1 })
+      try {
+        const lip = parts.find(p => p.addon)
+        if (glow >= 16) {
+          // The panel underside is below the upper wall: no ledge can attach.
+          expect(lip).toBeUndefined()
+        } else {
+          expect(lip).toBeDefined()
+          const wall = parts.find(p => p.code === lip!.addon!.wall)!
+          wall.geometry.computeBoundingBox()
+          lip!.geometry.computeBoundingBox()
+          expect(lip!.geometry.boundingBox!.min.z).toBeGreaterThanOrEqual(wall.geometry.boundingBox!.min.z)
+          expect(lip!.geometry.boundingBox!.max.z).toBeCloseTo(20)
+        }
+        expect(parts.find(p => p.label === 'แถบไฟ LED')?.code).toBe(id === 'two-tier-light' ? 'G' : 'H')
+      } finally { parts.forEach(p => p.geometry.dispose()) }
+    })
+  }
   it(`${id} does not create an orphan lip when the light replaces both walls`, () => {
     const style = findStyle(id)
     const art = rect(0, 0, 100, 50)

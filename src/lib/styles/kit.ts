@@ -83,8 +83,12 @@ export class Parts {
    */
   seat(on: number, label: string, outline: Region, wall: number, width: number, thick: number, panelBottom: number, floor = -Infinity, explode = 0) {
     const host = lipHost(this.list)
-    const t = Math.min(thick, panelBottom - floor)
-    if (!on || !host || !(t > 0.2)) {
+    // A segmented wall can start above the panel underside. Keep the ledge
+    // within its actual host rather than printing it into the light band.
+    host?.geometry.computeBoundingBox()
+    const box = host?.geometry.boundingBox
+    const t = Math.min(thick, panelBottom - Math.max(floor, box?.min.z ?? floor))
+    if (!on || !host || !box || panelBottom > box.max.z + 0.001 || !(t > 0.2)) {
       this.nextCode++
       return this
     }
