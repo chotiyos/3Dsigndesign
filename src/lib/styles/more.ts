@@ -321,13 +321,21 @@ export const DECO_STYLES: StyleDef[] = [
     code: 'E03',
     group: 'deco',
     name: 'อักษรโค้งตามเสา',
-    blurb: 'หลังตัวอักษรโค้งรับผิวเสากลมหรือผนังโค้ง ติดแนบสนิทไม่มีช่องว่าง',
+    blurb: 'หลังตัวอักษรโค้งรับผิวเสากลมหรือผนังโค้ง ติดแนบสนิทไม่มีช่องว่าง ข้อความพันรอบเสาได้ไม่เกินสามในสี่รอบ',
     make: 'print',
     usesArt: true,
     params: [common.depth(15), p('radius', 'รัศมีเสา', 150, 30, 2000, 5)],
     build: ({ art, box, v }) => {
-      const g = bend(slats(art, v.depth, 0, 'x', Math.max(2, box.w / 120)), v.radius, 'x')
-      return new Parts().solid('อักษรโค้ง', 'accent', g).done()
+      // Text longer than the column's circumference would wrap onto itself.
+      // Cap the wrap at three quarters of a turn by widening the radius.
+      const minRadius = box.w / (1.5 * Math.PI)
+      const radius = Math.max(v.radius, minRadius)
+      const g = bend(slats(art, v.depth, 0, 'x', Math.max(2, box.w / 120)), radius, 'x')
+      const parts = new Parts().solid('อักษรโค้ง', 'accent', g).done()
+      if (radius > v.radius) {
+        parts[0].warning = `ข้อความยาวเกินกว่าจะพันรอบเสารัศมี ${v.radius} มม. ระบบใช้รัศมี ${Math.ceil(radius)} มม. แทน ลดความสูงตัวอักษรหรือเพิ่มรัศมีเสา`
+      }
+      return parts
     },
   },
   {

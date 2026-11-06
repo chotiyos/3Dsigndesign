@@ -24,6 +24,8 @@ export interface SignPart {
   cut?: Region
   /** How far this part travels per mm of the explode slider, along Z. */
   explode: number
+  /** Shown in the editor when the style had to adjust the user's settings. */
+  warning?: string
 }
 
 export interface ParamDef {

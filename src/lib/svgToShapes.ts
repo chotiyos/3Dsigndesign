@@ -26,7 +26,9 @@ export function parseSvgToShapes(svgText: string): SvgShapesResult {
       const style = path.userData?.style as { fill?: string; fillOpacity?: number; opacity?: number } | undefined
       return style?.fill !== 'none' && style?.fillOpacity !== 0 && style?.opacity !== 0
     })
-    .flatMap((path) => SVGLoader.createShapes(path))
+    // ShapePath.toShapes() reads the SVG fill rule from path.userData (this
+    // replaced the deprecated SVGLoader.createShapes in recent three.js).
+    .flatMap((path) => path.toShapes())
   if (rawShapes.length === 0) {
     throw new Error('ไม่พบเส้นทางที่วาดเป็นรูปปิดได้ในไฟล์ SVG นี้')
   }

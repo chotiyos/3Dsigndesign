@@ -1737,6 +1737,15 @@ input[type='range'] {
   color: var(--navy-700);
 }
 
+.ed-warn {
+  flex-basis: 100%;
+  font-size: 0.82rem;
+  color: #7a4a00;
+  background: #fff3d6;
+  padding: 4px 8px;
+  border-radius: 3px;
+}
+
 .ed-busy {
   color: var(--ink-2);
   font-size: 0.82rem;

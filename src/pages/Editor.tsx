@@ -260,7 +260,12 @@ export default function Editor() {
     e.target.value = ''
     if (!file) return
     try {
-      const parsed = JSON.parse(await file.text()) as { app?: string; version?: number; draft?: Partial<Draft> }
+      let parsed: { app?: string; version?: number; draft?: Partial<Draft> }
+      try {
+        parsed = JSON.parse(await file.text())
+      } catch {
+        throw new Error('ไฟล์เสียหรือไม่ใช่ไฟล์งาน .jjd')
+      }
       if (!parsed || parsed.app !== 'jjdesign' || parsed.version !== 1 || !parsed.draft || typeof parsed.draft !== 'object' || Array.isArray(parsed.draft)) throw new Error('ไม่ใช่ไฟล์งานของ JJDesign รุ่นที่รองรับ')
       setDraft((d) => ({ ...d, ...cleanDraft(parsed.draft) }))
       setMessage({ tone: 'ok', text: `เปิดไฟล์ ${file.name} แล้ว` })
@@ -382,6 +387,9 @@ export default function Editor() {
             </span>
           )}
           {busy && <span className="ed-busy">กำลังคำนวณ…</span>}
+          {parts.filter((p) => p.warning).map((p) => (
+            <span key={p.id} className="ed-warn" role="status">{p.warning}</span>
+          ))}
         </div>
         {error && <p className="ed-error" role="alert">{error}</p>}
         {!error && parts.length === 0 && !busy && draft.source === 'text' && !font && <p className="ed-hint">กำลังโหลดฟอนต์…</p>}

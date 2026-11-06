@@ -58,6 +58,18 @@ describe('style catalogue', () => {
   }
 })
 
+it('curved-surface never wraps text more than three quarters around the column', () => {
+  const style = STYLES.find((s) => s.id === 'curved-surface')!
+  const wide = union(rect(0, 0, 1000, 100))
+  const parts = buildStyle(style, wide, { ...defaultValues(style), radius: 30 })
+  parts[0].geometry.computeBoundingBox()
+  const box = parts[0].geometry.boundingBox!
+  // A full wrap would put geometry on both sides of the column's axis in z.
+  expect(box.max.x - box.min.x).toBeGreaterThan(100)
+  expect(parts[0].warning).toMatch(/รัศมี/)
+  expect(buildStyle(style, union(rect(0, 0, 100, 100)), defaultValues(style))[0].warning).toBeUndefined()
+})
+
 for (const id of ['two-tier-light', 'two-tier-full-colour']) {
   it(id + ' keeps the side light within the body at minimum depth', () => {
     const style = STYLES.find((s) => s.id === id)!
