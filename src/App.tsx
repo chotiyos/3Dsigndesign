@@ -10,6 +10,7 @@ import { SiteShell } from './ui/SiteShell'
 const Editor = lazy(() => import('./pages/Editor'))
 const Gen = lazy(() => import('./pages/Gen'))
 const Lightbox = lazy(() => import('./pages/Lightbox'))
+const Keychain = lazy(() => import('./pages/Keychain'))
 
 function Loading() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
   else if (path === '/files') page = <Files />
   else if (path === '/gen') page = <Gen />
   else if (path === '/lightbox') page = <Lightbox />
+  else if (path === '/keychain') page = <Keychain />
   else if (path === '/how-to') page = <HowTo />
   else if (path === '/plugin') page = <Plugin />
   else if (path === '/contact') page = <Contact />

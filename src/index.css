@@ -2994,3 +2994,125 @@ input[type='range'] {
     display: none;
   }
 }
+
+/* Bubble name keychain */
+.kc-more {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--sheet);
+}
+
+.kc-more[open] {
+  padding-bottom: 14px;
+}
+
+.kc-more summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.kc-more > :not(summary) {
+  margin-top: 12px;
+}
+
+.kc-palettes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.kc-palettes button {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--ink-2);
+}
+
+.kc-palettes button[aria-pressed='true'] {
+  border-color: var(--navy-900);
+  box-shadow: inset 0 0 0 1px var(--navy-900);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.kc-swatch,
+.kc-swatch span {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.kc-swatch {
+  width: 34px;
+  height: 34px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+.kc-swatch > span {
+  width: 22px;
+  height: 22px;
+}
+
+.kc-swatch > span > span {
+  width: 11px;
+  height: 11px;
+}
+
+.kc-palette-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kc-own {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.kc-own label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.kc-own input[type='color'] {
+  flex-shrink: 0;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+@media (max-width: 420px) {
+  .kc-own {
+    grid-template-columns: 1fr;
+  }
+}

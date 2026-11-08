@@ -36,6 +36,8 @@ declare module 'clipper-lib' {
   }
 
   export class Clipper {
+    static CleanPolygons(paths: Paths, distance?: number): Paths
+    static PointInPolygon(point: IntPoint, path: Path): number
     constructor()
     AddPaths(paths: Paths, polyType: number, closed: boolean): void
     AddPath(path: Path, polyType: number, closed: boolean): void
