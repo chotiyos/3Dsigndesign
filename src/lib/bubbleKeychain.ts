@@ -1,5 +1,7 @@
 import * as ClipperLib from 'clipper-lib'
-import { bounds, circle, diff, intersect, islands, offset, regionArea, regionFromShapes, translate, union, type Bounds, type Region } from './geo2d'
+import { bounds, circle, diff, intersect, islands, offset, regionArea, regionFromShapes, roundRect, translate, union, type Bounds, type Region } from './geo2d'
+import { extrude, merge } from './solid'
+import { charmArt, CHARMS } from './charms'
 import { hb, type LoadedFont } from './hb'
 import { silhouette, Parts } from './styles/kit'
 import type { SignPart } from './styles'
@@ -7,6 +9,11 @@ import { shapeTextToShapes } from './textToShapes'
 
 /** A name keychain: puffy lettering on a coloured outline, on a flat base. */
 export type BubbleShape = 'circle' | 'contour'
+/** What the piece is for: a keychain, or a disc glued onto a phone grip. */
+export type BubblePurpose = 'keychain' | 'grip'
+/** The whole name, or one big first letter with the name across it. */
+/** The whole name, one big first letter with the name across it, or the name followed by a motif. */
+export type BubbleStyle = 'name' | 'initial' | 'charm'
 
 export interface BubbleOptions {
   text: string
@@ -23,8 +30,12 @@ export interface BubbleOptions {
   letter: number
   /** Width of the outline around the letters. */
   outline: number
-  /** A tab with a hole for the key ring. */
+  /** A tab with a hole for the key ring (never on a grip disc). */
   loop: boolean
+  purpose: BubblePurpose
+  style: BubbleStyle
+  /** Motif id from charms.ts, used by the 'charm' style. */
+  charm: string
 }
 
 export interface BubbleColours {
@@ -43,6 +54,9 @@ export const DEFAULT_BUBBLE: BubbleOptions = {
   letter: 1.2,
   outline: 2,
   loop: true,
+  purpose: 'keychain',
+  style: 'name',
+  charm: 'bunny',
 }
 
 export const MAX_CHARS = 24
@@ -91,13 +105,16 @@ export function cleanBubble(raw: unknown): BubbleOptions {
   return {
     text: typeof o.text === 'string' ? cleanText(o.text) : d.text,
     rows: Math.round(num(o.rows, 0, MAX_ROWS, d.rows)),
-    shape: o.shape === 'contour' ? 'contour' : 'circle',
-    size: num(o.size, 30, 80, d.size),
+    shape: o.purpose !== 'grip' && o.shape === 'contour' ? 'contour' : 'circle',
+    size: num(o.size, 30, o.purpose === 'grip' ? 60 : 80, o.purpose === 'grip' ? 40 : d.size),
     base: layer(num(o.base, 1.2, 4, d.base)),
     puff: layer(num(o.puff, 0.8, 5, d.puff)),
     letter: layer(num(o.letter, 0.4, 3, d.letter)),
     outline: num(o.outline, 1.2, 5, d.outline),
     loop: typeof o.loop === 'boolean' ? o.loop : d.loop,
+    purpose: o.purpose === 'grip' ? 'grip' : 'keychain',
+    style: o.style === 'initial' || o.style === 'charm' ? o.style : 'name',
+    charm: typeof o.charm === 'string' && CHARMS.some((ch) => ch.id === o.charm) ? o.charm : d.charm,
   }
 }
 
@@ -132,7 +149,7 @@ export function splits(list: string[], k: number): string[][] {
 }
 
 /** Rows of text laid out at a 1 mm em height, centred on the origin. */
-function layoutRows(font: LoadedFont, rows: string[], cache: Map<string, Region>): Region {
+function layoutRows(font: LoadedFont, rows: string[], cache: Map<string, Region>, charm = ''): Region {
   // Work at 100 mm em so geo2d's physical area cutoff preserves Thai marks.
   const unit = 100 / font.upem
   const shaped = rows.map((row) => {
@@ -157,6 +174,14 @@ function layoutRows(font: LoadedFont, rows: string[], cache: Map<string, Region>
   // Candidate fitting needs vertices only, not an expensive polygon union.
   const all = placed.flat()
   if (!all.length) return all
+  if (charm) {
+    // The motif stands after the name, taller than a row, centred on the block.
+    const t = bounds(all)
+    const k = Math.min(CHARM_SHARE, Math.max(t.h, 1) * 1.1)
+    const art = scaleRegion(charmArt(charm), k)
+    const a = bounds(art)
+    all.push(...translate(art, t.maxX + CHARM_GAP - a.minX, (t.minY + t.maxY) / 2))
+  }
   const b = bounds(all)
   return translate(all, -(b.minX + b.maxX) / 2, -(b.minY + b.maxY) / 2)
 }
@@ -200,7 +225,7 @@ export function chooseRows(font: LoadedFont, o: BubbleOptions, cache = new Map<s
   let best: BubbleLayout = { rows: [], height: 0 }
   for (const k of counts) {
     for (const rows of splits(list, k)) {
-      const height = fitHeight(layoutRows(font, rows, cache), o)
+      const height = fitHeight(layoutRows(font, rows, cache, motif(o)), o)
       // Fewer rows win ties, so a short name stays on one line.
       if (height > best.height * 1.03) best = { rows, height }
     }
@@ -224,6 +249,8 @@ export interface BubbleModel {
  * filament colour: base, outline and letters.
  */
 export function buildBubble(font: LoadedFont, o: BubbleOptions, colours: BubbleColours): BubbleModel {
+  if (o.purpose === 'grip') o = { ...o, shape: 'circle', size: num(o.size, 30, 60, 40) }
+  if (o.style === 'initial') return buildInitial(font, o, colours)
   const empty: BubbleModel = { parts: [], colours: {}, rows: [], letterHeight: 0, width: 0, height: 0 }
   const buffer = new hb.Buffer()
   buffer.addText(o.text.trim())
@@ -235,7 +262,7 @@ export function buildBubble(font: LoadedFont, o: BubbleOptions, colours: BubbleC
   const layout = chooseRows(font, o, cache)
   if (!layout.rows.length || layout.height <= 0) return empty
   const h = layout.height
-  const art = simplify(union(scaleRegion(layoutRows(font, layout.rows, cache), h)))
+  const art = simplify(union(scaleRegion(layoutRows(font, layout.rows, cache, motif(o)), h)))
   // Fatten for round, puffy strokes, but only as far as letters, marks and
   // counters stay apart: the outline colour must still show between them.
   let face = puffUp(art, FAT * h)
@@ -254,7 +281,7 @@ export function buildBubble(font: LoadedFont, o: BubbleOptions, colours: BubbleC
   }
   // Offset closing can leave coincident edges; canonicalize before triangulation.
   bubble = union(bubble)
-  if (o.loop) base = withTab(base)
+  if (hasTab(o)) base = withTab(base)
   const parts = new Parts()
     .slab('ฐาน', 'print', base, o.base, 0, 0)
     .slab('ขอบบับเบิล', 'print', bubble, o.puff, o.base, 0.6)
@@ -417,20 +444,24 @@ export function withTab(base: Region): Region {
 /** The parts list and Bambu Studio steps that go in the ZIP. */
 export function bubbleReadme(model: BubbleModel, o: BubbleOptions, colours: BubbleColours, list: string) {
   const [a, b, c] = model.parts
+  const grip = o.purpose === 'grip'
+  const initial = o.style === 'initial'
+  const middle = initial ? 'ตัวอักษรใหญ่' : 'ขอบบับเบิล'
   return [
-    'JJDesign — พวงกุญแจชื่อบับเบิล',
-    `ชื่อ: ${model.rows.join(' / ')}`,
-    `ขนาด ${model.width.toFixed(1)} × ${model.height.toFixed(1)} มม.${o.loop ? ' รวมหูห้อย' : ''} · ตัวอักษรสูง ${model.letterHeight.toFixed(1)} มม.`,
-    `ความหนา: ฐาน ${o.base} มม. + ขอบบับเบิล ${o.puff} มม. + ตัวอักษร ${o.letter} มม. = ${(o.base + o.puff + o.letter).toFixed(1)} มม.`,
-    `จำนวนแถว: ${model.rows.length}`,
+    `JJDesign — ${grip ? 'แผ่นติด Griptok' : 'พวงกุญแจชื่อบับเบิล'}${initial ? ' แบบตัวอักษรใหญ่ + ชื่อ' : o.style === 'charm' ? ` + ลาย${CHARMS.find((ch) => ch.id === o.charm)?.name ?? ''}` : ''}`,
+    initial ? `ตัวใหญ่: ${model.rows[0]} · ชื่อ: ${model.rows[1]}` : `ชื่อ: ${model.rows.join(' / ')}`,
+    `ขนาด ${model.width.toFixed(1)} × ${model.height.toFixed(1)} มม.${hasTab(o) ? ' รวมหูห้อย' : ''} · ${initial ? 'ชื่อ' : 'ตัวอักษร'}สูง ${model.letterHeight.toFixed(1)} มม.`,
+    `ความหนา: ฐาน ${o.base} มม. + ${middle} ${o.puff} มม. + ${initial ? 'ชื่อ' : 'ตัวอักษร'} ${o.letter} มม. = ${(o.base + o.puff + o.letter).toFixed(1)} มม.`,
+    initial ? '' : `จำนวนแถว: ${model.rows.length}`,
+    grip ? 'ติดด้านหลังแผ่นบนหน้าตัวจับมือถือ (แบบปกติหรือ MagSafe ที่หน้าแบน) เลือกกาวหรือเทปที่เหมาะกับวัสดุ ทำตามวิธีใช้และเวลารอกาวของผู้ผลิต' : '',
     model.warning ?? '',
     '',
     list,
     '',
     'สีที่เลือก',
     a ? `  ${a.code} ฐาน          ${colours.base}` : '',
-    b ? `  ${b.code} ขอบบับเบิล    ${colours.bubble}` : '',
-    c ? `  ${c.code} ตัวอักษร      ${colours.letter}` : '',
+    b ? `  ${b.code} ${middle.padEnd(12)} ${colours.bubble}` : '',
+    c ? `  ${c.code} ${(initial ? 'ชื่อ' : 'ตัวอักษร').padEnd(12)} ${initial ? colours.bubble : colours.letter}` : '',
     '',
     'พิมพ์หลายสีใน Bambu Studio (หรือ OrcaSlicer)',
     '1. ลากไฟล์ STL ทั้ง 3 ไฟล์ในโฟลเดอร์ พลาสติกพิมพ์ เข้าโปรแกรมพร้อมกัน',
@@ -457,4 +488,94 @@ function seamFence(region: Region): Region {
   const out: ClipperLib.Paths = []
   co.Execute(out, (SEAM + 0.002) * 1000)
   return out.map((poly) => poly.map((p) => [p.X / 1000, p.Y / 1000] as [number, number]))
+}
+
+/** A motif's height and gap from the name, in em. */
+const CHARM_SHARE = 1.5
+const CHARM_GAP = 0.3
+const motif = (o: BubbleOptions) => (o.style === 'charm' ? o.charm : '')
+
+/** Grip discs are glued on, so they never get a key-ring tab. */
+export const hasTab = (o: BubbleOptions) => o.loop && o.purpose !== 'grip'
+
+/** First Thai consonant or Latin letter, with combining marks removed. */
+export function initialOf(text: string) {
+  return Array.from(text.normalize('NFD')).find((c) => /[ก-ฮ]/u.test(c) && !/[ฤฦ]/u.test(c) || /\p{Script=Latin}/u.test(c) && /\p{Letter}/u.test(c)) ?? ''
+}
+
+/** Share of the big letter's height the name may take. */
+const NAME_SHARE = 0.26
+
+/**
+ * One big first letter in the outline colour, with the whole name on a
+ * banner across its lower half: base, big letter, then the name on top.
+ */
+function buildInitial(font: LoadedFont, o: BubbleOptions, colours: BubbleColours): BubbleModel {
+  const empty: BubbleModel = { parts: [], colours: {}, rows: [], letterHeight: 0, width: 0, height: 0 }
+  const name = o.text.trim()
+  const first = initialOf(name)
+  if (!first) return { ...empty, warning: 'ใส่ชื่อที่มีพยัญชนะไทยหรือตัวอักษรละตินอย่างน้อย 1 ตัว' }
+  const buffer = new hb.Buffer()
+  buffer.addText(name)
+  buffer.guessSegmentProperties()
+  hb.shape(font.hbFont, buffer)
+  if (buffer.getGlyphInfos().some((g) => g.codepoint === 0)) return { ...empty, warning: 'ฟอนต์นี้ไม่มีตัวอักษรบางตัว ลองเปลี่ยนฟอนต์หรือลบอักขระที่ไม่รองรับ' }
+  const cache = new Map<string, Region>()
+  const bigUnit = layoutRows(font, [first], cache)
+  const H = fitHeight(bigUnit, { ...o, outline: 0 })
+  if (H <= 0) return empty
+  // Only lightly rounded: full puffing at this size would fill the counters.
+  const big = offset(simplify(union(scaleRegion(bigUnit, H))), 0.4)
+  const bb = bounds(big)
+  const nameUnit = simplify(union(layoutRows(font, [name], cache)))
+  const nb = bounds(nameUnit)
+  const pad = Math.max(1.2, o.outline)
+  const cy = (bb.minY + bb.maxY) / 2 - 0.14 * bb.h
+  const inner = o.size / 2 - RIM - 0.3
+  // The banner's width: as wide as the circle allows at its height, or a
+  // little wider than the big letter on a contour piece.
+  let h = Math.min(NAME_SHARE * bb.h / nb.h, Infinity)
+  for (let i = 0; i < 3; i++) {
+    const half = o.shape === 'circle'
+      ? Math.sqrt(Math.max(0, inner ** 2 - (Math.abs(cy) + (nb.h * h) / 2 + pad) ** 2)) - pad
+      : Math.max(bb.w, 0.8 * bb.h) / 2 - pad
+    h = Math.min(NAME_SHARE * bb.h / nb.h, (2 * half) / nb.w)
+  }
+  if (h <= 0) return empty
+  const nameArt = translate(scaleRegion(nameUnit, h), 0, cy)
+  const face = puffUp(nameArt, FAT * h)
+  const fb = bounds(face)
+  const bh = fb.h + 2 * pad
+  let banner = roundRect((fb.minX + fb.maxX) / 2, (fb.minY + fb.maxY) / 2, fb.w + 2 * pad, bh, bh / 2)
+  let letter = diff(big, banner)
+  let base: Region
+  if (o.shape === 'circle') {
+    const clip = circle(0, 0, o.size / 2 - RIM, 128)
+    banner = intersect(banner, clip)
+    letter = intersect(letter, clip)
+    base = circle(0, 0, o.size / 2, 160)
+  } else {
+    base = silhouette(union(big, banner), RIM)
+  }
+  if (hasTab(o)) base = withTab(base)
+  const parts = new Parts()
+    // The banner rises with the base, in the base colour, so the name sits on a plain strip.
+    .solid('ฐาน', 'print', merge([extrude(base, o.base, 0), extrude(banner, o.puff, o.base)]), 0)
+    .slab('ตัวอักษรใหญ่', 'print', union(letter), o.puff, o.base, 0.6)
+    .slab('ชื่อ', 'print', intersect(face, banner), o.letter, o.base + o.puff, 1.2)
+    .done()
+  // The name takes the big letter's colour: it always contrasts with the base-coloured banner.
+  const tint = [colours.base, colours.bubble, colours.bubble]
+  const tints: Record<string, string> = {}
+  parts.forEach((part, i) => (tints[part.code] = tint[i]))
+  const b = bounds(base)
+  return {
+    parts,
+    colours: tints,
+    rows: [first, name],
+    letterHeight: h,
+    width: b.w,
+    height: b.h,
+    warning: printWarnings(face, h, o).join(' ') || undefined,
+  }
 }

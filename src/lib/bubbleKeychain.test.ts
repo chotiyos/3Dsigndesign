@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import {
-  buildBubble, bubbleReadme, chooseRows, cleanBubble, cleanColours, cleanText, DEFAULT_BUBBLE, graphemes, MAX_CHARS, PALETTES, printWarnings, puffUp, RIM, SEAM, splits, TAB, withTab,
+  buildBubble, bubbleReadme, chooseRows, initialOf, cleanBubble, cleanColours, cleanText, DEFAULT_BUBBLE, graphemes, MAX_CHARS, PALETTES, printWarnings, puffUp, RIM, SEAM, splits, TAB, withTab,
   type BubbleOptions,
 } from './bubbleKeychain'
 import { buildZip, modelSize, partsList, partStats, printableStl } from './exportModel'
@@ -354,3 +354,53 @@ describe('bubble keychain', () => {
     expect(printableStl(model.parts).byteLength).toBe(84 + 50 * model.parts.reduce((n, p) => n + (p.geometry.index?.count ?? p.geometry.getAttribute('position').count) / 3, 0))
   })
 })
+
+describe('initial style and grip discs', () => {
+  it('picks the first consonant or Latin letter as the big letter', () => {
+    expect(initialOf('เมย์')).toBe('ม')
+    expect(initialOf('  Ploy')).toBe('P')
+    expect(initialOf('ปิ่น')).toBe('ป')
+  })
+
+  for (const shape of ['circle', 'contour'] as const) {
+    for (const text of ['Mali', 'เมย์ ใจดี', 'น้องปิ่น']) {
+      it(`${shape} ${text}: big letter, name banner and base are watertight and inside the base`, () => {
+        const model = buildBubble(mitr, opts({ text, shape, style: 'initial' }), colours)
+        expect(model.parts.map((p) => p.label)).toEqual(['ฐาน', 'ตัวอักษรใหญ่', 'ชื่อ'])
+        for (const part of model.parts) expect(analyse(part.geometry).watertight, part.label).toBe(true)
+        expect(model.letterHeight).toBeGreaterThan(3)
+        const size = modelSize(model.parts)
+        if (shape === 'circle') expect(Math.max(size.w, size.h)).toBeLessThanOrEqual(50 + 2 * 4 + 1)
+        expect(size.d).toBeCloseTo(DEFAULT_BUBBLE.base + DEFAULT_BUBBLE.puff + DEFAULT_BUBBLE.letter, 3)
+      })
+    }
+  }
+
+  it('a grip disc is a circle with no tab, whatever was saved', () => {
+    const model = buildBubble(mitr, opts({ text: 'Ploy', purpose: 'grip', shape: 'contour', loop: true, size: 40 }), colours)
+    expect(model.width).toBeCloseTo(40, 0)
+    expect(model.height).toBeCloseTo(40, 0)
+    const readme = bubbleReadme(model, opts({ purpose: 'grip', loop: true }), colours, '')
+    expect(readme).toContain('Griptok')
+    expect(readme).not.toContain('รวมหูห้อย')
+  })
+
+  it('restores purpose and style safely', () => {
+    expect(cleanBubble({ purpose: 'grip', style: 'initial' })).toMatchObject({ purpose: 'grip', style: 'initial' })
+    expect(cleanBubble({ purpose: 'x', style: 7 })).toMatchObject({ purpose: 'keychain', style: 'name' })
+  })
+})
+
+ it('ignores marks, vowels, digits and emoji when choosing an initial', () => {
+   for (const text of ['่ิ', 'เแโใไะาำฤๅ', '123', '😀']) expect(initialOf(text)).toBe('')
+   expect(initialOf('😀12 เÉva')).toBe('E')
+   expect(initialOf('่ เเมย์')).toBe('ม')
+   const model = buildBubble(mitr, opts({ text: '123', style: 'initial' }), colours)
+   expect(model.parts).toEqual([])
+   expect(model.warning).toContain('พยัญชนะไทย')
+ })
+ it('normalizes hidden grip shape and restored size while preserving the loop preference', () => {
+   expect(cleanBubble({ purpose: 'grip', shape: 'contour', size: 80, loop: true })).toMatchObject({ shape: 'circle', size: 60, loop: true })
+   expect(cleanBubble({ purpose: 'grip' }).size).toBe(40)
+   expect(cleanBubble({})).toEqual(DEFAULT_BUBBLE)
+ })
