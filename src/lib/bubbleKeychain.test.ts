@@ -404,3 +404,13 @@ describe('initial style and grip discs', () => {
    expect(cleanBubble({ purpose: 'grip' }).size).toBe(40)
    expect(cleanBubble({})).toEqual(DEFAULT_BUBBLE)
  })
+
+describe('bubble rim setting', () => {
+  it('a wider rim leaves more base round the outline at the same overall size', () => {
+    const thin = buildBubble(mitr, opts({ text: 'Ploy', shape: 'contour', rim: 0.6, loop: false }), colours)
+    const wide = buildBubble(mitr, opts({ text: 'Ploy', shape: 'contour', rim: 4, loop: false }), colours)
+    expect(Math.max(wide.width, wide.height)).toBeCloseTo(Math.max(thin.width, thin.height), 0)
+    expect(wide.letterHeight).toBeLessThan(thin.letterHeight)
+    expect(cleanBubble({ rim: 9 }).rim).toBe(4)
+  })
+})

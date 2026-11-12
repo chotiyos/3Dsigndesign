@@ -268,12 +268,13 @@ export default function Keychain() {
                 <input type="checkbox" role="switch" className="switch" checked={options.loop} onChange={(e) => set('loop', e.target.checked)} />
               </label>
             </div>}
-            <details className="kc-more">
-              <summary>ความหนาและขอบ</summary>
+            <details className="kc-more" open>
+              <summary>ความหนาและขอบโดยละเอียด</summary>
               <Range label="ความหนาฐาน" unit="มม." value={options.base} min={1.2} max={4} step={0.2} onChange={(v) => set('base', v)} />
               <Range label={initial ? 'ความสูงตัวอักษรใหญ่' : 'ความสูงขอบบับเบิล'} unit="มม." value={options.puff} min={0.8} max={5} step={0.2} onChange={(v) => set('puff', v)} />
               <Range label="ตัวอักษรนูนจากขอบ" unit="มม." value={options.letter} min={0.4} max={3} step={0.2} onChange={(v) => set('letter', v)} />
               <Range label="ความกว้างขอบรอบตัวอักษร" unit="มม." value={options.outline} min={1.2} max={5} step={0.2} onChange={(v) => set('outline', v)} />
+              <Range label="ขอบฐานรอบนอก" unit="มม." hint="พื้นฐานที่เห็นรอบขอบบับเบิล" value={options.rim} min={0.6} max={4} step={0.2} onChange={(v) => set('rim', v)} />
               <p className="note">หนารวม <strong className="tabular">{total.toFixed(1)} มม.</strong> ความหนาแต่ละชั้นควรหารด้วยความสูงชั้นพิมพ์ลงตัว (เช่น 0.2 มม.) สีจะเปลี่ยนตรงรอยต่อพอดี</p>
             </details>
           </section>

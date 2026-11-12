@@ -17,7 +17,22 @@ export interface TwoToneOptions {
   text: string
   /** Motif id for the 'charm' mode. */
   charm: string
-  size: TwoToneSize
+  /** Largest letter height, mm. Long names shrink below it to fit `maxLength`. */
+  letter: number
+  /** The big letter's height in the 'initial' mode, mm. */
+  big: number
+  /** Longest side of the piece, not counting the tab, mm. */
+  maxLength: number
+  /** Base thickness, mm. */
+  base: number
+  /** How far the lettering stands above the base, mm. */
+  art: number
+  /** Base showing round the lettering, mm. */
+  margin: number
+  /** Raised rim width on the 'plate' mode, mm. */
+  rim: number
+  /** 0 lets the page choose one or two rows. */
+  rows: number
   loop: boolean
 }
 
@@ -26,22 +41,36 @@ export interface TwoToneColours {
   art: string
 }
 
-export const DEFAULT_TWOTONE: TwoToneOptions = { mode: 'charm', text: 'Mali', charm: 'bunny', size: 'small', loop: true }
+/** Quick sizes: letter height, big-letter height and longest side, mm. */
+export const SIZE_PRESETS: Record<TwoToneSize, { letter: number; big: number; maxLength: number }> = {
+  small: { letter: 11, big: 50, maxLength: 80 },
+  large: { letter: 14, big: 62, maxLength: 100 },
+}
+
+export const DEFAULT_TWOTONE: TwoToneOptions = {
+  mode: 'charm', text: 'Mali', charm: 'bunny', ...SIZE_PRESETS.small, base: 4.8, art: 1.2, margin: 2.4, rim: 1.2, rows: 0, loop: true,
+}
+
+/** Allowed ranges for the detailed settings: [min, max, step]. */
+export const TWOTONE_RANGES = {
+  letter: [6, 30, 0.5],
+  big: [30, 100, 1],
+  maxLength: [40, 160, 1],
+  base: [1.6, 8, 0.2],
+  art: [0.4, 3, 0.2],
+  margin: [1.2, 6, 0.2],
+  rim: [0.8, 3, 0.2],
+} as const satisfies Record<string, readonly [number, number, number]>
 export const TWOTONE_MAX = 24
 
-/** Base and raised layer thickness, mm (6 mm overall, 0.2 mm layers). */
-export const BASE_H = 4.8
-export const ART_H = 1.2
-/** Letter height for each size, mm; the big letter's height in the 'initial' mode. */
-export const LETTER = { small: 11, large: 14 }
-export const BIG = { small: 50, large: 62 }
-/** Longest piece, not counting the tab. Long names shrink to fit. */
-export const MAX_LENGTH = { small: 80, large: 100 }
+/** Default base and raised layer thickness, mm (6 mm overall, 0.2 mm layers). */
+export const BASE_H = DEFAULT_TWOTONE.base
+export const ART_H = DEFAULT_TWOTONE.art
+/** Default longest side for each quick size, mm. */
+export const MAX_LENGTH = { small: SIZE_PRESETS.small.maxLength, large: SIZE_PRESETS.large.maxLength }
 /** Smallest letters before a name goes onto two rows. */
 const MIN_LETTER = 7
 const FAT = 0.06
-/** Base showing round the raised art, mm. */
-const MARGIN = { charm: 2.6, word: 1.8, plate: 3.2, initial: 1.6 }
 
 export const TWOTONE_PALETTES: { id: string; name: string; colours: TwoToneColours }[] = [
   { id: 'pink', name: 'ชมพูขาว', colours: { base: '#f48fb1', art: '#ffffff' } },
@@ -71,10 +100,19 @@ export function cleanTwoTone(raw: unknown): TwoToneOptions {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const d = DEFAULT_TWOTONE
   return {
+    ...DEFAULT_TWOTONE,
     mode: TWOTONE_MODES.some((m) => m.id === o.mode) ? (o.mode as TwoToneMode) : d.mode,
     text: typeof o.text === 'string' ? cleanText(o.text) : d.text,
     charm: typeof o.charm === 'string' && CHARMS.some((c) => c.id === o.charm) ? o.charm : d.charm,
-    size: o.size === 'large' ? 'large' : 'small',
+    // Older saves had only a small/large size.
+    ...(o.size === 'large' && typeof o.letter !== 'number' ? SIZE_PRESETS.large : {}),
+    ...Object.fromEntries((Object.keys(TWOTONE_RANGES) as (keyof typeof TWOTONE_RANGES)[])
+      .filter((k) => typeof o[k] === 'number' && Number.isFinite(o[k]))
+      .map((k) => {
+        const [min, max, step] = TWOTONE_RANGES[k]
+        return [k, Number((Math.round(Math.min(max, Math.max(min, o[k] as number)) / step) * step).toFixed(2))]
+      })),
+    rows: o.rows === 1 || o.rows === 2 ? o.rows : 0,
     loop: typeof o.loop === 'boolean' ? o.loop : d.loop,
   }
 }
@@ -108,10 +146,11 @@ function missingGlyphs(font: LoadedFont, text: string) {
 }
 
 /** The name laid out on one or two rows at the largest em height that fits `maxW` × `maxH` (capped at `cap`). */
-function fitName(font: LoadedFont, text: string, maxW: number, maxH: number, cap: number, charm = '') {
+function fitName(font: LoadedFont, text: string, maxW: number, maxH: number, cap: number, charm = '', rows = 0) {
   const cache = new Map<string, Region>()
   const list = words(text)
-  const options = [[text.trim()], ...(list.length > 1 ? splits(list, 2) : [])]
+  const two = list.length > 1 ? splits(list, 2) : []
+  const options = rows === 1 || !two.length ? [[text.trim()]] : rows === 2 ? two : [[text.trim()], ...two]
   let best = { rows: [] as string[], h: 0, unit: [] as Region }
   for (const rows of options) {
     const unit = layoutRows(font, rows, cache, charm)
@@ -130,8 +169,8 @@ export function buildTwoTone(font: LoadedFont, o: TwoToneOptions, colours: TwoTo
   const name = o.text.trim()
   if (!name) return empty()
   if (missingGlyphs(font, name)) return empty('ฟอนต์นี้ไม่มีตัวอักษรบางตัว ลองเปลี่ยนฟอนต์หรือลบอักขระที่ไม่รองรับ')
-  const L = LETTER[o.size]
-  const long = MAX_LENGTH[o.size]
+  const L = o.letter
+  const long = o.maxLength
   let base: Region
   let art: Region
   let face: Region
@@ -142,7 +181,7 @@ export function buildTwoTone(font: LoadedFont, o: TwoToneOptions, colours: TwoTo
     // Capital initials keep dotted i/j from becoming detached pieces of base.
     const first = Array.from(initialOf(name).toUpperCase())[0]
     if (!first) return empty('ไม่มีพยัญชนะไทยหรือตัวอักษรอังกฤษให้ทำตัวใหญ่ ลองพิมพ์ชื่อใหม่')
-    const H = BIG[o.size]
+    const H = o.big
     // Boolean operations have a physical area cutoff: scale before unioning.
     const bigUnit = layoutRows(font, [first], new Map())
     const bb0 = bounds(bigUnit)
@@ -154,20 +193,21 @@ export function buildTwoTone(font: LoadedFont, o: TwoToneOptions, colours: TwoTo
     }
     const bb = bounds(big)
     // The name runs across the letter's middle, as wide as the letter (at least 70% of its height).
-    const fit = fitName(font, name, Math.max(bb.w, 0.7 * bb.h) * 0.92, 0.42 * bb.h, 0.3 * H)
+    const fit = fitName(font, name, Math.max(bb.w, 0.7 * bb.h) * 0.92, 0.42 * bb.h, Math.min(0.3 * H, L), '', o.rows)
     if (!fit.rows.length) return empty()
     ;({ rows, h } = fit)
     const nameArt = union(grow(fit.unit, h))
     const nb = bounds(nameArt)
     face = puffUp(translate(nameArt, (bb.minX + bb.maxX) / 2 - (nb.minX + nb.maxX) / 2, (bb.minY + bb.maxY) / 2 - (nb.minY + nb.maxY) / 2 - 0.06 * bb.h), FAT * h)
     // The name's own backing joins the letter where the name runs past it.
-    base = union(big, silhouette(face, MARGIN.initial))
+    base = union(big, silhouette(face, o.margin))
     art = face
   } else {
     const charm = o.mode === 'charm' ? o.charm : ''
-    const margin = MARGIN[o.mode]
-    const border = o.mode === 'plate' ? 2.4 : 0
-    const fit = fitName(font, name, long - 2 * margin - border, Math.min(40, long - 2 * margin - border), L, charm)
+    const margin = o.margin
+    // The plate's rim sits 1 mm in from its edge.
+    const border = o.mode === 'plate' ? 2 * (1 + o.rim) : 0
+    const fit = fitName(font, name, long - 2 * margin - border, Math.min(40, long - 2 * margin - border), L, charm, o.rows)
     if (!fit.rows.length) return empty()
     ;({ rows, h } = fit)
     const unit = fit.unit
@@ -182,10 +222,10 @@ export function buildTwoTone(font: LoadedFont, o: TwoToneOptions, colours: TwoTo
       art = face
     } else {
       const b = bounds(face)
-      const w = b.w + 2 * margin + 2.4
-      const hh = b.h + 2 * margin + 2.4
+      const w = b.w + 2 * margin + border
+      const hh = b.h + 2 * margin + border
       base = roundRect((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, w, hh, Math.min(hh / 2, 6))
-      const rim = diff(offset(base, -1), offset(base, -2.2))
+      const rim = diff(offset(base, -1), offset(base, -1 - o.rim))
       art = union(face, rim)
     }
   }
@@ -193,13 +233,13 @@ export function buildTwoTone(font: LoadedFont, o: TwoToneOptions, colours: TwoTo
   if (o.loop) base = withTab(base)
   art = intersect(art, base)
   const parts = new Parts()
-    .slab('ฐาน', 'print', base, BASE_H, 0, 0)
-    .slab('ตัวอักษรและลาย', 'print', art, ART_H, BASE_H, 1)
+    .slab('ฐาน', 'print', base, o.base, 0, 0)
+    .slab('ตัวอักษรและลาย', 'print', art, o.art, o.base, 1)
     .done()
   const tints: Record<string, string> = {}
   parts.forEach((p, i) => (tints[p.code] = i === 0 ? colours.base : colours.art))
   const b = bounds(base)
-  const warn = printWarnings(face, h, { ...DEFAULT_BUBBLE, base: BASE_H, puff: 0.2, letter: ART_H })
+  const warn = printWarnings(face, h, { ...DEFAULT_BUBBLE, base: o.base, puff: 0.2, letter: o.art })
   return { parts, colours: tints, rows, letterHeight: h, width: b.w, height: b.h, warning: warn.join(' ') || undefined }
 }
 
@@ -213,7 +253,7 @@ export function twoToneReadme(model: TwoToneModel, o: TwoToneOptions, colours: T
     `JJDesign — พวงกุญแจชื่อสองสี แบบ${mode.label}${charm ? ` (ลาย${charm})` : ''}`,
     `ชื่อ: ${model.rows.join(' / ')}`,
     `ขนาด ${model.width.toFixed(1)} × ${model.height.toFixed(1)} มม.${o.loop ? ' รวมหูห้อย' : ''} · ตัวอักษรสูง ${model.letterHeight.toFixed(1)} มม.`,
-    `ความหนา: ฐาน ${BASE_H} มม. + ลายนูน ${ART_H} มม. = ${(BASE_H + ART_H).toFixed(1)} มม.`,
+    `ความหนา: ฐาน ${o.base} มม. + ลายนูน ${o.art} มม. = ${(o.base + o.art).toFixed(1)} มม. · ขอบฐานรอบตัวอักษร ${o.margin} มม.${o.mode === 'plate' ? ` · ขอบนูน ${o.rim} มม.` : ''}`,
     model.warning ?? '',
     '',
     list,

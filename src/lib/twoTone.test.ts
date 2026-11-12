@@ -6,7 +6,7 @@ import { fontFromArrayBuffer } from './hb'
 import { analyse } from './solid'
 import { bounds, diff, intersect, islands, regionArea } from './geo2d'
 import {
-  ART_H, BASE_H, buildTwoTone, cleanTwoTone, cleanTwoToneColours, DEFAULT_TWOTONE, MAX_LENGTH, TWOTONE_MODES, TWOTONE_PALETTES, twoToneReadme,
+  ART_H, BASE_H, buildTwoTone, cleanTwoTone, SIZE_PRESETS, cleanTwoToneColours, DEFAULT_TWOTONE, MAX_LENGTH, TWOTONE_MODES, TWOTONE_PALETTES, twoToneReadme,
   type TwoToneOptions,
 } from './twoTone'
 
@@ -37,7 +37,7 @@ describe('two-tone name keychain', () => {
 
   it('large is bigger than small', () => {
     const small = buildTwoTone(fonts[0], opts({ text: 'Ploy' }), colours)
-    const large = buildTwoTone(fonts[0], opts({ text: 'Ploy', size: 'large' }), colours)
+    const large = buildTwoTone(fonts[0], opts({ text: 'Ploy', ...SIZE_PRESETS.large }), colours)
     expect(large.letterHeight).toBeGreaterThan(small.letterHeight)
   })
 
@@ -63,7 +63,7 @@ describe('two-tone name keychain', () => {
 
   it('limits the finished body, including thickening and the plate border', () => {
     for (const mode of ['word', 'charm', 'plate'] as const) for (const size of ['small', 'large'] as const) {
-      const model = buildTwoTone(fonts[0], opts({ mode, size, text: 'W'.repeat(24), loop: false }), colours)
+      const model = buildTwoTone(fonts[0], opts({ mode, ...SIZE_PRESETS[size], text: 'W'.repeat(24), loop: false }), colours)
       const b = bounds(model.parts[0].profile!.region)
       expect(Math.max(b.w, b.h)).toBeLessThanOrEqual(MAX_LENGTH[size] + 0.01)
       model.parts.forEach((p) => p.geometry.dispose())
@@ -82,7 +82,7 @@ describe('two-tone name keychain', () => {
 
   it('restores only valid settings', () => {
     expect(cleanTwoTone({ mode: 'x', size: 'huge', charm: 'nope', loop: 1 })).toEqual({ ...DEFAULT_TWOTONE })
-    expect(cleanTwoTone({ mode: 'plate', size: 'large', charm: 'owl', loop: false, text: 'Ann' })).toEqual({ mode: 'plate', size: 'large', charm: 'owl', loop: false, text: 'Ann' })
+    expect(cleanTwoTone({ mode: 'plate', size: 'large', charm: 'owl', loop: false, text: 'Ann' })).toEqual({ ...DEFAULT_TWOTONE, mode: 'plate', ...SIZE_PRESETS.large, charm: 'owl', loop: false, text: 'Ann' })
     expect(cleanTwoToneColours({ base: '#ABCDEF', art: 'white' })).toEqual({ base: '#abcdef', art: colours.art })
   })
 
@@ -93,5 +93,28 @@ describe('two-tone name keychain', () => {
     const names = Object.keys(zip)
     expect(names.filter((n) => n.endsWith('.stl'))).toHaveLength(3)
     expect(strFromU8(zip[names.find((n) => n.endsWith('.txt'))!])).toContain('ลายกระต่าย')
+  })
+})
+
+describe('two-tone detailed settings', () => {
+  it('thickness, letter height, rows and plate rim follow the settings', () => {
+    const model = buildTwoTone(fonts[0], opts({ mode: 'plate', text: 'Mali Ploy', base: 3, art: 2, letter: 9, rows: 2, rim: 2 }), colours)
+    const size = modelSize(model.parts)
+    expect(size.d).toBeCloseTo(5, 3)
+    expect(model.rows).toHaveLength(2)
+    expect(model.letterHeight).toBeLessThanOrEqual(9 + 1e-6)
+    const one = buildTwoTone(fonts[0], opts({ mode: 'word', text: 'Mali Ploy', rows: 1 }), colours)
+    expect(one.rows).toHaveLength(1)
+  })
+
+  it('a wider margin makes a bigger base round the same letters', () => {
+    const thin = buildTwoTone(fonts[0], opts({ mode: 'charm', text: 'Mali', margin: 1.2, loop: false }), colours)
+    const wide = buildTwoTone(fonts[0], opts({ mode: 'charm', text: 'Mali', margin: 5, loop: false }), colours)
+    expect(wide.width).toBeGreaterThan(thin.width + 7)
+  })
+
+  it('restores old saves and clamps new values to 0.2 mm layers', () => {
+    expect(cleanTwoTone({ size: 'large' })).toMatchObject(SIZE_PRESETS.large)
+    expect(cleanTwoTone({ base: 3.33, art: 9, letter: 2 })).toMatchObject({ base: 3.4, art: 3, letter: 6 })
   })
 })

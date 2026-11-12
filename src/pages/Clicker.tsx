@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import {
-  buildClicker, cleanClicker, cleanClickerColours, cleanClickerText, clickerReadme, CLICKER_PALETTES, DEFAULT_CLICKER, frameColour, ICONS, insertClickerIcon, keysOf, MAX_KEYS, sameClickerColours, withClickerKeyColour,
+  buildClicker, CLICKER_RANGES, cleanClicker, cleanClickerColours, cleanClickerText, clickerReadme, CLICKER_PALETTES, DEFAULT_CLICKER, frameColour, ICONS, insertClickerIcon, keysOf, MAX_KEYS, sameClickerColours, SWITCH_CAP, withClickerKeyColour,
   type ClickerBuild, type ClickerColours, type ClickerEdge, type ClickerLayout, type ClickerOptions,
 } from '../lib/clickerKeychain'
 import { buildZip, downloadBlob, partsList, partStats, printableStl, safeName } from '../lib/exportModel'
@@ -10,6 +10,7 @@ import { loadFont, type LoadedFont } from '../lib/hb'
 import { useTitle } from '../router'
 import { Viewer } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
+import { Range } from '../ui/Range'
 
 export const CLICKER_KEY = 'jjdesign-clicker-v1'
 const DEFAULT_FONT = 'kanit-bold'
@@ -113,6 +114,10 @@ export default function Clicker() {
   const set = <K extends keyof ClickerOptions>(key: K, value: ClickerOptions[K]) => {
     setMessage(null)
     setOptions((o) => ({ ...o, [key]: value }))
+  }
+  const range = (key: keyof typeof CLICKER_RANGES) => {
+    const [min, max, step] = CLICKER_RANGES[key]
+    return { min, max, step, value: options[key], onChange: (v: number) => set(key, v) }
   }
   const keys = keysOf(draft)
   const palette = CLICKER_PALETTES.find((p) => sameClickerColours(p.colours, colours))
@@ -236,6 +241,23 @@ export default function Clicker() {
                 <input type="checkbox" role="switch" className="switch" checked={options.loop} onChange={(e) => set('loop', e.target.checked)} />
               </label>
             </div>
+            <details className="kc-more" open>
+              <summary>ขนาดและความหนา</summary>
+              {options.build === 'solid' ? (
+                <>
+                  <Range label="ขนาดปุ่ม" unit="มม." hint="กรอบ ปุ่ม และตัวอักษรย่อขยายตามกัน" {...range('keySize')} />
+                  <Range label={options.edge === 'pencil' ? 'ความหนาตัวดินสอ' : 'ความหนากรอบ'} unit="มม." {...range('frame')} />
+                  <Range label="ความสูงปุ่ม" unit="มม." hint="จากผิวกรอบถึงหน้าปุ่ม" {...range('capH')} />
+                </>
+              ) : (
+                <p className="note">แบบกดได้ใช้ขนาดมาตรฐานสวิตช์ MX ปุ่ม {SWITCH_CAP.size} มม. ปรับขนาดปุ่มและตัวเรือนไม่ได้</p>
+              )}
+              <Range label="ตัวอักษรนูนจากหน้าปุ่ม" unit="มม." {...range('letterH')} />
+              <Range label="ขนาดตัวอักษรบนปุ่ม" unit="%" hint="เทียบกับพื้นที่หน้าปุ่ม" {...range('letterSize')} />
+              {options.build === 'solid' && (
+                <p className="note">หนารวม <strong className="tabular">{(options.frame + options.capH + options.letterH).toFixed(1)} มม.</strong> ความหนาแต่ละชั้นหาร 0.2 มม. ลงตัว สีจะเปลี่ยนตรงรอยต่อพอดี</p>
+              )}
+            </details>
           </section>
 
           <section className="lbx-step" aria-labelledby="ck-3">

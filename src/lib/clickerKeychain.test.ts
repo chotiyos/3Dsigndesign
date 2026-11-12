@@ -235,3 +235,31 @@ describe('pencil keychain', () => {
      expect(cells.map(c => regionArea(c))).toEqual(Array(10).fill(400))
    }
  })
+
+describe('clicker detailed settings', () => {
+  it('key size scales the decorative keychain; thicknesses stack as set', async () => {
+    const { modelSize } = await import('./exportModel')
+    const base = buildClicker(mitr, opts({ text: 'AB', loop: false }), colours)
+    const big = buildClicker(mitr, opts({ text: 'AB', loop: false, keySize: 30, frame: 4, capH: 2, letterH: 1.2 }), colours)
+    expect(big.width / base.width).toBeCloseTo(1.5, 2)
+    expect(modelSize(big.parts).d).toBeCloseTo(4 + 2 + 1.2, 3)
+    expect(big.thickness).toBeCloseTo(7.2, 3)
+    for (const part of big.parts) expect(analyse(part.geometry).watertight, part.label).toBe(true)
+  })
+
+  it('switch keys keep the MX size whatever key size is saved', () => {
+    const a = buildClicker(mitr, opts({ text: 'A', build: 'switch', loop: false }), colours)
+    const b = buildClicker(mitr, opts({ text: 'A', build: 'switch', loop: false, keySize: 30 }), colours)
+    expect(b.width).toBeCloseTo(a.width, 3)
+  })
+
+  it('smaller letters on the keys', () => {
+    const full = bounds(keyArt(mitr, 'M'))
+    const small = bounds(keyArt(mitr, 'M', LETTER_BOX * 0.6))
+    expect(small.w / full.w).toBeCloseTo(0.6, 2)
+  })
+
+  it('restores and clamps the detailed settings', () => {
+    expect(cleanClicker({ keySize: 99, frame: 3.33, letterSize: 10 })).toMatchObject({ keySize: 30, frame: 3.4, letterSize: 60, capH: DEFAULT_CLICKER.capH })
+  })
+})

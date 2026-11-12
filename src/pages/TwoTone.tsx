@@ -6,12 +6,13 @@ import { buildZip, downloadBlob, partsList, partStats, printableStl, safeName } 
 import { FONT_OPTIONS } from '../lib/fonts'
 import { loadFont, type LoadedFont } from '../lib/hb'
 import {
-  BIG, buildTwoTone, cleanTwoTone, cleanTwoToneColours, DEFAULT_TWOTONE, LETTER, TWOTONE_MODES, TWOTONE_PALETTES, twoToneChars, twoToneReadme,
+  buildTwoTone, cleanTwoTone, cleanTwoToneColours, DEFAULT_TWOTONE, SIZE_PRESETS, TWOTONE_MODES, TWOTONE_RANGES, TWOTONE_PALETTES, twoToneChars, twoToneReadme,
   type TwoToneColours, type TwoToneOptions, type TwoToneSize,
 } from '../lib/twoTone'
 import { useTitle } from '../router'
 import { Viewer } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
+import { Range } from '../ui/Range'
 
 export const TWOTONE_KEY = 'jjdesign-twotone-v1'
 const DEFAULT_FONT = 'mitr-semibold'
@@ -104,7 +105,14 @@ export default function TwoTone() {
   }
   const palette = TWOTONE_PALETTES.find((p) => p.colours.base === colours.base && p.colours.art === colours.art)
   const initial = options.mode === 'initial'
-  const sizeLabel = (s: TwoToneSize) => (initial ? `ตัวใหญ่ ${BIG[s] / 10} ซม.` : `ตัวอักษร ${LETTER[s] / 10} ซม.`)
+  const sizeLabel = (s: TwoToneSize) => (initial ? `ตัวใหญ่ ${SIZE_PRESETS[s].big / 10} ซม.` : `ตัวอักษร ${SIZE_PRESETS[s].letter / 10} ซม.`)
+  const preset = (Object.keys(SIZE_PRESETS) as TwoToneSize[]).find((k) =>
+    (Object.keys(SIZE_PRESETS[k]) as (keyof (typeof SIZE_PRESETS)[TwoToneSize])[]).every((key) => SIZE_PRESETS[k][key] === options[key]))
+  const range = (key: keyof typeof TWOTONE_RANGES) => {
+    const [min, max, step] = TWOTONE_RANGES[key]
+    return { min, max, step, value: options[key], onChange: (v: number) => set(key, v) }
+  }
+  const words = options.text.trim().split(/\s+/).filter(Boolean).length
 
   const baseName = safeName(options.text.trim() || 'พวงกุญแจ')
   function download(kind: 'zip' | 'stl') {
@@ -199,14 +207,31 @@ export default function TwoTone() {
           </section>
 
           <section className="lbx-step" aria-labelledby="tt-3">
-            <h2 id="tt-3"><span>3</span> ขนาด</h2>
-            <div className="seg seg-small" role="group" aria-label="ขนาด">
+            <h2 id="tt-3"><span>3</span> ขนาดและความหนา</h2>
+            <div className="seg seg-small" role="group" aria-label="ขนาดสำเร็จ">
               {(['small', 'large'] as const).map((s) => (
-                <button key={s} type="button" aria-pressed={options.size === s} onClick={() => set('size', s)}>
+                <button key={s} type="button" aria-pressed={preset === s} onClick={() => { setMessage(null); setOptions((o) => ({ ...o, ...SIZE_PRESETS[s] })) }}>
                   {s === 'small' ? 'เล็ก' : 'ใหญ่'} · {sizeLabel(s)}
                 </button>
               ))}
             </div>
+            {initial
+              ? <Range label="ความสูงตัวอักษรใหญ่" unit="มม." {...range('big')} />
+              : <Range label="ความยาวสูงสุด" unit="มม." hint="ไม่รวมหูห้อย ชื่อยาวจะย่อให้พอดี" {...range('maxLength')} />}
+            <Range label={initial ? 'ความสูงชื่อสูงสุด' : 'ความสูงตัวอักษรสูงสุด'} unit="มม." hint="ชื่อยาวอาจเล็กกว่านี้เพื่อให้พอดี" {...range('letter')} />
+            <div className="field">
+              <span className="field-label">จำนวนแถว <small>เว้นวรรคระหว่างคำจึงแบ่งแถวได้</small></span>
+              <div className="seg seg-small" role="group" aria-label="จำนวนแถว">
+                {[0, 1, 2].map((n) => (
+                  <button key={n} type="button" aria-pressed={options.rows === n} disabled={n === 2 && words < 2} onClick={() => set('rows', n)}>{n === 0 ? 'อัตโนมัติ' : `${n} แถว`}</button>
+                ))}
+              </div>
+            </div>
+            <Range label="ความหนาฐาน" unit="มม." {...range('base')} />
+            <Range label="ตัวอักษรนูนจากฐาน" unit="มม." {...range('art')} />
+            <Range label={initial ? 'ขอบฐานรอบชื่อ' : 'ขอบฐานรอบตัวอักษร'} unit="มม." {...range('margin')} />
+            {options.mode === 'plate' && <Range label="ความกว้างขอบนูน" unit="มม." {...range('rim')} />}
+            <p className="note">หนารวม <strong className="tabular">{(options.base + options.art).toFixed(1)} มม.</strong> ความหนาแต่ละชั้นหาร 0.2 มม. ลงตัว สีจะเปลี่ยนตรงรอยต่อพอดี</p>
             <div className="option-card" data-on={options.loop || undefined}>
               <label className="option-head">
                 <span><span className="option-title">หูห้อยพร้อมรู</span> <small>รูขนาด 3.5 มม. ใส่ห่วงหรือสายคล้อง</small></span>

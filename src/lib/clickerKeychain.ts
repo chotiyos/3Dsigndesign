@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { bounds, circle, diff, intersect, islands, offset, rect, regionArea, regionFromShapes, roundRect, translate, union, type Region } from './geo2d'
+import { bounds, circle, diff, intersect, islands, offset, rect, regionArea, regionFromShapes, roundRect, scale, translate, union, type Region } from './geo2d'
 import { hb, type LoadedFont } from './hb'
 import { chamfer, extrude, merge } from './solid'
 import { Parts } from './styles/kit'
@@ -22,6 +22,16 @@ export interface ClickerOptions {
   edge: ClickerEdge
   layout: ClickerLayout
   loop: boolean
+  /** Key size, mm (decorative keys only; switch keys stay at the MX size). */
+  keySize: number
+  /** Frame (or pencil body) thickness, mm, decorative keys only. */
+  frame: number
+  /** Key cap height above the frame, mm, decorative keys only. */
+  capH: number
+  /** How far the letters stand above the cap, mm. */
+  letterH: number
+  /** Letter size as a share of the cap face, percent. */
+  letterSize: number
 }
 
 export interface ClickerColours {
@@ -31,7 +41,18 @@ export interface ClickerColours {
   letter: string
 }
 
-export const DEFAULT_CLICKER: ClickerOptions = { text: 'JJ', build: 'solid', edge: 'scallop', layout: 'column', loop: true }
+export const DEFAULT_CLICKER: ClickerOptions = {
+  text: 'JJ', build: 'solid', edge: 'scallop', layout: 'column', loop: true, keySize: 20, frame: 3.6, capH: 3.2, letterH: 0.8, letterSize: 100,
+}
+
+/** Allowed ranges for the detailed settings: [min, max, step]. */
+export const CLICKER_RANGES = {
+  keySize: [16, 30, 1],
+  frame: [2, 6, 0.2],
+  capH: [1.6, 5, 0.2],
+  letterH: [0.4, 2, 0.2],
+  letterSize: [60, 100, 5],
+} as const satisfies Record<string, readonly [number, number, number]>
 
 export const MAX_KEYS = 10
 /** Picture keys, drawn here rather than taken from the font. */
@@ -40,10 +61,8 @@ export const ICONS = ['♥', '★', '☺', '✿'] as const
 /** Frame outer size and the distance between key centres, mm. */
 export const KEY = 20
 export const PITCH = 19
-const FRAME_H = 3.6
 /** Decorative cap: base size, height and how far its shoulder rounds in. */
-const CAP = { size: 15.6, h: 3.2, inset: 1.2, r: 2.4 }
-const LETTER_H = 0.8
+const CAP_SHAPE = { size: 15.6, inset: 1.2, r: 2.4 }
 /** Letters fit in this square on the cap top. */
 export const LETTER_BOX = 9.4
 
@@ -114,6 +133,11 @@ export function cleanClicker(raw: unknown): ClickerOptions {
     edge: pick(o.edge, ['scallop', 'round', 'circle', 'pencil'] as const, DEFAULT_CLICKER.edge),
     layout: pick(o.layout, ['column', 'row'] as const, DEFAULT_CLICKER.layout),
     loop: typeof o.loop === 'boolean' ? o.loop : DEFAULT_CLICKER.loop,
+    ...Object.fromEntries((Object.keys(CLICKER_RANGES) as (keyof typeof CLICKER_RANGES)[]).map((k) => {
+      const [min, max, step] = CLICKER_RANGES[k]
+      const v = typeof o[k] === 'number' && Number.isFinite(o[k]) ? (o[k] as number) : DEFAULT_CLICKER[k]
+      return [k, Number((Math.round(Math.min(max, Math.max(min, v)) / step) * step).toFixed(2))]
+    })) as Pick<ClickerOptions, keyof typeof CLICKER_RANGES>,
   }
 }
 
@@ -235,20 +259,20 @@ function tab(o: ClickerOptions): { solid: Region; hole: Region } {
 }
 
 /** Glyphs for one key, fitted into LETTER_BOX and centred on the origin. */
-export function keyArt(font: LoadedFont, key: string): Region {
-  const icon = iconArt(key)
+export function keyArt(font: LoadedFont, key: string, box = LETTER_BOX): Region {
+  const icon = iconArt(key, box)
   if (icon) return icon
   const unit = 100 / font.upem
   const art = union(regionFromShapes(shapeTextToShapes(font, key).shapes, unit))
   if (!art.length) return art
   const b = bounds(art)
-  const k = LETTER_BOX / Math.max(b.w, b.h)
+  const k = box / Math.max(b.w, b.h)
   return art.map((poly) => poly.map(([x, y]) => [(x - (b.minX + b.maxX) / 2) * k, (y - (b.minY + b.maxY) / 2) * k] as [number, number]))
 }
 
 /** Our own picture keys, sized like a letter. */
-export function iconArt(key: string): Region | null {
-  const s = LETTER_BOX / 2
+export function iconArt(key: string, box = LETTER_BOX): Region | null {
+  const s = box / 2
   if (key === '♥') {
     // Two circles and a point.
     const r = s * 0.52
@@ -321,7 +345,7 @@ export function buildClicker(font: LoadedFont, o: ClickerOptions, colours: Click
   }
   const artCache = new Map<string, Region>()
   const arts = keys.map((k) => {
-    if (!artCache.has(k)) artCache.set(k, keyArt(font, k))
+    if (!artCache.has(k)) artCache.set(k, keyArt(font, k, (LETTER_BOX * o.letterSize) / 100))
     return artCache.get(k)!
   })
   if (arts.some((a) => !a.length)) return { ...empty, warning: 'มีปุ่มที่ไม่มีลาย ลองลบอักขระพิเศษออก' }
@@ -346,6 +370,9 @@ export function buildClicker(font: LoadedFont, o: ClickerOptions, colours: Click
   const print: Layer[] = []
   const groupLabel = (i: number) => (frameGroups.length === 1 ? 'กรอบ' : `กรอบ ${i + 1}`)
   // Pencil ends stand as tall as the frames or the switch housing.
+  const FRAME_H = o.frame
+  const LETTER_H = o.letterH
+  const CAP = { ...CAP_SHAPE, h: o.capH }
   const endHeight = o.build === 'solid' ? FRAME_H : SWITCH_BODY_H
   for (const e of ends) {
     const layer: Layer = { label: e.label, colour: e.colour, geometry: [extrude(e.region, endHeight, 0)], explode: 0 }
@@ -419,11 +446,15 @@ export function buildClicker(font: LoadedFont, o: ClickerOptions, colours: Click
   parts.forEach((p, i) => (tints[p.code] = view[i].colour))
   printParts.forEach((p, i) => (tints[p.code] ??= print[i].colour))
 
+  // Decorative keys are drawn at the 20 mm standard and scaled across;
+  // switch keys must keep the MX fit, so they never scale.
+  const k = o.build === 'solid' ? o.keySize / KEY : 1
+  if (k !== 1) for (const part of new Set([...parts, ...printParts])) part.geometry.scale(k, k, 1)
   const outline = union(...cells, ...ends.map((e) => e.region))
   const b = bounds(outline)
   const thickness = o.build === 'solid' ? FRAME_H + CAP.h + LETTER_H : SWITCH_BODY_H + CAP_LIFT + SWITCH_CAP.top + LETTER_H
-  const warning = printWarnings(arts, keys)
-  return { parts, print: printParts, colours: tints, keys, width: b.w, height: b.h, thickness, warning }
+  const warning = printWarnings(k === 1 ? arts : arts.map((a) => scale(a, k)), keys)
+  return { parts, print: printParts, colours: tints, keys, width: b.w * k, height: b.h * k, thickness, warning }
 }
 
 /** Fixed colours for the pencil's ends. */
@@ -506,6 +537,7 @@ export function clickerReadme(model: ClickerModel, o: ClickerOptions, list: stri
     'JJDesign — พวงกุญแจปุ่มคีย์บอร์ด',
     `ปุ่ม: ${model.keys.join(' ')} (${model.keys.length} ปุ่ม)`,
     `ขนาด ${model.width.toFixed(1)} × ${model.height.toFixed(1)} มม.${o.loop ? ' รวมหูห้อย' : ''} · หนา ${model.thickness.toFixed(1)} มม.${isSwitch ? ' เมื่อประกอบสวิตช์แล้ว' : ''}`,
+    isSwitch ? `ตัวอักษรนูน ${o.letterH} มม. · ขนาดตัวอักษร ${o.letterSize}% ของหน้าปุ่ม` : `ปุ่ม ${o.keySize} มม. · กรอบหนา ${o.frame} มม. · ปุ่มสูง ${o.capH} มม. · ตัวอักษรนูน ${o.letterH} มม. · ขนาดตัวอักษร ${o.letterSize}% ของหน้าปุ่ม`,
     isSwitch ? 'แบบกดได้: ใช้สวิตช์คีย์บอร์ดแบบ MX (Cherry MX, Gateron, Kailh, Outemu) ซื้อแยก 1 ตัวต่อ 1 ปุ่ม' : 'แบบตกแต่ง: พิมพ์ชิ้นเดียวจบ ไม่ต้องประกอบ',
     model.warning ?? '',
     '',

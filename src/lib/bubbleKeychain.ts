@@ -30,6 +30,8 @@ export interface BubbleOptions {
   letter: number
   /** Width of the outline around the letters. */
   outline: number
+  /** Plain base showing round the outline, mm. */
+  rim: number
   /** A tab with a hole for the key ring (never on a grip disc). */
   loop: boolean
   purpose: BubblePurpose
@@ -53,6 +55,7 @@ export const DEFAULT_BUBBLE: BubbleOptions = {
   puff: 2.4,
   letter: 1.2,
   outline: 2,
+  rim: 1.4,
   loop: true,
   purpose: 'keychain',
   style: 'name',
@@ -62,7 +65,7 @@ export const DEFAULT_BUBBLE: BubbleOptions = {
 export const MAX_CHARS = 24
 export const MAX_ROWS = 4
 /** Plain base showing round the outline, in mm. */
-export const RIM = 1.4
+export const RIM = 1.4 // default for BubbleOptions.rim
 /** Letters are fattened by this share of their em height for the puffy look. */
 const FAT = 0.05
 const LINE_GAP = 1.08
@@ -111,6 +114,7 @@ export function cleanBubble(raw: unknown): BubbleOptions {
     puff: layer(num(o.puff, 0.8, 5, d.puff)),
     letter: layer(num(o.letter, 0.4, 3, d.letter)),
     outline: num(o.outline, 1.2, 5, d.outline),
+    rim: num(o.rim, 0.6, 4, d.rim),
     loop: typeof o.loop === 'boolean' ? o.loop : d.loop,
     purpose: o.purpose === 'grip' ? 'grip' : 'keychain',
     style: o.style === 'initial' || o.style === 'charm' ? o.style : 'name',
@@ -195,7 +199,7 @@ function reach(region: Region) {
 
 /** Room for the outline layer: the circle less the rim and the outline. */
 function room(o: BubbleOptions) {
-  return o.shape === 'circle' ? o.size / 2 - RIM - o.outline : o.size - 2 * (RIM + o.outline)
+  return o.shape === 'circle' ? o.size / 2 - o.rim - o.outline : o.size - 2 * (o.rim + o.outline)
 }
 
 /**
@@ -272,12 +276,12 @@ export function buildBubble(font: LoadedFont, o: BubbleOptions, colours: BubbleC
   if (o.shape === 'circle') {
     const R = o.size / 2
     // Rounding in the offsets may overshoot by a hair; keep the rim clear.
-    const inner = circle(0, 0, R - RIM, 128)
+    const inner = circle(0, 0, R - o.rim, 128)
     bubble = intersect(bubble, inner)
     face = intersect(face, bubble)
     base = circle(0, 0, R, 160)
   } else {
-    base = silhouette(bubble, RIM)
+    base = silhouette(bubble, o.rim)
   }
   // Offset closing can leave coincident edges; canonicalize before triangulation.
   bubble = union(bubble)
@@ -451,7 +455,7 @@ export function bubbleReadme(model: BubbleModel, o: BubbleOptions, colours: Bubb
     `JJDesign — ${grip ? 'แผ่นติด Griptok' : 'พวงกุญแจชื่อบับเบิล'}${initial ? ' แบบตัวอักษรใหญ่ + ชื่อ' : o.style === 'charm' ? ` + ลาย${CHARMS.find((ch) => ch.id === o.charm)?.name ?? ''}` : ''}`,
     initial ? `ตัวใหญ่: ${model.rows[0]} · ชื่อ: ${model.rows[1]}` : `ชื่อ: ${model.rows.join(' / ')}`,
     `ขนาด ${model.width.toFixed(1)} × ${model.height.toFixed(1)} มม.${hasTab(o) ? ' รวมหูห้อย' : ''} · ${initial ? 'ชื่อ' : 'ตัวอักษร'}สูง ${model.letterHeight.toFixed(1)} มม.`,
-    `ความหนา: ฐาน ${o.base} มม. + ${middle} ${o.puff} มม. + ${initial ? 'ชื่อ' : 'ตัวอักษร'} ${o.letter} มม. = ${(o.base + o.puff + o.letter).toFixed(1)} มม.`,
+    `ความหนา: ฐาน ${o.base} มม. + ${middle} ${o.puff} มม. + ${initial ? 'ชื่อ' : 'ตัวอักษร'} ${o.letter} มม. = ${(o.base + o.puff + o.letter).toFixed(1)} มม. · ขอบรอบตัวอักษร ${o.outline} มม. · ขอบฐานรอบนอก ${o.rim} มม.`,
     initial ? '' : `จำนวนแถว: ${model.rows.length}`,
     grip ? 'ติดด้านหลังแผ่นบนหน้าตัวจับมือถือ (แบบปกติหรือ MagSafe ที่หน้าแบน) เลือกกาวหรือเทปที่เหมาะกับวัสดุ ทำตามวิธีใช้และเวลารอกาวของผู้ผลิต' : '',
     model.warning ?? '',
@@ -531,7 +535,7 @@ function buildInitial(font: LoadedFont, o: BubbleOptions, colours: BubbleColours
   const nb = bounds(nameUnit)
   const pad = Math.max(1.2, o.outline)
   const cy = (bb.minY + bb.maxY) / 2 - 0.14 * bb.h
-  const inner = o.size / 2 - RIM - 0.3
+  const inner = o.size / 2 - o.rim - 0.3
   // The banner's width: as wide as the circle allows at its height, or a
   // little wider than the big letter on a contour piece.
   let h = Math.min(NAME_SHARE * bb.h / nb.h, Infinity)
@@ -550,12 +554,12 @@ function buildInitial(font: LoadedFont, o: BubbleOptions, colours: BubbleColours
   let letter = diff(big, banner)
   let base: Region
   if (o.shape === 'circle') {
-    const clip = circle(0, 0, o.size / 2 - RIM, 128)
+    const clip = circle(0, 0, o.size / 2 - o.rim, 128)
     banner = intersect(banner, clip)
     letter = intersect(letter, clip)
     base = circle(0, 0, o.size / 2, 160)
   } else {
-    base = silhouette(union(big, banner), RIM)
+    base = silhouette(union(big, banner), o.rim)
   }
   if (hasTab(o)) base = withTab(base)
   const parts = new Parts()
