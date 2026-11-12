@@ -126,16 +126,18 @@ export default function Lightbox() {
   }
 
   const deferredPicks = useDeferredValue(picks)
+  // A sheet face keeps its plug ring unless it is DXF only.
+  const faceKeepsPlug = useDeferredValue(outputs[DIFFUSER_CODE] !== 'dxf')
   const deferredOptions = useDeferredValue(options)
   const deferredLayers = useDeferredValue(layers)
   const model = useMemo(() => {
     if (!quantized || deferredLayers.length !== traced.length) return null
     try {
-      return buildLightbox(quantized, traced, deferredLayers, deferredOptions, deferredPicks)
+      return buildLightbox(quantized, traced, deferredLayers, deferredOptions, deferredPicks, faceKeepsPlug)
     } catch {
       return null
     }
-  }, [quantized, traced, deferredLayers, deferredOptions, deferredPicks])
+  }, [quantized, traced, deferredLayers, deferredOptions, deferredPicks, faceKeepsPlug])
   const parts = useMemo(() => model?.parts ?? [], [model])
   useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
 
@@ -362,7 +364,7 @@ export default function Lightbox() {
             </ul>
             <p className="note">
               วัสดุแผ่น (อะคริลิก พลาสวูด อะลูมิเนียม) ที่หนาไม่เกิน 12 มม. ได้ไฟล์ DXF สำหรับตัดเลเซอร์หรือ CNC นอกนั้นได้ไฟล์ STL สำหรับพิมพ์ 3D
-              {picks[DIFFUSER_CODE] && ' · แผ่นกระจายแสงแบบแผ่นตัดวางทับขอบหน้ากรอบ ไม่มีขอบสวม'}
+              {picks[DIFFUSER_CODE] && outputs[DIFFUSER_CODE] === 'dxf' && ' · แผ่นกระจายแสงแบบ DXF อย่างเดียวเป็นแผ่นเรียบวางทับขอบหน้ากรอบ ไม่มีบ่าสวม แบบ "ทั้ง 2" ไฟล์ STL ยังมีบ่าสวม'}
             </p>
             {Object.keys(picks).length > 0 && (
               <button type="button" className="btn btn-ghost" onClick={() => { setPicks({}); setOutputs({}); setPrintPicks({}) }}>

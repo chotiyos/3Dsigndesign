@@ -243,6 +243,8 @@ export function buildLightbox(
   q: Pick<Quantized, 'width' | 'height'>, colours: Region[], layers: LayerSetting[], o: LightboxOptions,
   /** How each part is made, by part letter. Unpicked parts keep the printed defaults. */
   picks: Record<string, MaterialId> = {},
+  /** A sheet face that also gets an STL keeps its printed shape (with the plug ring); the DXF is its flat outline. */
+  faceKeepsPlug = false,
 ) {
   // Keep a positive image span when the requested margin fills a small box.
   const rim = Math.min(o.wall + o.margin, (o.width - 1) / 2)
@@ -293,7 +295,8 @@ export function buildLightbox(
   // A cut sheet (opal acrylic) is a flat panel laid on the frame's front edge;
   // a printed face carries a plug ring that pushes into the frame.
   const face = picks[DIFFUSER_CODE]
-  if (face && isCuttable(face, o.diffuser)) parts.slab('แผ่นกระจายแสง', face, shape, o.diffuser, z, 1)
+  if (face && isCuttable(face, o.diffuser) && faceKeepsPlug) parts.solid('แผ่นกระจายแสง', face, diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, z), 1, shape)
+  else if (face && isCuttable(face, o.diffuser)) parts.slab('แผ่นกระจายแสง', face, shape, o.diffuser, z, 1)
   else parts.solid('แผ่นกระจายแสง', 'opalprint', diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, z), 1)
   parts
     // Reference only: a strip stuck around the inside of the frame, facing in.

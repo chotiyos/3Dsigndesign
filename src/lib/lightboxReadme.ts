@@ -8,7 +8,8 @@ export function lightboxReadme(parts: SignPart[]) {
   const list = partsList(listed)
   const size = modelSize(parts)
   const cut = parts.filter((part) => part.cut)
-  const sheetFace = parts.some((part) => part.label === 'แผ่นกระจายแสง' && part.cut)
+  // A flat cut face has no plug ring: its solid is a plain slab (it carries a profile).
+  const sheetFace = parts.some((part) => part.label === 'แผ่นกระจายแสง' && part.cut && part.profile)
   return [
     `JJDesign — กล่องไฟจากรูป`,
     `ขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} มม. ลึก ${size.d.toFixed(1)} มม.`,

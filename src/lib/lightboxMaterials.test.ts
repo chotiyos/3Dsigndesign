@@ -60,3 +60,20 @@ describe('zip file choice per part', () => {
     expect(has(names, 'B', '.stl')).toBe(true)
   })
 })
+
+describe('sheet face with both files', () => {
+  it('keeps the plug ring in the STL and gives a flat DXF outline; DXF only stays flat', () => {
+    const depthOf = (m: ReturnType<typeof buildLightbox>) => {
+      const face = m.parts.find((p) => p.code === DIFFUSER_CODE)!
+      face.geometry.computeBoundingBox()
+      const box = face.geometry.boundingBox!
+      return { span: box.max.z - box.min.z, cut: Boolean(face.cut), watertight: analyse(face.geometry).watertight }
+    }
+    const flat = depthOf(buildLightbox(q, colours, layers, DEFAULT_LIGHTBOX, { [DIFFUSER_CODE]: 'opal' }, false))
+    const both = depthOf(buildLightbox(q, colours, layers, DEFAULT_LIGHTBOX, { [DIFFUSER_CODE]: 'opal' }, true))
+    expect(flat.span).toBeCloseTo(DEFAULT_LIGHTBOX.diffuser, 3)
+    expect(both.span).toBeGreaterThan(DEFAULT_LIGHTBOX.diffuser + 1)
+    expect(flat.cut && both.cut).toBe(true)
+    expect(both.watertight).toBe(true)
+  })
+})
