@@ -1,6 +1,6 @@
 import { traceMask } from './artwork'
-import { BufferGeometry, Float32BufferAttribute } from 'three'
-import { band, bounds, diff, hull, intersect, islands, ngon, offset, regionArea, ring, roundRect, union, type Region } from './geo2d'
+import { BufferGeometry, Float32BufferAttribute, ShapeGeometry } from 'three'
+import { band, bounds, diff, hull, intersect, islands, ngon, offset, regionArea, regionToShapes, ring, roundRect, union, type Region } from './geo2d'
 import { extrude, merge } from './solid'
 import { applyMaterials, codeAt, isCuttable, Parts } from './styles/kit'
 import { applyRear } from './styles/rear'
@@ -162,8 +162,15 @@ export interface LayerSetting {
   thick: number
 }
 
+/**
+ * How the picture goes on the face: printed colour layers, printed straight
+ * onto the panel with a digital UV printer, or a printed sticker stuck on.
+ */
+export type LightboxFace = 'layers' | 'uv' | 'sticker'
+
 export interface LightboxOptions {
   shape: LightboxShape
+  face: LightboxFace
   /** Overall width in mm (diameter for circle and hexagon). */
   width: number
   radius: number
@@ -179,6 +186,7 @@ export interface LightboxOptions {
 
 export const DEFAULT_LIGHTBOX: LightboxOptions = {
   shape: 'rect',
+  face: 'layers',
   width: 160,
   radius: 8,
   margin: 4,
@@ -291,7 +299,8 @@ export function buildLightbox(
     // Reference only: a strip stuck around the inside of the frame, facing in.
     .slab('ไฟเส้น LED', 'led', band(shape, o.wall + 0.2, 2), Math.min(10, o.depth - 2 - plug), o.back + 2, -0.4)
   const order: number[] = []
-  placed.forEach((region, j) => {
+  // Printed artwork (UV or sticker) replaces the colour layers.
+  if (o.face === 'layers') placed.forEach((region, j) => {
     if (region.length) order.push(j)
     if (region.length) parts.slab(`สี ${j + 1} ${layers[j].colour}`, 'accent', region, layers[j].thick, z + o.diffuser, 1.5 + j * 0.15)
   })
@@ -305,7 +314,42 @@ export function buildLightbox(
     part.backlit = Math.min(1, Math.max(0.15, Math.exp(-(thick - 0.4) / 1.2)))
   })
   const b = bounds(shape)
-  return { parts: applyMaterials(built, picks), colours: tints, width: b.w, height: b.h }
+  // Where the whole picture sits on the face, in mm, for print files and the preview.
+  const art: FaceArt = {
+    rect: { x: (-q.width / 2) * scale, y: (-q.height / 2) * scale, w: q.width * scale, h: q.height * scale },
+    window,
+    face: shape,
+    top: z + o.diffuser,
+  }
+  return { parts: applyMaterials(built, picks), colours: tints, width: b.w, height: b.h, art }
+}
+
+export interface FaceArt {
+  /** The full picture's rectangle on the face, mm. */
+  rect: { x: number; y: number; w: number; h: number }
+  /** The lit window inside the frame: the printed area. */
+  window: Region
+  /** The whole front panel outline. */
+  face: Region
+  /** Height of the face's front surface. */
+  top: number
+}
+
+/**
+ * A paper-thin preview of the printed picture on the face, with texture
+ * coordinates that map `rect` onto the image. Preview only, never exported.
+ */
+export function faceDecal(art: FaceArt, image: string): SignPart {
+  // Only where the picture is: the margin round it shows the plain panel.
+  const { x, y, w, h } = art.rect
+  const shown = intersect(art.window, [[[x, y], [x + w, y], [x + w, y + h], [x, y + h]]])
+  const geometry = new ShapeGeometry(regionToShapes(shown), 1)
+  const pos = geometry.getAttribute('position')
+  const uv: number[] = []
+  for (let i = 0; i < pos.count; i++) uv.push((pos.getX(i) - art.rect.x) / art.rect.w, (pos.getY(i) - art.rect.y) / art.rect.h)
+  geometry.setAttribute('uv', new Float32BufferAttribute(uv, 2))
+  geometry.translate(0, 0, art.top + 0.05)
+  return { id: 'face-art', code: 'ลาย', label: 'ลายพิมพ์บนหน้าแผ่น', material: 'opal', geometry, explode: 1, image }
 }
 
 /** Approximate LED strip length: once around the inside of the frame, in mm. */

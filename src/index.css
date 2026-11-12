@@ -3306,3 +3306,17 @@ input[type='range'] {
 .lbx-make select {
   grid-column: 1 / -1;
 }
+
+.lbx-make .seg button {
+  white-space: nowrap;
+}
+
+.lbx-make-print {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+}

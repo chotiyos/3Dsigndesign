@@ -44,6 +44,8 @@ export interface SignPart {
    * glows in its own colour at this strength, 0 to 1.
    */
   backlit?: number
+  /** Preview only: an image URL drawn on the part using its texture coordinates. */
+  image?: string
   /** Shown in the editor when the style had to adjust the user's settings. */
   warning?: string
 }

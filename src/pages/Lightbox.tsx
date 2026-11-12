@@ -2,10 +2,11 @@ import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
 import { buildZip, downloadBlob, PICKABLE_MATERIALS, printableStl, safeName, type PartOutput } from '../lib/exportModel'
+import { effectiveDpi, faceFiles, faceReadme, MIN_DPI } from '../lib/facePrint'
 import { lightboxReadme } from '../lib/lightboxReadme'
 import {
-  borderColour, buildLightbox, DEFAULT_LIGHTBOX, DIFFUSER_CODE, quantize, stripLength, toHex, traceColours,
-  type LayerSetting, type LightboxOptions, type LightboxShape, type Quantized,
+  borderColour, buildLightbox, DEFAULT_LIGHTBOX, DIFFUSER_CODE, faceDecal, quantize, stripLength, toHex, traceColours,
+  type LayerSetting, type LightboxFace, type LightboxOptions, type LightboxShape, type Quantized,
 } from '../lib/lightbox'
 import type { MaterialId } from '../lib/styles'
 import { useTitle } from '../router'
@@ -22,19 +23,27 @@ const SHAPES: { id: LightboxShape; label: string }[] = [
 ]
 
 const MOUNTS = ['ไม่มี', 'รูสกรู', 'รูแขวน']
+const FACES: { id: LightboxFace; label: string }[] = [
+  { id: 'layers', label: 'ชั้นสีพิมพ์ 3D' },
+  { id: 'uv', label: 'พิมพ์ UV ลงแผ่น' },
+  { id: 'sticker', label: 'สติกเกอร์แปะ' },
+]
 /** Materials that come as sheet and are cut from a DXF. */
 const SHEET_MATERIALS: readonly MaterialId[] = ['acrylic', 'opal', 'mirror', 'plaswood', 'metal']
 /** Pixels across the traced picture: about 0.5 mm per pixel on a 160 mm box. */
 const TRACE_SIDE = 320
 
 /** A small night scene drawn on the spot, so the page has something to show before an upload. */
-function sampleImage(): ImageData | null {
+function sampleImage(): { data: ImageData; url: string; width: number } | null {
   try {
+    // Drawn large enough for a sharp 300 dpi print file, then shrunk for tracing.
+    const big = 8
     const canvas = document.createElement('canvas')
-    canvas.width = 320
-    canvas.height = 220
+    canvas.width = 320 * big
+    canvas.height = 220 * big
     const ctx = canvas.getContext('2d')
     if (!ctx) return null
+    ctx.scale(big, big)
     ctx.fillStyle = '#1d2f6f'
     ctx.fillRect(0, 0, 320, 220)
     ctx.fillStyle = '#f6c945'
@@ -56,7 +65,13 @@ function sampleImage(): ImageData | null {
     ctx.lineTo(92, 104)
     ctx.lineTo(122, 130)
     ctx.fill()
-    return ctx.getImageData(0, 0, 320, 220)
+    const small = document.createElement('canvas')
+    small.width = 320
+    small.height = 220
+    const sctx = small.getContext('2d')
+    if (!sctx) return null
+    sctx.drawImage(canvas, 0, 0, 320, 220)
+    return { data: sctx.getImageData(0, 0, 320, 220), url: canvas.toDataURL('image/png'), width: canvas.width }
   } catch {
     return null
   }
@@ -72,6 +87,10 @@ export default function Lightbox() {
   const demo = useDemo()
   const [image, setImage] = useState<ImageData | null>(null)
   const [imageName, setImageName] = useState<string | null>(null)
+  // The picture at full size, for UV and sticker print files and the preview.
+  const [photo, setPhoto] = useState<{ url: string; width: number } | null>(null)
+  // The plastic the STL is printed in, for parts that get both files.
+  const [printPicks, setPrintPicks] = useState<Record<string, MaterialId>>({})
   const [count, setCount] = useState(4)
   const [options, setOptions] = useState<LightboxOptions>(DEFAULT_LIGHTBOX)
   const [night, setNight] = useState(false)
@@ -79,8 +98,13 @@ export default function Lightbox() {
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
-    setImage((current) => current ?? sampleImage())
+    const sample = sampleImage()
+    if (!sample) return
+    setImage((current) => current ?? sample.data)
+    setPhoto((current) => current ?? { url: sample.url, width: sample.width })
   }, [])
+  // Let go of an uploaded picture's object URL when it is replaced.
+  useEffect(() => () => { if (photo?.url.startsWith('blob:')) URL.revokeObjectURL(photo.url) }, [photo])
 
   const deferredCount = useDeferredValue(count)
   const quantized = useMemo(() => (image ? quantize(image, deferredCount) : null), [image, deferredCount])
@@ -127,6 +151,11 @@ export default function Lightbox() {
     try {
       setImage(await readImage(file, TRACE_SIDE))
       setImageName(file.name)
+      const url = URL.createObjectURL(file)
+      const img = new Image()
+      img.src = url
+      await img.decode()
+      setPhoto({ url, width: img.naturalWidth })
       setMessage(null)
     } catch {
       setMessage({ tone: 'error', text: 'อ่านรูปนี้ไม่ได้ ลองไฟล์ JPG PNG หรือ WEBP' })
@@ -134,13 +163,21 @@ export default function Lightbox() {
   }
 
   const baseName = safeName(imageName ? imageName.replace(/\.[^.]+$/, '') : 'กล่องไฟ')
-  function download(kind: 'zip' | 'stl') {
+  async function download(kind: 'zip' | 'stl') {
     if (busy || parts.length === 0) return
     const cost = EXPORT_COST[kind]
     try {
+      const printed = printedFace && model?.art && photo ? { kind: printedFace, art: model.art, photo } : null
+      const extra = kind === 'zip' && printed ? await faceFiles(printed.photo.url, printed.art, printed.kind) : undefined
+      const both = parts.filter((part) => outputOf(part) === 'both')
+      const readme = [
+        lightboxReadme(parts),
+        both.length ? `ชิ้นที่ได้ทั้ง 2 ไฟล์ (เลือกตัดหรือพิมพ์ทีหลัง): ${both.map((part) => `${part.code} ${part.label} — ตัด ${MATERIAL_NAMES[part.material]} หรือพิมพ์ ${MATERIAL_NAMES[printOf(part)]}`).join(' · ')}` : '',
+        printed ? faceReadme(printed.kind, printed.art, printed.photo.width).join('\n') : '',
+      ].filter(Boolean).join('\n\n')
       const data = kind === 'stl'
         ? printableStl(parts)
-        : buildZip({ baseName, parts, readme: lightboxReadme(parts), output: outputOf })
+        : buildZip({ baseName, parts, readme, output: outputOf, stlMaterial: printOf, extra })
       if (!spend(cost, `${kind.toUpperCase()} กล่องไฟ ${baseName}`)) {
         setMessage({ tone: 'error', text: `เครดิตทดลองไม่พอ ต้องใช้ ${cost} เครดิต เหลือ ${credits(demo)} เครดิต` })
         return
@@ -154,6 +191,15 @@ export default function Lightbox() {
 
 
   const strip = stripLength(parts)
+  const printedFace = options.face === 'layers' ? null : options.face
+  /** Plastic for the STL of a part that gets both files. */
+  const printOf = (part: (typeof parts)[number]): MaterialId =>
+    printPicks[part.code] ?? (part.code === DIFFUSER_CODE ? 'opalprint' : part.label.startsWith('สี ') ? 'accent' : 'print')
+  // The printed picture drawn on the face, preview only.
+  const decal = useMemo(() => (printedFace && model?.art && photo ? faceDecal(model.art, photo.url) : null), [printedFace, model, photo])
+  useEffect(() => () => decal?.geometry.dispose(), [decal])
+  const viewParts = useMemo(() => (decal ? [...parts, decal] : parts), [parts, decal])
+  const dpi = printedFace && model?.art && photo ? effectiveDpi(model.art, photo.width) : 0
   /** Files a part gets: printed parts STL; sheet parts DXF, or DXF and STL. */
   function outputOf(part: (typeof parts)[number]): PartOutput {
     if (!part.cut) return 'stl'
@@ -165,7 +211,7 @@ export default function Lightbox() {
       <header className="page-head">
         <h1>กล่องไฟจากรูป</h1>
         <p>
-          อัปโหลดรูปหรือโลโก้ ระบบแยกสีเป็นชั้นบางบนแผ่นกระจายแสง แล้วสร้างกรอบ ฝาหลัง และที่ยึดให้ครบ ได้ไฟล์พิมพ์ 3D หลายสีพร้อมใช้
+          อัปโหลดรูปหรือโลโก้ ทำลายหน้าแผ่นเป็นชั้นสีพิมพ์ 3D หรือส่งพิมพ์ Digital UV และสติกเกอร์ แล้วสร้างกรอบ ฝาหลัง และที่ยึดให้ครบ เลือกได้ทีละชิ้นว่าจะพิมพ์ 3D หรือตัดแผ่น
         </p>
       </header>
       <div className="gen-layout">
@@ -181,7 +227,21 @@ export default function Lightbox() {
           </section>
 
           <section className="lbx-step" aria-labelledby="lbx-2">
-            <h2 id="lbx-2"><span>2</span> สีและชั้นพิมพ์</h2>
+            <h2 id="lbx-2"><span>2</span> ลายหน้าแผ่น</h2>
+            <div className="seg seg-small" role="group" aria-label="ลายหน้าแผ่น">
+              {FACES.map((f) => (
+                <button key={f.id} type="button" aria-pressed={options.face === f.id} onClick={() => { setMessage(null); set('face', f.id) }}>{f.label}</button>
+              ))}
+            </div>
+            {printedFace && (
+              <p className="note">
+                {printedFace === 'uv'
+                  ? 'ไม่ต้องพิมพ์ชั้นสี ได้ไฟล์ภาพขนาดจริง 300 dpi พร้อมไฟล์กลับด้านและเส้นตัด สำหรับร้านพิมพ์ Digital UV ลงแผ่นกระจายแสง'
+                  : 'ไม่ต้องพิมพ์ชั้นสี ได้ไฟล์ภาพขนาดจริง 300 dpi พร้อมเส้นไดคัท สำหรับพิมพ์สติกเกอร์แบบแสงผ่านแล้วแปะบนแผ่นกระจายแสง'}
+                {dpi > 0 && dpi < MIN_DPI && <><br /><strong>รูปนี้ละเอียดประมาณ {Math.round(dpi)} dpi ที่ขนาดนี้ ภาพจะไม่คม ใช้รูปที่ใหญ่กว่านี้ถ้ามี</strong></>}
+              </p>
+            )}
+            {!printedFace && <>
             <Range label="จำนวนสี" unit="สี" value={count} min={2} max={8} step={1} onChange={(v) => setCount(Math.round(v))} />
             <ul className="lbx-colours">
               {layers.map((layer, j) => (
@@ -203,6 +263,7 @@ export default function Lightbox() {
               ))}
             </ul>
             <p className="note">ปิดสีไหน ตรงนั้นจะเห็นแสงขาวจากแผ่นกระจายแสง ระบบปิดสีพื้นหลังให้ก่อน สีอ่อนและชั้นบางแสงผ่านมากกว่า</p>
+            </>}
             <Range label="ความหนาแผ่นกระจายแสง" unit="มม." value={options.diffuser} min={0.4} max={3} step={0.2} onChange={(v) => set('diffuser', v)} />
           </section>
 
@@ -275,12 +336,26 @@ export default function Lightbox() {
                     <select
                       className="material-pick"
                       disabled={busy}
-                      aria-label={`วัสดุของ ${part.code} ${part.label}`}
+                      aria-label={`${out === 'both' ? 'วัสดุแผ่นสำหรับไฟล์ DXF ' : 'วัสดุ'}ของ ${part.code} ${part.label}`}
                       value={part.material}
                       onChange={(e) => pick(e.target.value as MaterialId)}
                     >
                       {PICKABLE_MATERIALS.filter((m) => (cut ? SHEET_MATERIALS.includes(m) : !SHEET_MATERIALS.includes(m))).map((m) => <option key={m} value={m}>{MATERIAL_NAMES[m]}</option>)}
                     </select>
+                    {out === 'both' && (
+                      <label className="lbx-make-print">
+                        <span>พิมพ์ STL ด้วย</span>
+                        <select
+                          className="material-pick"
+                          disabled={busy}
+                          aria-label={`พลาสติกสำหรับไฟล์ STL ของ ${part.code} ${part.label}`}
+                          value={printOf(part)}
+                          onChange={(e) => { setMessage(null); const m = e.target.value as MaterialId; setPrintPicks((p) => ({ ...p, [part.code]: m })) }}
+                        >
+                          {PICKABLE_MATERIALS.filter((m) => !SHEET_MATERIALS.includes(m)).map((m) => <option key={m} value={m}>{MATERIAL_NAMES[m]}</option>)}
+                        </select>
+                      </label>
+                    )}
                   </li>
                 )
               })}
@@ -290,7 +365,7 @@ export default function Lightbox() {
               {picks[DIFFUSER_CODE] && ' · แผ่นกระจายแสงแบบแผ่นตัดวางทับขอบหน้ากรอบ ไม่มีขอบสวม'}
             </p>
             {Object.keys(picks).length > 0 && (
-              <button type="button" className="btn btn-ghost" onClick={() => { setPicks({}); setOutputs({}) }}>
+              <button type="button" className="btn btn-ghost" onClick={() => { setPicks({}); setOutputs({}); setPrintPicks({}) }}>
                 <Icon name="reset" size={16} /> กลับเป็นพิมพ์ 3D ทั้งหมด
               </button>
             )}
@@ -309,7 +384,7 @@ export default function Lightbox() {
         </div>
 
         <div className="gen-view lbx-view">
-          <Viewer parts={parts} colors={model?.colours} explodeMM={explode} night={night} frameKey={`${options.shape}-${imageName ?? 'sample'}`} className="sheet-viewer" label="ตัวอย่างกล่องไฟ 3 มิติ" />
+          <Viewer parts={viewParts} colors={model?.colours} explodeMM={explode} night={night} frameKey={`${options.shape}-${imageName ?? 'sample'}`} className="sheet-viewer" label="ตัวอย่างกล่องไฟ 3 มิติ" />
           <p className="gen-tag">
             {model && model.width > 0 ? `${model.width.toFixed(0)} × ${model.height.toFixed(0)} มม. · ${parts.length} ชิ้น` : 'ยังไม่มีสีที่พิมพ์'}
             {busy && ' · กำลังคำนวณ'}

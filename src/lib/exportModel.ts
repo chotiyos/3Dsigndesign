@@ -39,6 +39,10 @@ export interface ZipOptions {
   readme: string
   /** Which files a part gets. Default: STL always, plus a DXF when it is cut from sheet. */
   output?: (part: SignPart) => PartOutput
+  /** For a part that gets both files: the plastic its STL is printed in (its folder). */
+  stlMaterial?: (part: SignPart) => MaterialId | undefined
+  /** More files by path, such as artwork for a UV printer. */
+  extra?: Record<string, Uint8Array>
 }
 
 /** The files a part gets in the ZIP. A DXF needs a cut outline. */
@@ -62,15 +66,18 @@ export const dxfLayer = (part: SignPart) => `${part.code}_${part.material}`
  * A combined STL, plus a folder per material: every part gets an STL, and
  * parts cut from sheet in that material also get a DXF.
  */
-export function buildZip({ baseName, parts, readme, output }: ZipOptions): Uint8Array {
+export function buildZip({ baseName, parts, readme, output, stlMaterial, extra }: ZipOptions): Uint8Array {
   const files: Record<string, Uint8Array> = {}
   if (parts.some(part => part.material !== 'led')) files[`${baseName}-ทั้งหมด.stl`] = printableStl(parts)
   for (const part of parts) {
     const stem = `${partFolder(part)}/${part.code}-${safeName(part.label)}`
     const want = part.cut ? (output?.(part) ?? 'both') : 'stl'
-    if (want !== 'dxf') files[`${stem}.stl`] = partsToStl([part])
+    const printIn = want === 'both' ? stlMaterial?.(part) : undefined
+    const stlStem = printIn ? `${MATERIAL_INFO[printIn].folder}/${part.code}-${safeName(part.label)}` : stem
+    if (want !== 'dxf') files[`${stlStem}.stl`] = partsToStl([part])
     if (part.cut && want !== 'stl') files[`${stem}.dxf`] = strToU8(buildDxf([{ layer: dxfLayer(part), region: part.cut }]))
   }
+  Object.assign(files, extra)
   files['รายการชิ้นส่วน.txt'] = strToU8(readme)
   return zipSync(files, { level: 6 })
 }

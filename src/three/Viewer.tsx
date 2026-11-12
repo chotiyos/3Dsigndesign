@@ -59,6 +59,34 @@ interface SceneState {
   framedKey?: string
 }
 
+const imageTextures = new Map<string, THREE.Texture>()
+
+/** A printed picture on a lit face: matte by day, glowing through the panel at night. */
+function imageMaterial(url: string, night: boolean) {
+  let texture = imageTextures.get(url)
+  if (!texture) {
+    texture = new THREE.TextureLoader().load(url)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.anisotropy = 4
+    // Keep a few pictures; the page hands a new URL for each upload.
+    if (imageTextures.size > 6) {
+      const [oldest] = imageTextures.keys()
+      imageTextures.get(oldest)?.dispose()
+      imageTextures.delete(oldest)
+    }
+    imageTextures.set(url, texture)
+  }
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: 0.55,
+    emissive: night ? new THREE.Color('#ffffff') : new THREE.Color('#000000'),
+    emissiveMap: night ? texture : null,
+    emissiveIntensity: night ? 0.8 : 0,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+  })
+}
+
 export function Viewer(props: ViewerProps) {
   const { parts, explodeMM, hidden, colors, night = false, grid = true, edges = false, frameKey, autoRotate = false, backdrop, scene: surround, captureRef, className, label } = props
   const hostRef = useRef<HTMLDivElement>(null)
@@ -269,7 +297,7 @@ export function Viewer(props: ViewerProps) {
       mesh.position.z = part.explode * explodeMM
       const color = colors?.[part.code] ?? MATERIAL_COLORS[part.material]
       ;(mesh.material as THREE.Material).dispose()
-      mesh.material = makeMaterial(part.material, color, night, part.backlit)
+      mesh.material = part.image ? imageMaterial(part.image, night) : makeMaterial(part.material, color, night, part.backlit)
       if (edges && !entry.edges) {
         entry.edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(part.geometry, 35),
