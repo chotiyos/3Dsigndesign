@@ -9,6 +9,7 @@ const NAV = [
   { href: '/lightbox', label: 'กล่องไฟจากรูป' },
   { href: '/keychain', label: 'พวงกุญแจชื่อ' },
   { href: '/clicker', label: 'พวงกุญแจปุ่ม' },
+  { href: '/twotone', label: 'พวงกุญแจสองสี' },
   { href: '/files', label: 'ไฟล์ 3D สำเร็จรูป' },
   { href: '/gen', label: 'โมเดลจาก AI' },
   { href: '/how-to', label: 'วิธีใช้' },
@@ -69,6 +70,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
               <Link href="/lightbox">กล่องไฟจากรูป</Link>
               <Link href="/keychain">พวงกุญแจชื่อบับเบิล</Link>
               <Link href="/clicker">พวงกุญแจปุ่มคีย์บอร์ด</Link>
+              <Link href="/twotone">พวงกุญแจชื่อสองสี</Link>
               <Link href="/gen">โมเดลจาก AI</Link>
               <Link href="/files">ไฟล์ 3D สำเร็จรูป</Link>
               <Link href="/plugin">ปลั๊กอิน</Link>

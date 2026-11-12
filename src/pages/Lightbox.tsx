@@ -1,13 +1,15 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
-import { buildZip, downloadBlob, printableStl, safeName } from '../lib/exportModel'
+import { buildZip, downloadBlob, partMethod, PICKABLE_MATERIALS, printableStl, safeName } from '../lib/exportModel'
 import { lightboxReadme } from '../lib/lightboxReadme'
 import {
-  borderColour, buildLightbox, DEFAULT_LIGHTBOX, quantize, stripLength, toHex, traceColours,
+  borderColour, buildLightbox, DEFAULT_LIGHTBOX, DIFFUSER_CODE, quantize, stripLength, toHex, traceColours,
   type LayerSetting, type LightboxOptions, type LightboxShape, type Quantized,
 } from '../lib/lightbox'
+import type { MaterialId } from '../lib/styles'
 import { useTitle } from '../router'
+import { MATERIAL_NAMES } from '../three/materials'
 import { Viewer } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
 import { Range } from '../ui/Range'
@@ -20,6 +22,8 @@ const SHAPES: { id: LightboxShape; label: string }[] = [
 ]
 
 const MOUNTS = ['ไม่มี', 'รูสกรู', 'รูแขวน']
+/** Materials that come as sheet and are cut from a DXF. */
+const SHEET_MATERIALS: readonly MaterialId[] = ['acrylic', 'opal', 'mirror', 'plaswood', 'metal']
 /** Pixels across the traced picture: about 0.5 mm per pixel on a 160 mm box. */
 const TRACE_SIDE = 320
 
@@ -82,27 +86,32 @@ export default function Lightbox() {
   const quantized = useMemo(() => (image ? quantize(image, deferredCount) : null), [image, deferredCount])
   const traced = useMemo(() => (quantized ? traceColours(quantized) : []), [quantized])
   const [layers, setLayers] = useState<LayerSetting[]>([])
+  // How each part is made, by part letter. Empty means the printed defaults.
+  const [picks, setPicks] = useState<Record<string, MaterialId>>({})
   // New colours (another picture or colour count) start from the picture's own colours.
   const [layersFrom, setLayersFrom] = useState<Quantized | null>(null)
   if (quantized && layersFrom !== quantized) {
     setLayersFrom(quantized)
     setLayers(layersFor(quantized))
+    // Colour parts are renumbered with the new colours; keep only the box's own picks.
+    setPicks((p) => Object.fromEntries(Object.entries(p).filter(([code]) => ['A', 'B', DIFFUSER_CODE].includes(code))))
   }
 
+  const deferredPicks = useDeferredValue(picks)
   const deferredOptions = useDeferredValue(options)
   const deferredLayers = useDeferredValue(layers)
   const model = useMemo(() => {
     if (!quantized || deferredLayers.length !== traced.length) return null
     try {
-      return buildLightbox(quantized, traced, deferredLayers, deferredOptions)
+      return buildLightbox(quantized, traced, deferredLayers, deferredOptions, deferredPicks)
     } catch {
       return null
     }
-  }, [quantized, traced, deferredLayers, deferredOptions])
+  }, [quantized, traced, deferredLayers, deferredOptions, deferredPicks])
   const parts = useMemo(() => model?.parts ?? [], [model])
   useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
 
-  const busy = deferredOptions !== options || deferredLayers !== layers || deferredCount !== count
+  const busy = deferredOptions !== options || deferredLayers !== layers || deferredCount !== count || deferredPicks !== picks
   const set = <K extends keyof LightboxOptions>(key: K, value: LightboxOptions[K]) => setOptions((o) => ({ ...o, [key]: value }))
   const setRear = (key: string, value: number) => setOptions((o) => ({ ...o, rear: { ...o.rear, [key]: value } }))
   const setLayer = (j: number, change: Partial<LayerSetting>) => setLayers((all) => all.map((layer, i) => (i === j ? { ...layer, ...change } : layer)))
@@ -230,7 +239,48 @@ export default function Lightbox() {
           </section>
 
           <section className="lbx-step" aria-labelledby="lbx-5">
-            <h2 id="lbx-5"><span>5</span> ส่งออกไฟล์</h2>
+            <h2 id="lbx-5"><span>5</span> วิธีผลิตแต่ละชิ้น</h2>
+            <ul className="lbx-make">
+              {parts.filter((part) => part.material !== 'led').map((part) => {
+                const canCut = part.code === DIFFUSER_CODE || Boolean(part.profile && part.profile.depth <= 12)
+                const cut = Boolean(part.cut)
+                const pick = (m: MaterialId) => { setMessage(null); setPicks((p) => ({ ...p, [part.code]: m })) }
+                return (
+                  <li key={part.id}>
+                    <span className="lbx-make-name">
+                      <strong><span className="layer-code">{part.code}</span> {part.label}</strong>
+                      <small>{canCut ? partMethod(part) : 'หนาเกิน 12 มม. พิมพ์ 3D เท่านั้น'}</small>
+                    </span>
+                    <div className="seg seg-small" role="group" aria-label={`ไฟล์ของ ${part.code} ${part.label}`}>
+                      <button type="button" aria-pressed={!cut} disabled={busy} onClick={() => cut && pick(part.code === DIFFUSER_CODE ? 'opalprint' : part.label.startsWith('สี ') ? 'accent' : 'print')}>STL พิมพ์</button>
+                      <button type="button" aria-pressed={cut} disabled={busy || !canCut} onClick={() => !cut && pick(part.code === DIFFUSER_CODE ? 'opal' : 'acrylic')}>DXF ตัดแผ่น</button>
+                    </div>
+                    <select
+                      className="material-pick"
+                      disabled={busy}
+                      aria-label={`วัสดุของ ${part.code} ${part.label}`}
+                      value={part.material}
+                      onChange={(e) => pick(e.target.value as MaterialId)}
+                    >
+                      {PICKABLE_MATERIALS.filter((m) => (cut ? SHEET_MATERIALS.includes(m) : !SHEET_MATERIALS.includes(m))).map((m) => <option key={m} value={m}>{MATERIAL_NAMES[m]}</option>)}
+                    </select>
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="note">
+              วัสดุแผ่น (อะคริลิก พลาสวูด อะลูมิเนียม) ที่หนาไม่เกิน 12 มม. ได้ไฟล์ DXF สำหรับตัดเลเซอร์หรือ CNC นอกนั้นได้ไฟล์ STL สำหรับพิมพ์ 3D
+              {picks[DIFFUSER_CODE] && ' · แผ่นกระจายแสงแบบแผ่นตัดวางทับขอบหน้ากรอบ ไม่มีขอบสวม'}
+            </p>
+            {Object.keys(picks).length > 0 && (
+              <button type="button" className="btn btn-ghost" onClick={() => setPicks({})}>
+                <Icon name="reset" size={16} /> กลับเป็นพิมพ์ 3D ทั้งหมด
+              </button>
+            )}
+          </section>
+
+          <section className="lbx-step" aria-labelledby="lbx-6">
+            <h2 id="lbx-6"><span>6</span> ส่งออกไฟล์</h2>
             <button type="button" className="btn btn-primary btn-block" disabled={busy || parts.length === 0} onClick={() => download('zip')}>
               <Icon name="download" size={16} /> ZIP แยกไฟล์ทุกชิ้นและทุกสี <span className="cost">{EXPORT_COST.zip} เครดิต</span>
             </button>

@@ -5,4 +5,6 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // The public preview link is a Cloudflare quick tunnel, whose name changes on every start.
+  preview: { allowedHosts: ['.trycloudflare.com'] },
 })

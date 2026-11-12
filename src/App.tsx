@@ -12,6 +12,7 @@ const Gen = lazy(() => import('./pages/Gen'))
 const Lightbox = lazy(() => import('./pages/Lightbox'))
 const Keychain = lazy(() => import('./pages/Keychain'))
 const Clicker = lazy(() => import('./pages/Clicker'))
+const TwoTone = lazy(() => import('./pages/TwoTone'))
 
 function Loading() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
   else if (path === '/lightbox') page = <Lightbox />
   else if (path === '/keychain') page = <Keychain />
   else if (path === '/clicker') page = <Clicker />
+  else if (path === '/twotone') page = <TwoTone />
   else if (path === '/how-to') page = <HowTo />
   else if (path === '/plugin') page = <Plugin />
   else if (path === '/contact') page = <Contact />

@@ -2,9 +2,9 @@ import { traceMask } from './artwork'
 import { BufferGeometry, Float32BufferAttribute } from 'three'
 import { band, bounds, diff, hull, intersect, islands, ngon, offset, regionArea, ring, roundRect, union, type Region } from './geo2d'
 import { extrude, merge } from './solid'
-import { Parts } from './styles/kit'
+import { applyMaterials, codeAt, isCuttable, Parts } from './styles/kit'
 import { applyRear } from './styles/rear'
-import type { SignPart } from './styles/types'
+import type { MaterialId, SignPart } from './styles/types'
 
 /** A photo or drawing reduced to a few flat colours. */
 export interface Quantized {
@@ -228,7 +228,14 @@ function diffuserSolid(shape: Region, plugRing: Region, thick: number, plug: num
  * with wire and wall fixings, a white diffuser face that plugs into the frame,
  * and one part per printed colour on top of the diffuser.
  */
-export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: Region[], layers: LayerSetting[], o: LightboxOptions) {
+/** Part letter of the diffuser face: back, frame, then the diffuser. */
+export const DIFFUSER_CODE = codeAt(2)
+
+export function buildLightbox(
+  q: Pick<Quantized, 'width' | 'height'>, colours: Region[], layers: LayerSetting[], o: LightboxOptions,
+  /** How each part is made, by part letter. Unpicked parts keep the printed defaults. */
+  picks: Record<string, MaterialId> = {},
+) {
   // Keep a positive image span when the requested margin fills a small box.
   const rim = Math.min(o.wall + o.margin, (o.width - 1) / 2)
   const printed = colours.map((region, j) => (layers[j]?.on ? region : []))
@@ -272,11 +279,15 @@ export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: R
   const z = o.back + o.depth
   const inner = offset(shape, -o.wall - o.gap)
   const plug = Math.min(3, o.depth - 2)
-  const diffuser = diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, z)
   const parts = new Parts()
     .back('ฝาหลังสวมใน', 'print', inner, o.back, 0, -1, offset(shape, -o.wall - 1))
     .slab('กรอบข้าง', 'print', ring(shape, o.wall), z, 0)
-    .solid('แผ่นกระจายแสง', 'opalprint', diffuser, 1)
+  // A cut sheet (opal acrylic) is a flat panel laid on the frame's front edge;
+  // a printed face carries a plug ring that pushes into the frame.
+  const face = picks[DIFFUSER_CODE]
+  if (face && isCuttable(face, o.diffuser)) parts.slab('แผ่นกระจายแสง', face, shape, o.diffuser, z, 1)
+  else parts.solid('แผ่นกระจายแสง', 'opalprint', diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, z), 1)
+  parts
     // Reference only: a strip stuck around the inside of the frame, facing in.
     .slab('ไฟเส้น LED', 'led', band(shape, o.wall + 0.2, 2), Math.min(10, o.depth - 2 - plug), o.back + 2, -0.4)
   const order: number[] = []
@@ -294,7 +305,7 @@ export function buildLightbox(q: Pick<Quantized, 'width' | 'height'>, colours: R
     part.backlit = Math.min(1, Math.max(0.15, Math.exp(-(thick - 0.4) / 1.2)))
   })
   const b = bounds(shape)
-  return { parts: built, colours: tints, width: b.w, height: b.h }
+  return { parts: applyMaterials(built, picks), colours: tints, width: b.w, height: b.h }
 }
 
 /** Approximate LED strip length: once around the inside of the frame, in mm. */

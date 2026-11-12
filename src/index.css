@@ -350,13 +350,13 @@ input[type='range'] {
   display: none;
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 1500px) {
   .masthead-minor {
     display: none;
   }
 }
 
-@media (max-width: 1300px) {
+@media (max-width: 1420px) {
   .masthead-menu {
     display: inline-flex;
   }
@@ -3247,4 +3247,62 @@ input[type='range'] {
   width: 100%;
   height: 100%;
   fill: currentColor;
+}
+
+/* Lightbox: how each part is made */
+.lbx-make {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.lbx-make li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+}
+
+.lbx-make-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lbx-make-name strong {
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lbx-make-name small {
+  color: var(--ink-2);
+  font-size: 0.78rem;
+}
+
+.lbx-make-name small[data-cut] {
+  color: var(--navy-900);
+  font-weight: 600;
+}
+
+.lbx-make select {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 420px) {
+  .lbx-make li {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lbx-make select {
+  grid-column: 1 / -1;
 }

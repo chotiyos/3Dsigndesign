@@ -149,7 +149,7 @@ export function splits(list: string[], k: number): string[][] {
 }
 
 /** Rows of text laid out at a 1 mm em height, centred on the origin. */
-function layoutRows(font: LoadedFont, rows: string[], cache: Map<string, Region>, charm = ''): Region {
+export function layoutRows(font: LoadedFont, rows: string[], cache: Map<string, Region>, charm = ''): Region {
   // Work at 100 mm em so geo2d's physical area cutoff preserves Thai marks.
   const unit = 100 / font.upem
   const shaped = rows.map((row) => {
