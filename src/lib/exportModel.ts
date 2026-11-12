@@ -37,7 +37,12 @@ export interface ZipOptions {
   baseName: string
   parts: SignPart[]
   readme: string
+  /** Which files a part gets. Default: STL always, plus a DXF when it is cut from sheet. */
+  output?: (part: SignPart) => PartOutput
 }
+
+/** The files a part gets in the ZIP. A DXF needs a cut outline. */
+export type PartOutput = 'stl' | 'dxf' | 'both'
 
 /** Where a part's files go inside the ZIP: one folder per material, so each shop gets its own pile. */
 export function partFolder(part: SignPart) {
@@ -57,13 +62,14 @@ export const dxfLayer = (part: SignPart) => `${part.code}_${part.material}`
  * A combined STL, plus a folder per material: every part gets an STL, and
  * parts cut from sheet in that material also get a DXF.
  */
-export function buildZip({ baseName, parts, readme }: ZipOptions): Uint8Array {
+export function buildZip({ baseName, parts, readme, output }: ZipOptions): Uint8Array {
   const files: Record<string, Uint8Array> = {}
   if (parts.some(part => part.material !== 'led')) files[`${baseName}-ทั้งหมด.stl`] = printableStl(parts)
   for (const part of parts) {
     const stem = `${partFolder(part)}/${part.code}-${safeName(part.label)}`
-    files[`${stem}.stl`] = partsToStl([part])
-    if (part.cut) files[`${stem}.dxf`] = strToU8(buildDxf([{ layer: dxfLayer(part), region: part.cut }]))
+    const want = part.cut ? (output?.(part) ?? 'both') : 'stl'
+    if (want !== 'dxf') files[`${stem}.stl`] = partsToStl([part])
+    if (part.cut && want !== 'stl') files[`${stem}.dxf`] = strToU8(buildDxf([{ layer: dxfLayer(part), region: part.cut }]))
   }
   files['รายการชิ้นส่วน.txt'] = strToU8(readme)
   return zipSync(files, { level: 6 })

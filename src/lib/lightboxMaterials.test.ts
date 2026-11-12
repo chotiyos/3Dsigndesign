@@ -37,3 +37,26 @@ describe('lightbox part materials', () => {
     expect(model.parts.find((p) => p.code === colour.code)!.cut).toBeDefined()
   })
 })
+
+describe('zip file choice per part', () => {
+  const model = buildLightbox(q, colours, layers, DEFAULT_LIGHTBOX, { A: 'acrylic', [DIFFUSER_CODE]: 'opal' })
+  const files = (output?: (p: { code: string }) => 'stl' | 'dxf' | 'both') =>
+    Object.keys(unzipSync(buildZip({ baseName: 't', parts: model.parts, readme: '', output })))
+  const has = (names: string[], code: string, ext: string) => names.some((n) => n.includes(`/${code}-`) && n.endsWith(ext))
+
+  it('cut parts get both files by default, printed parts STL only', () => {
+    const names = files()
+    expect(has(names, 'A', '.dxf') && has(names, 'A', '.stl')).toBe(true)
+    expect(has(names, 'B', '.stl')).toBe(true)
+    expect(has(names, 'B', '.dxf')).toBe(false)
+  })
+
+  it('DXF only drops the STL; STL only drops the DXF; printed parts ignore the choice', () => {
+    const names = files((p) => (p.code === 'A' ? 'dxf' : p.code === DIFFUSER_CODE ? 'stl' : 'dxf'))
+    expect(has(names, 'A', '.dxf')).toBe(true)
+    expect(has(names, 'A', '.stl')).toBe(false)
+    expect(has(names, DIFFUSER_CODE, '.stl')).toBe(true)
+    expect(has(names, DIFFUSER_CODE, '.dxf')).toBe(false)
+    expect(has(names, 'B', '.stl')).toBe(true)
+  })
+})

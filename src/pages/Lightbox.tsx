@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
-import { buildZip, downloadBlob, partMethod, PICKABLE_MATERIALS, printableStl, safeName } from '../lib/exportModel'
+import { buildZip, downloadBlob, PICKABLE_MATERIALS, printableStl, safeName, type PartOutput } from '../lib/exportModel'
 import { lightboxReadme } from '../lib/lightboxReadme'
 import {
   borderColour, buildLightbox, DEFAULT_LIGHTBOX, DIFFUSER_CODE, quantize, stripLength, toHex, traceColours,
@@ -88,13 +88,17 @@ export default function Lightbox() {
   const [layers, setLayers] = useState<LayerSetting[]>([])
   // How each part is made, by part letter. Empty means the printed defaults.
   const [picks, setPicks] = useState<Record<string, MaterialId>>({})
+  // Files for parts cut from sheet: DXF only, or DXF and STL (the default).
+  const [outputs, setOutputs] = useState<Record<string, PartOutput>>({})
   // New colours (another picture or colour count) start from the picture's own colours.
   const [layersFrom, setLayersFrom] = useState<Quantized | null>(null)
   if (quantized && layersFrom !== quantized) {
     setLayersFrom(quantized)
     setLayers(layersFor(quantized))
     // Colour parts are renumbered with the new colours; keep only the box's own picks.
-    setPicks((p) => Object.fromEntries(Object.entries(p).filter(([code]) => ['A', 'B', DIFFUSER_CODE].includes(code))))
+    const keep = ([code]: [string, unknown]) => ['A', 'B', DIFFUSER_CODE].includes(code)
+    setPicks((p) => Object.fromEntries(Object.entries(p).filter(keep)))
+    setOutputs((p) => Object.fromEntries(Object.entries(p).filter(keep)))
   }
 
   const deferredPicks = useDeferredValue(picks)
@@ -136,7 +140,7 @@ export default function Lightbox() {
     try {
       const data = kind === 'stl'
         ? printableStl(parts)
-        : buildZip({ baseName, parts, readme: lightboxReadme(parts) })
+        : buildZip({ baseName, parts, readme: lightboxReadme(parts), output: outputOf })
       if (!spend(cost, `${kind.toUpperCase()} กล่องไฟ ${baseName}`)) {
         setMessage({ tone: 'error', text: `เครดิตทดลองไม่พอ ต้องใช้ ${cost} เครดิต เหลือ ${credits(demo)} เครดิต` })
         return
@@ -150,6 +154,11 @@ export default function Lightbox() {
 
 
   const strip = stripLength(parts)
+  /** Files a part gets: printed parts STL; sheet parts DXF, or DXF and STL. */
+  function outputOf(part: (typeof parts)[number]): PartOutput {
+    if (!part.cut) return 'stl'
+    return outputs[part.code] === 'dxf' ? 'dxf' : 'both'
+  }
 
   return (
     <div className="page gen lightbox">
@@ -245,15 +254,23 @@ export default function Lightbox() {
                 const canCut = part.code === DIFFUSER_CODE || Boolean(part.profile && part.profile.depth <= 12)
                 const cut = Boolean(part.cut)
                 const pick = (m: MaterialId) => { setMessage(null); setPicks((p) => ({ ...p, [part.code]: m })) }
+                const out = outputOf(part)
+                const choose = (want: PartOutput) => {
+                  setMessage(null)
+                  setOutputs((o) => ({ ...o, [part.code]: want }))
+                  if (want === 'stl' && cut) pick(part.code === DIFFUSER_CODE ? 'opalprint' : part.label.startsWith('สี ') ? 'accent' : 'print')
+                  if (want !== 'stl' && !cut) pick(part.code === DIFFUSER_CODE ? 'opal' : 'acrylic')
+                }
                 return (
                   <li key={part.id}>
                     <span className="lbx-make-name">
                       <strong><span className="layer-code">{part.code}</span> {part.label}</strong>
-                      <small>{canCut ? partMethod(part) : 'หนาเกิน 12 มม. พิมพ์ 3D เท่านั้น'}</small>
+                      <small>{!canCut ? 'หนาเกิน 12 มม. พิมพ์ 3D เท่านั้น' : out === 'stl' ? 'พิมพ์ 3D · ได้ไฟล์ STL' : out === 'dxf' ? 'ตัดแผ่น · ได้ไฟล์ DXF' : 'ตัดแผ่น · ได้ทั้ง DXF และ STL'}</small>
                     </span>
                     <div className="seg seg-small" role="group" aria-label={`ไฟล์ของ ${part.code} ${part.label}`}>
-                      <button type="button" aria-pressed={!cut} disabled={busy} onClick={() => cut && pick(part.code === DIFFUSER_CODE ? 'opalprint' : part.label.startsWith('สี ') ? 'accent' : 'print')}>STL พิมพ์</button>
-                      <button type="button" aria-pressed={cut} disabled={busy || !canCut} onClick={() => !cut && pick(part.code === DIFFUSER_CODE ? 'opal' : 'acrylic')}>DXF ตัดแผ่น</button>
+                      <button type="button" aria-pressed={out === 'stl'} disabled={busy} onClick={() => choose('stl')}>STL</button>
+                      <button type="button" aria-pressed={out === 'dxf'} disabled={busy || !canCut} onClick={() => choose('dxf')}>DXF</button>
+                      <button type="button" aria-pressed={out === 'both'} disabled={busy || !canCut} onClick={() => choose('both')}>ทั้ง 2</button>
                     </div>
                     <select
                       className="material-pick"
@@ -273,7 +290,7 @@ export default function Lightbox() {
               {picks[DIFFUSER_CODE] && ' · แผ่นกระจายแสงแบบแผ่นตัดวางทับขอบหน้ากรอบ ไม่มีขอบสวม'}
             </p>
             {Object.keys(picks).length > 0 && (
-              <button type="button" className="btn btn-ghost" onClick={() => setPicks({})}>
+              <button type="button" className="btn btn-ghost" onClick={() => { setPicks({}); setOutputs({}) }}>
                 <Icon name="reset" size={16} /> กลับเป็นพิมพ์ 3D ทั้งหมด
               </button>
             )}
