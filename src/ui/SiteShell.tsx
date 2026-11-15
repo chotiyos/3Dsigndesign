@@ -7,9 +7,8 @@ import { Icon } from './Icon'
 const NAV = [
   { href: '/styles', label: 'แคตตาล็อกแบบป้าย' },
   { href: '/lightbox', label: 'กล่องไฟจากรูป' },
-  { href: '/keychain', label: 'พวงกุญแจชื่อ' },
-  { href: '/clicker', label: 'พวงกุญแจปุ่ม' },
-  { href: '/twotone', label: 'พวงกุญแจสองสี' },
+  // The keychain pages live under the gifts category (its keychain tab).
+  { href: '/gifts', label: 'ของขวัญใส่ชื่อ', also: ['/keychain', '/clicker', '/twotone'] },
   { href: '/files', label: 'ไฟล์ 3D สำเร็จรูป' },
   { href: '/gen', label: 'โมเดลจาก AI' },
   { href: '/how-to', label: 'วิธีใช้' },
@@ -32,7 +31,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
           </Link>
           <nav className="masthead-nav" data-open={open || undefined} aria-label="เมนูหลัก">
             {NAV.map((item) => (
-              <Link key={item.href} href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>
+              <Link key={item.href} href={item.href} aria-current={path.startsWith(item.href) || ('also' in item && item.also?.some((p) => path.startsWith(p))) ? 'page' : undefined}>
                 {item.label}
               </Link>
             ))}
@@ -71,6 +70,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
               <Link href="/keychain">พวงกุญแจชื่อบับเบิล</Link>
               <Link href="/clicker">พวงกุญแจปุ่มคีย์บอร์ด</Link>
               <Link href="/twotone">พวงกุญแจชื่อสองสี</Link>
+              <Link href="/gifts">ของขวัญใส่ชื่อ</Link>
               <Link href="/gen">โมเดลจาก AI</Link>
               <Link href="/files">ไฟล์ 3D สำเร็จรูป</Link>
               <Link href="/plugin">ปลั๊กอิน</Link>

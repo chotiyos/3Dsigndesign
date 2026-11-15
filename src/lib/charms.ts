@@ -1,4 +1,4 @@
-import { bounds, circle, diff, rect, regionArea, rotate, roundRect, scale, stroke, translate, union, type Region } from './geo2d'
+import { bounds, circle, diff, offset, rect, regionArea, rotate, roundRect, scale, stroke, translate, union, type Region } from './geo2d'
 
 /**
  * Small cute motifs to print beside a name. Each is our own drawing: a solid
@@ -230,6 +230,27 @@ export const CHARMS: Charm[] = [
       poly([-0.12, -0.5], [0.12, -0.5], [0, -0.38]),
       line(0.12, [0, -0.5], [0.12, -0.7], [-0.08, -0.85], [0.06, -1]),
     ),
+  },
+  {
+    id: 'rocket', name: 'จรวด', group: 'cute',
+    draw: () => diff(
+      union(
+        // Body with a pointed nose, two fins and a flame.
+        el(0, 0.05, 0.36, 0.72), poly([-0.2, 0.62], [0, 1], [0.2, 0.62]),
+        mirror(poly([-0.3, -0.3], [-0.62, -0.72], [-0.2, -0.55])),
+        poly([-0.16, -0.66], [0.16, -0.66], [0, -1]),
+      ),
+      union(c(0, 0.22, 0.15), box(0, -0.62, 0.5, 0.07)),
+    ),
+  },
+  {
+    id: 'planet', name: 'ดาวเคราะห์', group: 'nature',
+    draw: () => {
+      const ring = diff(el(0, 0, 1, 0.34, 0.3), el(0, 0, 0.8, 0.2, 0.3))
+      // The ring passes in front of the planet below, behind it above.
+      const front = diff(ring, rotate(box(0, 0.5, 3, 1), 0.3))
+      return union(diff(c(0, 0, 0.56), offset(front, 0.08 * U)), front, diff(ring, c(0, 0, 0.62)))
+    },
   },
 ]
 
