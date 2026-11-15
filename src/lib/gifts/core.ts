@@ -58,6 +58,12 @@ export interface GiftLayer {
   region: Region
   z: number
   h: number
+  /**
+   * Standing layers (upright designs): the region is drawn as seen from the
+   * front, its y is the height, and it is extruded towards the front from
+   * the plane at y = stand (plus z) — a name plate on the front of a cup.
+   */
+  stand?: number
 }
 
 export type GiftValues = Record<string, string | number | boolean>
@@ -80,6 +86,8 @@ export interface GiftDesign {
   colours: GiftColour[]
   /** Extra lines for the print readme. */
   howTo?: string[]
+  /** Modelled standing up in print orientation (cups, bookends): the preview turns it to face the viewer. */
+  upright?: boolean
   build(ctx: GiftContext, v: GiftValues): GiftResult
 }
 
@@ -170,6 +178,13 @@ export function fitText(font: LoadedFont, text: string, maxW: number, maxH: numb
 
 // ——— shapes ———
 
+/** Holes smaller than `maxArea` mm² filled in (gaps closed by joining a plinth or a bar). */
+export function fillSmallHoles(region: Region, maxArea: number): Region {
+  const small = region.filter((poly) => area(poly) < 0 && -area(poly) <= maxArea)
+  // A hole turned the other way round is a solid patch that covers it.
+  return small.length ? union(region, small.map((poly) => poly.slice().reverse())) : region
+}
+
 /** Outline only: holes (counters, cut-out details) filled in. */
 export const filled = (region: Region): Region => union(region.filter((poly) => area(poly) > 0))
 
@@ -198,6 +213,8 @@ export function resolve(layers: GiftLayer[]): GiftLayer[] {
     for (let j = i + 1; j < out.length; j++) {
       const a = out[i]
       const b = out[j]
+      // Flat and standing layers lie in different planes; only like ones are compared.
+      if ((a.stand ?? null) !== (b.stand ?? null)) continue
       if (a.z >= b.z + b.h - 1e-6 || b.z >= a.z + a.h - 1e-6) continue
       a.region = diff(a.region, b.region)
     }
@@ -227,17 +244,34 @@ export function toModel(design: GiftDesign, result: GiftResult, colours: Record<
   const tints: Record<string, string> = {}
   const order = design.colours.filter((c) => layers.some((l) => l.colour === c.key))
   order.forEach((c, i) => {
-    const geometries: THREE.BufferGeometry[] = layers.filter((l) => l.colour === c.key).map((l) => extrude(l.region, l.h, l.z))
+    const geometries: THREE.BufferGeometry[] = layers.filter((l) => l.colour === c.key).map((l) => {
+      const g = extrude(l.region, l.h, l.z)
+      // Stand it up: drawing y becomes height, the extrusion points to the front (−y).
+      if (l.stand !== undefined) g.rotateX(Math.PI / 2).translate(0, l.stand, 0)
+      return g
+    })
     const geometry = merge(geometries)
     geometries.forEach((g) => g.dispose())
     parts.solid(c.label, 'print', geometry, i * 0.6)
   })
   const list = parts.done()
   list.forEach((p, i) => (tints[p.code] = colours[order[i].key] ?? order[i].default))
-  const all = union(...layers.map((l) => l.region))
-  const b = all.length ? bounds(all) : { w: 0, h: 0 }
-  const thickness = layers.reduce((m, l) => Math.max(m, l.z + l.h), 0)
-  return { parts: list, tints, width: b.w, height: b.h, thickness, layers, warning: result.warning }
+  // Size from the solids themselves, so standing parts count too.
+  const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }
+  for (const part of list) {
+    part.geometry.computeBoundingBox()
+    const bb = part.geometry.boundingBox!
+    box.minX = Math.min(box.minX, bb.min.x); box.maxX = Math.max(box.maxX, bb.max.x)
+    box.minY = Math.min(box.minY, bb.min.y); box.maxY = Math.max(box.maxY, bb.max.y)
+    box.minZ = Math.min(box.minZ, bb.min.z); box.maxZ = Math.max(box.maxZ, bb.max.z)
+  }
+  const some = list.length > 0
+  return {
+    parts: list, tints, layers, warning: result.warning,
+    width: some ? box.maxX - box.minX : 0,
+    height: some ? box.maxY - box.minY : 0,
+    thickness: some ? box.maxZ - box.minZ : 0,
+  }
 }
 
 /** SVG path data, y flipped, for one region. */
@@ -246,7 +280,8 @@ export function svgPath(region: Region) {
 }
 
 /** A top view of the design for catalogue cards: layers drawn bottom to top. */
-export function topView(layers: GiftLayer[], colours: Record<string, string>) {
+export function topView(layers: GiftLayer[], colours: Record<string, string>, upright = false) {
+  if (upright) layers = frontView(layers)
   const all = union(...layers.map((l) => l.region))
   if (!all.length) return null
   const b = bounds(all)
@@ -256,4 +291,18 @@ export function topView(layers: GiftLayer[], colours: Record<string, string>) {
     viewBox: `${(b.minX - pad).toFixed(2)} ${(-b.maxY - pad).toFixed(2)} ${(b.w + 2 * pad).toFixed(2)} ${(b.h + 2 * pad).toFixed(2)}`,
     paths: sorted.map((l) => ({ d: svgPath(l.region), fill: colours[l.colour] ?? '#cccccc' })),
   }
+}
+
+/**
+ * An upright design seen from the front: flat layers become their width ×
+ * height boxes, standing layers keep their drawing, front-most drawn last.
+ */
+function frontView(layers: GiftLayer[]): GiftLayer[] {
+  const flat = layers.filter((l) => l.stand === undefined && l.region.length).map((l) => {
+    const b = bounds(l.region)
+    const region: Region = [[[b.minX, l.z], [b.maxX, l.z], [b.maxX, l.z + l.h], [b.minX, l.z + l.h]]]
+    return { ...l, region, z: -b.minY, h: 0 }
+  })
+  const standing = layers.filter((l) => l.stand !== undefined).map((l) => ({ ...l, z: 1e6 - (l.stand ?? 0) + l.z, h: 0 }))
+  return [...flat, ...standing]
 }

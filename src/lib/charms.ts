@@ -346,6 +346,28 @@ export const CHARMS: Charm[] = [
       return union(diff(body, union(windowCut, offset(wheels, 0.08 * U), c(0.3, -0.05, 0.13))), diff(wheels, union(c(-0.58, -0.42, 0.1), c(0.6, -0.42, 0.1))))
     },
   },
+  {
+    id: 'bee', name: 'ผึ้ง', group: 'animal',
+    draw: () => {
+      const body = el(0, -0.15, 0.62, 0.48)
+      const stripes = union(box(-0.12, -0.15, 0.13, 1.2), box(0.2, -0.15, 0.13, 1.2))
+      const wings = union(el(-0.2, 0.48, 0.24, 0.36, 0.4), el(0.18, 0.5, 0.24, 0.36, -0.3))
+      const face = union(c(-0.4, -0.06, 0.07), line(0.05, ...arc(-0.38, -0.22, 0.1, -2.6, -0.5, 8)))
+      const sting = poly([0.58, -0.08], [0.82, -0.18], [0.58, -0.3])
+      return union(diff(union(body, sting), union(stripes, face, offset(wings, 0.06 * U))), diff(wings, el(-0.2, 0.5, 0.1, 0.2, 0.4)), line(0.06, [-0.42, 0.25], [-0.6, 0.6]), c(-0.62, 0.62, 0.07))
+    },
+  },
+  {
+    id: 'santa', name: 'ซานตาคลอส', group: 'cute',
+    draw: () => {
+      const face = c(0, -0.02, 0.45)
+      const hat = union(poly([-0.55, 0.22], [0.15, 0.95], [0.55, 0.22]), c(0.32, 0.86, 0.13))
+      const brim = box(0, 0.24, 1.2, 0.2, 0.1)
+      const beard = union(c(-0.42, -0.32, 0.22), c(-0.2, -0.5, 0.24), c(0.08, -0.56, 0.25), c(0.34, -0.42, 0.22), c(0.46, -0.18, 0.16), c(-0.5, -0.1, 0.16))
+      const details = union(eyes(0.16, 0.06, 0.06), el(0, -0.1, 0.09, 0.07), offset(diff(beard, face), 0.03 * U))
+      return union(diff(face, details), diff(beard, c(0, -0.22, 0.12)), diff(hat, offset(brim, 0.05 * U)), brim)
+    },
+  },
 ]
 
 const cache = new Map<string, Region>()

@@ -126,7 +126,7 @@ function GiftCatalogue({ missing = false }: { missing?: boolean }) {
       if (!d || cancelled) return
       try {
         const result = d.build({ font }, defaults(d))
-        const view = topView(result.layers, defaultColours(d))
+        const view = topView(result.layers, defaultColours(d), d.upright)
         if (!cancelled) setThumbs((t) => ({ ...t, [d.id]: view }))
       } catch {
         // A thumbnail that fails stays blank; the design page shows the error.
@@ -271,6 +271,9 @@ function GiftEditor({ design }: { design: GiftDesign }) {
   }, [design, font, deferred])
   const parts = useMemo(() => model?.parts ?? [], [model])
   useEffect(() => () => { parts.forEach((p) => p.geometry.dispose()) }, [parts])
+  // Upright designs are modelled standing (z up) for printing; turn a copy to face the viewer.
+  const viewParts = useMemo(() => (design.upright ? parts.map((p) => ({ ...p, geometry: p.geometry.clone().rotateX(-Math.PI / 2) })) : parts), [design.upright, parts])
+  useEffect(() => () => { if (viewParts !== parts) viewParts.forEach((p) => p.geometry.dispose()) }, [viewParts, parts])
   // Colours tint the preview only, so changing them never rebuilds.
   const used = design.colours.filter((c) => model?.layers.some((l) => l.colour === c.key))
   const tints = useMemo(() => Object.fromEntries(parts.map((p, i) => [p.code, colours[used[i]?.key] ?? '#cccccc'])), [parts, colours, used])
@@ -292,7 +295,9 @@ function GiftEditor({ design }: { design: GiftDesign }) {
       const readme = [
         `JJDesign — ${design.name}`,
         ...design.params.filter((p) => p.kind === 'text').map((p) => `${p.label}: ${values[p.key]}`),
-        `ขนาด ${model.width.toFixed(1)} × ${model.height.toFixed(1)} มม. · หนารวม ${model.thickness.toFixed(1)} มม.`,
+        design.upright
+          ? `ขนาด กว้าง ${model.width.toFixed(1)} × ลึก ${model.height.toFixed(1)} × สูง ${model.thickness.toFixed(1)} มม. (พิมพ์ตั้งตรงตามไฟล์)`
+          : `ขนาด ${model.width.toFixed(1)} × ${model.height.toFixed(1)} มม. · หนารวม ${model.thickness.toFixed(1)} มม.`,
         model.warning ?? '',
         '',
         partsList(partStats(parts)),
@@ -363,7 +368,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
             <details className="kc-more" open>
               <summary>ความหนา</summary>
               {thickParams.map((p) => <ParamField key={p.key} p={p} value={values[p.key]} onChange={(v) => set(p.key, v)} onText={() => {}} />)}
-              {model && model.thickness > 0 && <p className="note">หนารวม <strong className="tabular">{model.thickness.toFixed(1)} มม.</strong> ความหนาแต่ละชั้นหาร 0.2 มม. ลงตัว สีจะเปลี่ยนตรงรอยต่อพอดี</p>}
+              {model && !design.upright && model.thickness > 0 && <p className="note">หนารวม <strong className="tabular">{model.thickness.toFixed(1)} มม.</strong> ความหนาแต่ละชั้นหาร 0.2 มม. ลงตัว สีจะเปลี่ยนตรงรอยต่อพอดี</p>}
             </details>
             <button type="button" className="btn btn-ghost" onClick={() => {
               const d = defaults(design)
@@ -400,10 +405,12 @@ function GiftEditor({ design }: { design: GiftDesign }) {
         </div>
 
         <div className="gen-view lbx-view">
-          <Viewer parts={parts} colors={tints} explodeMM={explode} frameKey={design.id} className="sheet-viewer" label={`ตัวอย่าง ${design.name} 3 มิติ`} />
+          <Viewer parts={viewParts} colors={tints} explodeMM={explode} frameKey={design.id} className="sheet-viewer" label={`ตัวอย่าง ${design.name} 3 มิติ`} />
           <p className="gen-tag" role="status">
             {model && parts.length
-              ? `${(model.width / 10).toFixed(1)} × ${(model.height / 10).toFixed(1)} ซม. · หนา ${model.thickness.toFixed(1)} มม. · ${parts.length} สี`
+              ? design.upright
+                ? `กว้าง ${(model.width / 10).toFixed(1)} × ลึก ${(model.height / 10).toFixed(1)} × สูง ${(model.thickness / 10).toFixed(1)} ซม. · ${parts.length} สี`
+                : `${(model.width / 10).toFixed(1)} × ${(model.height / 10).toFixed(1)} ซม. · หนา ${model.thickness.toFixed(1)} มม. · ${parts.length} สี`
               : fontError ? 'โหลดฟอนต์ไม่สำเร็จ' : font ? (model?.warning ? 'สร้างแบบไม่ได้' : 'พิมพ์ข้อความเพื่อเริ่ม') : 'กำลังโหลดฟอนต์'}
             {busy && font && ' · กำลังคำนวณ'}
           </p>
