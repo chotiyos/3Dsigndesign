@@ -1,5 +1,6 @@
 import type { GiftDesign } from './core'
 import { AWARDS } from './awards'
+import { BIRTH } from './birth'
 import { DOUBLE_LINE } from './doubleLine'
 import { LETTERS } from './letters'
 import { NAME_KEYS } from './nameKeys'
@@ -15,6 +16,7 @@ export const GIFTS: GiftDesign[] = [
   ...DOUBLE_LINE,
   ...ROUND1,
   ...AWARDS,
+  ...BIRTH,
   ...ROUND2,
   ...NAME_KEYS,
   ...ROUND3,
