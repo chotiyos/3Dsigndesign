@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { extrude } from '../solid'
 import { analyse } from '../solid'
 import { fontFromArrayBuffer } from '../hb'
-import { regionArea } from '../geo2d'
-import { cleanValues, defaults, GIFT_GROUPS, GIFTS, resolve, toModel, topView } from './index'
+import { bounds, diff, islands, offset, rect, regionArea, union } from '../geo2d'
+import { cleanText, cleanValues, connectedLetter, defaults, GIFT_GROUPS, GIFTS, parseGiftStorage, resolve, standingFoot, toModel, topView } from './index'
 
 function font(file: string) {
   const bytes = readFileSync(`public/fonts/${file}`)
@@ -23,6 +23,33 @@ describe('gift catalogue', () => {
   })
 
   for (const g of GIFTS) {
+    it(`${g.id}: handles range extremes, long stacked Thai and empty text`, () => {
+      for (const mode of ['min', 'max', 'wide', 'empty'] as const) {
+        const raw = Object.fromEntries(g.params.map((p) => [p.key,
+          p.kind === 'number' ? ((mode === 'max' || (mode === 'wide' && ['width', 'length', 'photoH', 'rim', 'border', 'magnet'].includes(p.key))) ? p.max : p.min) ?? p.default :
+          p.kind === 'text' ? (mode === 'empty' ? '' : 'กิ่'.repeat(p.maxChars ?? 24)) :
+          p.kind === 'toggle' ? mode !== 'min' :
+          p.kind === 'choice' && mode === 'min' ? p.options?.[0]?.id ?? p.default :
+          p.kind === 'choice' && mode === 'max' ? p.options?.at(-1)?.id ?? p.default : p.default]))
+        const result = g.build({ font: mitr }, cleanValues(g, raw))
+        if (!result.layers.length) {
+          expect(Boolean(result.warning) || mode === 'empty', `${g.id} ${mode}: empty without explanation`).toBe(true)
+          continue
+        }
+        const layers = resolve(result.layers)
+        for (const l of layers) {
+          const geo = extrude(l.region, l.h, l.z)
+          expect(analyse(geo).watertight, `${g.id} ${mode} ${l.colour}`).toBe(true)
+          geo.dispose()
+          expect([bounds(l.region).w, bounds(l.region).h, l.z, l.h].every(Number.isFinite)).toBe(true)
+          if (['text', 'name', 'motif', 'line'].includes(l.colour) && l.z > 0) {
+            const below = layers.filter((b) => (b.stand ?? null) === (l.stand ?? null) && b.z < l.z && b.z + b.h >= l.z - 1e-5)
+            expect(regionArea(diff(l.region, offset(union(...below.map((b) => b.region)), 0.08))), `${g.id} ${mode} ${l.colour} support`).toBeLessThan(0.2)
+          }
+        }
+      }
+    }, 60_000)
+
     it(`${g.id}: builds with defaults and a Thai name, every layer printable`, () => {
       for (const [f, extra] of [[kanit, {}], [mitr, { name: 'มะลิ', line1: 'น้องปิ่น', line2: 'สุขสันต์วันเกิด', name2: 'ต้น' }]] as const) {
         const v = cleanValues(g, { ...defaults(g), ...extra })
@@ -44,6 +71,102 @@ describe('gift catalogue', () => {
       }
     }, 60_000)
   }
+
+  it('keeps the non-overlapping heights of earlier layers', () => {
+    const layers = resolve([
+      { colour: 'base', region: rect(0, 0, 20, 20), z: 0, h: 5 },
+      { colour: 'art', region: rect(0, 0, 10, 10), z: 2, h: 1 },
+    ])
+    expect(layers.filter((l) => l.colour === 'base').reduce((v, l) => v + regionArea(l.region) * l.h, 0)).toBeCloseTo(1900, 0)
+  })
+
+  it('centres standing feet in depth and embeds them by 2 mm', () => {
+    const foot = standingFoot(rect(0, 0, 100, 120), 'base', 4)
+    expect(foot.h).toBeGreaterThanOrEqual(24)
+    expect(foot.z + foot.h / 2).toBe(2)
+    expect(bounds(foot.region).maxY).toBeCloseTo(-58)
+  })
+
+  it('snaps numbers relative to their minimum without escaping the range', () => {
+    const g = { ...GIFTS[0], params: [{ key: 'n', label: '', kind: 'number' as const, default: 1.1, min: 1.1, max: 2, step: 0.4 }] }
+    expect(cleanValues(g, { n: 1.1 }).n).toBe(1.1)
+    expect(cleanValues(g, { n: 99 }).n).toBeLessThanOrEqual(2)
+    expect(cleanValues(g, { n: NaN }).n).toBe(1.1)
+  })
+
+  it('restores valid entries while ignoring malformed storage and entries', () => {
+    for (const raw of ['{', 'null', '[]', 'true', '3']) expect(parseGiftStorage(raw)).toEqual({})
+    expect(parseGiftStorage('{"bad":null,"alsoBad":[],"good":{"values":{"name":"Mali"}}}')).toEqual({ good: { values: { name: 'Mali' } } })
+  })
+
+  it('limits whole graphemes without splitting stacked Thai marks', () => {
+    expect(cleanText('กิ่กิ่กิ่', 2)).toBe('กิ่กิ่')
+  })
+
+  it('joins structural marks while keeping letter counters', () => {
+    const ring = diff(rect(0, 0, 20, 20), rect(0, 0, 10, 10))
+    const connected = connectedLetter(union(ring, rect(0, 16, 3, 3)))
+    expect(islands(connected)).toHaveLength(1)
+    expect(regionArea(diff(rect(0, 0, 8, 8), connected))).toBeCloseTo(64)
+  })
+
+  it('keeps wide shallow bowl slopes within 45 degrees', () => {
+    for (const id of ['home-bowl-cone', 'home-bowl-curved']) {
+      const g = GIFTS.find((d) => d.id === id)!
+      const layers = g.build({ font: kanit }, cleanValues(g, { ...defaults(g), width: 220, height: 30 })).layers.filter((l) => l.colour === 'cup')
+      for (let i = 2; i < layers.length; i++) {
+        const dr = (bounds(layers[i].region).w - bounds(layers[i - 1].region).w) / 2
+        expect(dr).toBeLessThanOrEqual(layers[i].z - layers[i - 1].z + 0.002)
+      }
+    }
+  })
+
+  it('rejects magnet pockets that would break through the side wall', () => {
+    const g = GIFTS.find((d) => d.id === 'home-magnet')!
+    const result = g.build({ font: kanit }, cleanValues(g, { ...defaults(g), shape: 'star', size: 30, magnet: 20 }))
+    expect(result.layers).toHaveLength(0)
+    expect(result.warning).toBeTruthy()
+    const valid = g.build({ font: kanit }, cleanValues(g, { ...defaults(g), base: 1.6 }))
+    expect(valid.layers.find((l) => l.colour === 'plate' && l.z === 2.2)!.h).toBeGreaterThanOrEqual(1.19)
+  })
+
+  it('supports every raised layer at defaults', () => {
+    const failures: string[] = []
+    for (const g of GIFTS) {
+      const layers = resolve(g.build({ font: kanit }, defaults(g)).layers)
+      for (const l of layers) {
+        if (l.z < 1e-6 || l.colour === 'cup' || (g.id === 'home-magnet' && l.colour === 'plate')) continue
+        const below = layers.filter((b) => (b.stand ?? null) === (l.stand ?? null) && b.z < l.z && b.z + b.h >= l.z - 1e-5)
+        const unsupported = diff(l.region, offset(union(...below.map((b) => b.region)), 0.06))
+        if (regionArea(unsupported) > 0.2) failures.push(`${g.id} ${l.colour}: ${regionArea(unsupported).toFixed(1)} mm2`)
+      }
+    }
+    expect(failures).toEqual([])
+  }, 60_000)
+
+  it('keeps each flat design connected as an assembled object', () => {
+    const failures: string[] = []
+    for (const g of GIFTS.filter((d) => !d.upright)) {
+      const layers = g.build({ font: kanit }, defaults(g)).layers
+      const count = islands(union(...layers.map((l) => l.region))).length
+      if (count !== 1) failures.push(`${g.id}: ${count}`)
+    }
+    expect(failures).toEqual([])
+  }, 60_000)
+
+  it('profiles default drawing and model generation', () => {
+    const timings: { id: string; draw: number; model: number }[] = []
+    for (const g of GIFTS) {
+      const start = performance.now()
+      const result = g.build({ font: kanit }, defaults(g))
+      const drawn = performance.now()
+      const model = toModel(g, result, {})
+      expect(model.parts.length, g.id).toBeGreaterThan(0)
+      timings.push({ id: g.id, draw: Math.round(drawn - start), model: Math.round(performance.now() - drawn) })
+      model.parts.forEach((p) => p.geometry.dispose())
+    }
+    if (process.env.GIFT_PROFILE) console.table(timings)
+  }, 60_000)
 
   it('cleans values to each parameter range', () => {
     const g = GIFTS[0]

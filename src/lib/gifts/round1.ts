@@ -3,7 +3,7 @@ import { charmArt } from '../charms'
 import { bounds, circle, diff, intersect, offset, rotate, roundRect, scale, translate, union, type Region } from '../geo2d'
 import { silhouette } from '../styles/kit'
 import {
-  filled, fitText, LOOP, missingGlyphs, num, str, textArt, THICKNESS, withTab,
+  connectedLetter, filled, standingFoot, fitText, LOOP, missingGlyphs, num, str, textArt, THICKNESS, withTab,
   type GiftContext, type GiftDesign, type GiftLayer, type GiftParam, type GiftValues,
 } from './core'
 import { daisy, leafBranch, patternWeb, PATTERNS, type PatternKind } from './patterns'
@@ -20,17 +20,11 @@ const sized = (region: Region, h: number): Region => {
 /** One letter, `h` mm tall, centred. */
 function letterArt(ctx: GiftContext, ch: string, h: number): Region {
   const art = textArt(ctx.font, [ch], 100)
-  return art.length ? sized(art, h) : []
+  return art.length ? connectedLetter(sized(art, h)) : []
 }
 
 /** Text rounded a little so strokes print cleanly. */
 const soft = (art: Region, h: number) => puffUp(art, Math.min(0.5, h * 0.04))
-
-/** A plinth under a standing piece so it does not rock. */
-function plinth(region: Region, h: number): Region {
-  const b = bounds(region)
-  return roundRect((b.minX + b.maxX) / 2, b.minY - h / 2 + 0.6, Math.max(30, b.w * 0.62), h, Math.min(2, h / 2))
-}
 
 // ——— letter signs ———
 
@@ -106,7 +100,10 @@ function letterSign(ctx: GiftContext, v: GiftValues, pattern: PatternKind, deco:
   }
   if (v.stand) {
     const all = union(...layers.map((l) => l.region))
-    layers.unshift({ colour: 'frame', region: plinth(all, 6), z: 0, h: top })
+    layers.unshift(standingFoot(all, 'frame', top))
+  }
+  if (deco === 'daisies') {
+    layers.unshift({ colour: 'back', region: connectedLetter(union(...layers.filter((l) => l.z === 0).map((l) => l.region))), z: 0, h: 1.2 })
   }
   return { layers }
 }
@@ -170,9 +167,11 @@ function nameSign(ctx: GiftContext, v: GiftValues, motif: string) {
   if (motif) {
     // The motif to the left, as tall as both lines; the text shrinks to make room.
     const mh = tb.h * 1.15
-    const m = sized(charmArt(motif), mh)
+    let m = sized(charmArt(motif), mh)
+    const maxMotifW = (length - 2 * margin) * 0.35
+    if (bounds(m).w > maxMotifW) m = scale(m, maxMotifW / bounds(m).w)
     const mb = bounds(m)
-    const room = length - 2 * margin - mb.w - margin
+    const room = Math.max(1, length - 2 * margin - mb.w - margin)
     if (tb.w > room) {
       art = scale(art, room / tb.w)
       tb = bounds(art)
@@ -180,10 +179,11 @@ function nameSign(ctx: GiftContext, v: GiftValues, motif: string) {
     picture = translate(m, tb.minX - margin - mb.maxX, (tb.minY + tb.maxY) / 2)
   }
   const face = union(art, picture)
-  let base = silhouette(face, margin)
-  if (v.stand) base = union(base, plinth(base, 6))
+  const base = silhouette(face, margin)
+
   return {
     layers: [
+      ...(v.stand ? [standingFoot(base, 'base', t)] : []),
       { colour: 'base', region: base, z: 0, h: t },
       { colour: 'text', region: art, z: t, h: r },
       { colour: 'motif', region: picture, z: t, h: r },
@@ -227,11 +227,11 @@ function patternPlate(ctx: GiftContext, v: GiftValues, kind: PatternKind, banner
   const layers: GiftLayer[] = [
     { colour: 'base', region: plate, z: 0, h: 1.2 },
     { colour: 'pattern', region: banner ? inner : patternWeb(kind, inner, num(v, 'size') * 0.45), z: 1.2, h: t - 1.2 },
-    { colour: 'base', region: union(diff(plate, inner), backing), z: 0, h: t },
+    { colour: 'base', region: banner ? diff(plate, inner) : union(diff(plate, inner), backing), z: 0, h: t },
     { colour: 'text', region: face, z: t, h: r },
-    { colour: 'motif', region: union(...hearts), z: t, h: r },
+    { colour: 'motif', region: intersect(union(...hearts), plate), z: t, h: r },
   ]
-  if (v.stand) layers.unshift({ colour: 'base', region: plinth(plate, 6), z: 0, h: t })
+  if (v.stand) layers.unshift(standingFoot(plate, 'base', t))
   return { layers }
 }
 
@@ -260,7 +260,7 @@ function patternText(ctx: GiftContext, v: GiftValues) {
     { colour: 'pattern', region: patternWeb(str(v, 'pattern') as PatternKind, inner, Math.max(4, fit.height * 0.22)), z: 1.2, h: t - 1.2 },
     { colour: 'text', region: diff(face, inner), z: 0, h: t + num(v, 'raise') },
   ]
-  if (v.stand) layers.unshift({ colour: 'base', region: plinth(back, 5), z: 0, h: 1.2 })
+  if (v.stand) layers.unshift(standingFoot(back, 'base', t + num(v, 'raise'), 5))
   return { layers }
 }
 
@@ -303,7 +303,7 @@ function nameInside(ctx: GiftContext, name: string, shape: Region, share = 0.72)
   const fit = fitText(ctx.font, name, b.w * share, b.h * 0.42, b.h * 0.34)
   if (!fit.art.length) return []
   const nb = bounds(fit.art)
-  return soft(translate(fit.art, (b.minX + b.maxX) / 2 - (nb.minX + nb.maxX) / 2, (b.minY + b.maxY) / 2 - (nb.minY + nb.maxY) / 2 - b.h * 0.04), fit.height)
+  return intersect(shape, soft(translate(fit.art, (b.minX + b.maxX) / 2 - (nb.minX + nb.maxX) / 2, (b.minY + b.maxY) / 2 - (nb.minY + nb.maxY) / 2 - b.h * 0.04), fit.height))
 }
 
 function shapeKeychain(ctx: GiftContext, v: GiftValues, three: boolean) {
@@ -341,8 +341,8 @@ function doubleHeart(ctx: GiftContext, v: GiftValues) {
   return {
     layers: [
       { colour: 'base', region: base, z: 0, h: t },
-      { colour: 'inner', region: diff(right, offset(left, 1)), z: t, h: 0.6 },
-      { colour: 'text', region: union(ra, rb), z: t + 0.6, h: num(v, 'raise') },
+      { colour: 'inner', region: union(left, right), z: t, h: 0.6 },
+      { colour: 'text', region: intersect(union(ra, rb), union(left, right)), z: t + 0.6, h: num(v, 'raise') },
     ],
   }
 }

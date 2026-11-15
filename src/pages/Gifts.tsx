@@ -1,10 +1,10 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState, type JSX } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { buildZip, downloadBlob, partsList, partStats, printableStl, safeName } from '../lib/exportModel'
 import { FONT_OPTIONS } from '../lib/fonts'
 import {
-  cleanText, cleanValues, defaults, findGift, GIFT_GROUPS, GIFTS, graphemeCount, toModel, topView,
-  type GiftDesign, type GiftGroup, type GiftModel, type GiftParam, type GiftValues,
+  cleanText, cleanValues, defaults, findGift, GIFT_GROUPS, GIFTS, graphemeCount, parseGiftStorage, toModel, topView,
+  type GiftDesign, type GiftGroup, type GiftModel, type GiftParam, type GiftValues, type SavedGift,
 } from '../lib/gifts'
 import { loadFont, type LoadedFont } from '../lib/hb'
 import { Link, useTitle } from '../router'
@@ -15,22 +15,15 @@ import { Range } from '../ui/Range'
 export const GIFTS_KEY = 'jjdesign-gifts-v1'
 const DEFAULT_FONT = 'kanit-bold'
 
-interface SavedDesign {
-  values?: unknown
-  colours?: Record<string, string>
-  fontId?: string
-}
-
-function readSaved(): Record<string, SavedDesign> {
+function readSaved(): Record<string, SavedGift> {
   try {
-    const raw = JSON.parse(localStorage.getItem(GIFTS_KEY) ?? '{}') as unknown
-    return raw && typeof raw === 'object' ? (raw as Record<string, SavedDesign>) : {}
+    return parseGiftStorage(localStorage.getItem(GIFTS_KEY) ?? '{}')
   } catch {
     return {}
   }
 }
 
-function writeSaved(id: string, entry: SavedDesign) {
+function writeSaved(id: string, entry: SavedGift) {
   try {
     localStorage.setItem(GIFTS_KEY, JSON.stringify({ ...readSaved(), [id]: entry }))
   } catch {
@@ -115,7 +108,7 @@ function GiftCatalogue({ missing = false }: { missing?: boolean }) {
   const shown = GIFTS.filter((d) => group === 'all' || d.group === group)
   const pages = PAGES.filter((pg) => group === 'all' || pg.group === group)
   const count = (g: GiftGroup) => GIFTS.filter((d) => d.group === g).length + PAGES.filter((pg) => pg.group === g).length
-  // Thumbnails are built one at a time between frames, so the page stays responsive.
+  // Built one design at a time, yielding to the page between them.
   const [thumbs, setThumbs] = useState<Record<string, ReturnType<typeof topView>>>({})
   useEffect(() => {
     if (!font) return
@@ -131,10 +124,10 @@ function GiftCatalogue({ missing = false }: { missing?: boolean }) {
       } catch {
         // A thumbnail that fails stays blank; the design page shows the error.
       }
-      setTimeout(next, 0)
+      timer = window.setTimeout(next, 16)
     }
-    next()
-    return () => { cancelled = true }
+    let timer: number | undefined = window.setTimeout(next, 16)
+    return () => { cancelled = true; clearTimeout(timer) }
     // Thumbnails depend on the font only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [font])
@@ -230,7 +223,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
   // Text is typed into a draft and applied after a pause (and after IME composition).
   const [drafts, setDrafts] = useState<Record<string, string>>(() =>
     Object.fromEntries(design.params.filter((p) => p.kind === 'text').map((p) => [p.key, String(values[p.key])])))
-  const composing = useRef(false)
+  const [composing, setComposing] = useState(false)
   const [colours, setColours] = useState<Record<string, string>>(() => {
     const out = defaultColours(design)
     for (const [k, c] of Object.entries(saved.colours ?? {})) if (k in out && typeof c === 'string' && HEX.test(c)) out[k] = c.toLowerCase()
@@ -242,7 +235,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
-    if (composing.current) return
+    if (composing) return
     const timer = setTimeout(() => {
       setValues((v) => {
         const next = { ...v }
@@ -256,7 +249,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
       })
     }, 250)
     return () => clearTimeout(timer)
-  }, [drafts, design])
+  }, [drafts, design, composing])
 
   useEffect(() => writeSaved(design.id, { values, colours, fontId }), [design.id, values, colours, fontId])
 
@@ -278,8 +271,8 @@ function GiftEditor({ design }: { design: GiftDesign }) {
   const used = design.colours.filter((c) => model?.layers.some((l) => l.colour === c.key))
   const tints = useMemo(() => Object.fromEntries(parts.map((p, i) => [p.code, colours[used[i]?.key] ?? '#cccccc'])), [parts, colours, used])
 
-  const busy = deferred !== values || !font || design.params.some((p) => p.kind === 'text' && cleanText(drafts[p.key] ?? '', p.maxChars) !== values[p.key])
-  const set = (key: string, v: string | number | boolean) => { setMessage(null); setValues((o) => ({ ...o, [key]: v })) }
+  const busy = composing || deferred !== values || !font || design.params.some((p) => p.kind === 'text' && cleanText(drafts[p.key] ?? '', p.maxChars) !== values[p.key])
+  const set = (key: string, v: string | number | boolean) => { setMessage(null); setValues((o) => cleanValues(design, { ...o, [key]: v })) }
   const shown = design.params.filter((p) => !p.when || p.when.is.includes(values[p.when.key]))
   const textParams = shown.filter((p) => p.kind === 'text')
   const shapeParams = shown.filter((p) => p.kind !== 'text' && !['base', 'raise'].includes(p.key))
@@ -308,7 +301,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
         'พิมพ์หลายสีใน Bambu Studio (หรือ OrcaSlicer)',
         '1. ลากไฟล์ STL ทุกไฟล์ในโฟลเดอร์ พลาสติกพิมพ์ เข้าโปรแกรมพร้อมกัน ตอบ "ใช่" ให้โหลดเป็นวัตถุเดียว',
         '2. กำหนดเส้นพลาสติกให้แต่ละชิ้นตามสีด้านบน',
-        '3. ชั้น 0.2 มม. ผนัง 2–3 เส้น เติม 15–20% วางด้านเรียบติดแผ่นพิมพ์ ไม่ต้องใช้ซัพพอร์ต',
+        '3. ชั้น 0.2 มม. ผนัง 2–3 เส้น เติม 15–20% ตรวจทิศทางและซัพพอร์ตตามคำแนะนำของแต่ละแบบ',
         ...(design.howTo ?? []),
         'ถ้าพิมพ์สีเดียว ใช้ไฟล์ -ทั้งหมด.stl ไฟล์เดียว',
         '',
@@ -346,9 +339,9 @@ function GiftEditor({ design }: { design: GiftDesign }) {
                   type="text"
                   value={drafts[p.key] ?? ''}
                   placeholder={p.hint}
-                  onCompositionStart={() => { composing.current = true }}
-                  onCompositionEnd={(e) => { composing.current = false; const val = e.currentTarget.value; setDrafts((d) => ({ ...d, [p.key]: cleanText(val, p.maxChars) })) }}
-                  onChange={(e) => { setMessage(null); const val = e.target.value; setDrafts((d) => ({ ...d, [p.key]: composing.current ? val : cleanText(val, p.maxChars) })) }}
+                  onCompositionStart={() => setComposing(true)}
+                  onCompositionEnd={(e) => { setComposing(false); const val = e.currentTarget.value; setDrafts((d) => ({ ...d, [p.key]: cleanText(val, p.maxChars) })) }}
+                  onChange={(e) => { setMessage(null); const val = e.target.value; const isComposing = composing || (e.nativeEvent as InputEvent).isComposing; setDrafts((d) => ({ ...d, [p.key]: isComposing ? val : cleanText(val, p.maxChars) })) }}
                 />
                 {p.hint && <small className="note">{p.hint}</small>}
               </label>
@@ -382,7 +375,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
           <section className="lbx-step" aria-labelledby="gf-3">
             <h2 id="gf-3"><span>3</span> สี</h2>
             <div className="kc-own gift-colours">
-              {(used.length ? used : design.colours).map((c) => (
+              {(model ? used : design.colours).map((c) => (
                 <label key={c.key}>
                   <input type="color" value={colours[c.key]} onChange={(e) => { const val = e.target.value; setColours((o) => ({ ...o, [c.key]: val })) }} />
                   <span>{c.label}</span>

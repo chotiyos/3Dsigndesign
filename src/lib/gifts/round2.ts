@@ -3,7 +3,7 @@ import { charmArt } from '../charms'
 import { bounds, diff, offset, roundRect, scale, translate, union, type Region } from '../geo2d'
 import { silhouette } from '../styles/kit'
 import {
-  filled, fitText, missingGlyphs, num, str, textArt, THICKNESS,
+  connectedLetter, filled, standingFoot, fitText, missingGlyphs, num, str, textArt, THICKNESS,
   type GiftContext, type GiftDesign, type GiftLayer, type GiftParam, type GiftValues,
 } from './core'
 import { patternWeb, PATTERNS, type PatternKind } from './patterns'
@@ -26,17 +26,13 @@ const soft = (art: Region, h: number) => puffUp(art, Math.min(0.5, h * 0.04))
  * cut-outs of the charm) raised a little higher in a darker colour.
  */
 function motifLayers(m: Region, fill: string, line: string, z: number, h: number): GiftLayer[] {
-  const outline = filled(m)
+  const outline = silhouette(m, 0)
   return [
     { colour: fill, region: outline, z, h },
     { colour: line, region: diff(outline, m), z: z + h, h: 0.6 },
   ]
 }
 
-function plinth(region: Region, h: number): Region {
-  const b = bounds(region)
-  return roundRect((b.minX + b.maxX) / 2, b.minY - h / 2 + 0.6, Math.max(30, b.w * 0.62), h, Math.min(2, h / 2))
-}
 
 // ——— sports awards ———
 
@@ -69,7 +65,7 @@ function award(ctx: GiftContext, v: GiftValues, icon: string, spot: IconSpot) {
   const t = num(v, 'base')
   const r = num(v, 'raise')
   const top = t + 0.8
-  const digits = sized(textArt(ctx.font, [number], 100), H)
+  const digits = connectedLetter(sized(textArt(ctx.font, [number], 100), H))
   const inner = offset(digits, -num(v, 'rim'))
   const b = bounds(digits)
   const layers: GiftLayer[] = []
@@ -98,7 +94,7 @@ function award(ctx: GiftContext, v: GiftValues, icon: string, spot: IconSpot) {
     layers.push({ colour: 'name', region: face, z: top + 0.4, h: r })
   }
   const all = union(...layers.map((l) => l.region))
-  layers.unshift({ colour: 'plate', region: plinth(all, 7), z: 0, h: top + 0.4 })
+  layers.unshift(standingFoot(all, 'plate', top + 0.4, 7))
   return { layers }
 }
 
@@ -160,9 +156,9 @@ function birthSign(ctx: GiftContext, v: GiftValues, motif: string) {
     layers.push({ colour: 'pill', region: pill, z: t, h: 0.6 })
     if (fit.art.length) layers.push({ colour: 'text', region: soft(centreAt(fit.art, cx, cy), fit.height), z: t + 0.6, h: r })
   })
-  let base = silhouette(union(...pieces), num(v, 'margin'))
-  base = union(base, plinth(base, 7))
-  layers.unshift({ colour: 'base', region: base, z: 0, h: t })
+  const base = silhouette(union(...pieces), num(v, 'margin'))
+
+  layers.unshift(standingFoot(base, 'base', t, 7), { colour: 'base', region: base, z: 0, h: t })
   return { layers }
 }
 

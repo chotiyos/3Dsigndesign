@@ -352,9 +352,9 @@ export const CHARMS: Charm[] = [
       const body = el(0, -0.15, 0.62, 0.48)
       const stripes = union(box(-0.12, -0.15, 0.13, 1.2), box(0.2, -0.15, 0.13, 1.2))
       const wings = union(el(-0.2, 0.48, 0.24, 0.36, 0.4), el(0.18, 0.5, 0.24, 0.36, -0.3))
-      const face = union(c(-0.4, -0.06, 0.07), line(0.05, ...arc(-0.38, -0.22, 0.1, -2.6, -0.5, 8)))
+      const face = union(c(-0.4, -0.06, 0.07), line(0.09, ...arc(-0.38, -0.22, 0.1, -2.6, -0.5, 8)))
       const sting = poly([0.58, -0.08], [0.82, -0.18], [0.58, -0.3])
-      return union(diff(union(body, sting), union(stripes, face, offset(wings, 0.06 * U))), diff(wings, el(-0.2, 0.5, 0.1, 0.2, 0.4)), line(0.06, [-0.42, 0.25], [-0.6, 0.6]), c(-0.62, 0.62, 0.07))
+      return union(diff(union(body, sting), union(stripes, face, offset(wings, 0.06 * U))), diff(wings, el(-0.2, 0.5, 0.1, 0.2, 0.4)), line(0.1, [-0.42, 0.25], [-0.6, 0.6]), c(-0.62, 0.62, 0.07))
     },
   },
   {

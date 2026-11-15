@@ -1,6 +1,6 @@
 import type * as THREE from 'three'
 import { layoutRows, splits, withTab, words } from '../bubbleKeychain'
-import { bounds, diff, offset, union, type Region } from '../geo2d'
+import { bounds, diff, islands, offset, roundRect, stroke, union, type Region } from '../geo2d'
 import { hb, type LoadedFont } from '../hb'
 import { extrude, merge } from '../solid'
 import { Parts } from '../styles/kit'
@@ -118,13 +118,31 @@ export function cleanValues(design: GiftDesign, raw: unknown): GiftValues {
       const n = typeof v === 'number' && Number.isFinite(v) ? v : (p.default as number)
       const step = p.step ?? 1
       const clamped = Math.min(p.max ?? Infinity, Math.max(p.min ?? -Infinity, n))
-      out[p.key] = Number((Math.round(clamped / step) * step).toFixed(3))
+      const origin = p.min ?? 0
+      out[p.key] = Math.min(p.max ?? Infinity, Math.max(p.min ?? -Infinity, Number((origin + Math.round((clamped - origin) / step) * step).toFixed(3))))
     }
   }
   return out
 }
 
 export const defaults = (design: GiftDesign) => cleanValues(design, {})
+
+export interface SavedGift {
+  values?: unknown
+  colours?: Record<string, string>
+  fontId?: string
+}
+
+/** Ignore corrupt entries individually so one bad draft does not lose the rest. */
+export function parseGiftStorage(raw: string): Record<string, SavedGift> {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(Object.entries(parsed).filter(([, entry]) => entry && typeof entry === 'object' && !Array.isArray(entry)))
+  } catch {
+    return {}
+  }
+}
 
 /** Parameters every flat design shares: thickness of the body and the raised layer. */
 export const THICKNESS: GiftParam[] = [
@@ -201,6 +219,38 @@ function area(poly: [number, number][]) {
 
 export { withTab }
 
+/** Join detached marks in structural letters while retaining their counters. */
+export function connectedLetter(region: Region): Region {
+  const pieces = islands(region).sort((a, b) => Math.abs(area(b[0])) - Math.abs(area(a[0])))
+  if (pieces.length < 2) return region
+  const joined = [pieces.shift()!]
+  const bridges: Region[] = []
+  while (pieces.length) {
+    let best = { distance: Infinity, index: 0, a: [0, 0] as [number, number], b: [0, 0] as [number, number] }
+    pieces.forEach((piece, index) => {
+      for (const a of piece[0]) for (const other of joined) for (const b of other[0]) {
+        const distance = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+        if (distance < best.distance) best = { distance, index, a, b }
+      }
+    })
+    bridges.push(stroke([best.a, best.b], 1.6))
+    joined.push(pieces.splice(best.index, 1)[0])
+  }
+  return union(region, ...bridges)
+}
+
+/** A centred foot gives a flat-printed sign real depth when stood on its edge. */
+export function standingFoot(region: Region, colour: string, top: number, height = 6): GiftLayer {
+  const b = bounds(region)
+  const depth = Math.max(24, b.h * 0.22, top)
+  return {
+    colour,
+    region: roundRect(b.cx, b.minY - height / 2 + 2, Math.max(30, b.w + 4), height, 2),
+    z: (top - depth) / 2,
+    h: depth,
+  }
+}
+
 // ——— layers to parts ———
 
 /**
@@ -208,21 +258,43 @@ export { withTab }
  * colours ever fill the same space (a multi-colour slicer needs that).
  */
 export function resolve(layers: GiftLayer[]): GiftLayer[] {
-  const out = layers.map((l) => ({ ...l }))
-  for (let i = 0; i < out.length; i++) {
-    for (let j = i + 1; j < out.length; j++) {
-      const a = out[i]
-      const b = out[j]
-      // Flat and standing layers lie in different planes; only like ones are compared.
-      if ((a.stand ?? null) !== (b.stand ?? null)) continue
-      if (a.z >= b.z + b.h - 1e-6 || b.z >= a.z + a.h - 1e-6) continue
-      a.region = diff(a.region, b.region)
+  const out: GiftLayer[] = []
+  const valid = layers.filter((l) => l.region.length && l.h > 0 && Number.isFinite(l.z) && Number.isFinite(l.h))
+  const boxes = valid.map((l) => bounds(l.region))
+  for (let i = 0; i < valid.length; i++) {
+    const layer = valid[i]
+    const box = boxes[i]
+    const cutters = valid.slice(i + 1).filter((b, j) => {
+      const bb = boxes[i + 1 + j]
+      return box.minX < bb.maxX && bb.minX < box.maxX && box.minY < bb.maxY && bb.minY < box.maxY &&
+        (layer.stand ?? null) === (b.stand ?? null) && b.z < layer.z + layer.h - 1e-6 && layer.z < b.z + b.h - 1e-6
+    })
+    const cuts = [...new Set([layer.z, layer.z + layer.h, ...cutters.flatMap((b) =>
+      [Math.max(layer.z, b.z), Math.min(layer.z + layer.h, b.z + b.h)])])].sort((a, b) => a - b)
+    for (let k = 0; k < cuts.length - 1; k++) {
+      const z = cuts[k], end = cuts[k + 1]
+      const clips = cutters.filter((b) => b.z < end - 1e-6 && b.z + b.h > z + 1e-6)
+      out.push({ ...layer, z, h: end - z, region: clips.length ? diff(layer.region, union(...clips.map((b) => b.region))) : layer.region })
     }
   }
-  // Opened a hair with square joins: cuts and unions can leave edges that touch
+  // Opened a hair: cuts and unions can leave edges that touch
   // along a line (a hole meeting its outline), which does not close as a solid.
   // Specks under 0.1 mm² are dropped too: they print as nothing and break the mesh.
-  for (const l of out) l.region = offset(offset(l.region, -0.02, true), 0.02, true).filter((poly) => Math.abs(area(poly)) >= 0.1)
+  for (const l of out) {
+    const opened = offset(offset(l.region, -0.05), 0.05)
+    // Clipper's 0.001 mm rounding can leave edges shorter than STL welding
+    // tolerance at acute cuts. Remove those redundant vertices before meshing.
+    const clean = opened.map((poly) => {
+      const points: [number, number][] = []
+      for (const p of poly) {
+        const last = points.at(-1)
+        if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= 0.005) points.push(p)
+      }
+      if (points.length > 1 && Math.hypot(points[0][0] - points.at(-1)![0], points[0][1] - points.at(-1)![1]) < 0.005) points.pop()
+      return points
+    }).filter((poly) => poly.length >= 3)
+    l.region = islands(union(clean)).filter((island) => area(island[0]) >= 0.1).flat()
+  }
   return out.filter((l) => l.region.length && l.h > 0)
 }
 
@@ -266,8 +338,14 @@ export function toModel(design: GiftDesign, result: GiftResult, colours: Record<
     box.minZ = Math.min(box.minZ, bb.min.z); box.maxZ = Math.max(box.maxZ, bb.max.z)
   }
   const some = list.length > 0
+  const thinText = result.layers.some((l) => ['text', 'name'].includes(l.colour) &&
+    islands(l.region).some((island) => !offset(island, -0.5).length))
+  const warning = [result.warning,
+    thinText ? 'ตัวอักษรบางส่วนเล็กกว่า 1 มม. ลองเพิ่มขนาดหรือลดข้อความ' : undefined,
+    layers.some((l) => l.z < 0) ? 'ฐานตั้งยื่นสองด้าน เปิดซัพพอร์ตใต้แผ่นป้ายและตรวจทิศทางก่อนพิมพ์' : undefined,
+  ].filter(Boolean).join('\n') || undefined
   return {
-    parts: list, tints, layers, warning: result.warning,
+    parts: list, tints, layers, warning,
     width: some ? box.maxX - box.minX : 0,
     height: some ? box.maxY - box.minY : 0,
     thickness: some ? box.maxZ - box.minZ : 0,
@@ -282,7 +360,7 @@ export function svgPath(region: Region) {
 /** A top view of the design for catalogue cards: layers drawn bottom to top. */
 export function topView(layers: GiftLayer[], colours: Record<string, string>, upright = false) {
   if (upright) layers = frontView(layers)
-  const all = union(...layers.map((l) => l.region))
+  const all = layers.flatMap((l) => l.region)
   if (!all.length) return null
   const b = bounds(all)
   const pad = Math.max(b.w, b.h) * 0.06

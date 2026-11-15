@@ -1,9 +1,9 @@
 import { puffUp } from '../bubbleKeychain'
 import { charmArt } from '../charms'
-import { bounds, circle, diff, ngon, offset, rect, roundRect, scale, stroke, translate, union, type Region } from '../geo2d'
+import { bounds, circle, diff, intersect, ngon, offset, rect, roundRect, scale, stroke, translate, union, type Region } from '../geo2d'
 import { silhouette } from '../styles/kit'
 import {
-  filled, fillSmallHoles, fitText, missingGlyphs, num, str, THICKNESS,
+  connectedLetter, filled, standingFoot, fillSmallHoles, fitText, missingGlyphs, num, str, THICKNESS,
   type GiftContext, type GiftDesign, type GiftLayer, type GiftParam, type GiftValues,
 } from './core'
 import { daisy, leafBranch } from './patterns'
@@ -22,13 +22,13 @@ const centreAt = (region: Region, x: number, y: number): Region => {
 }
 const soft = (art: Region, h: number) => puffUp(art, Math.min(0.5, h * 0.04))
 
-function plinth(region: Region, h: number): Region {
-  const b = bounds(region)
-  return roundRect((b.minX + b.maxX) / 2, b.minY - h / 2 + 0.6, Math.max(30, b.w * 0.62), h, Math.min(2, h / 2))
-}
 
 /** An open container: a floor and a wall following `shape` (seen from above). */
 function cup(shape: Region, height: number, wall: number, floor: number, colour: string): GiftLayer[] {
+  // A flat front wall gives the standing plate an area of contact instead of
+  // touching a round/hexagonal cup only along a tangent line.
+  const b = bounds(shape)
+  shape = union(shape, rect(b.cx, b.minY + wall / 2, b.w * 0.65, wall))
   return [
     { colour, region: shape, z: 0, h: floor },
     { colour, region: diff(shape, offset(shape, -wall)), z: floor, h: height - floor },
@@ -68,7 +68,7 @@ const CUP_COLOURS = [
 ]
 
 const CUP_HOWTO = [
-  'กล่องพิมพ์ตั้งตรง ป้ายชื่อยื่นจากผนังด้านหน้า ไม่ต้องใช้ซัพพอร์ต ตัวอักษรบนผนังตั้งใช้พิมพ์หลายสีแบบแยกวัตถุ (AMS)',
+  'กล่องพิมพ์ตั้งตรง ป้ายชื่อยื่นจากผนังด้านหน้า เปิดซัพพอร์ตใต้ป้ายและลายที่ยื่น ตัวอักษรบนผนังตั้งใช้พิมพ์หลายสีแบบแยกวัตถุ (AMS)',
   'ถ้าพิมพ์สีเดียว ทาสีตัวอักษรภายหลังได้',
 ]
 
@@ -238,14 +238,15 @@ function petBowl(ctx: GiftContext, v: GiftValues, curved: boolean) {
   const name = str(v, 'name')
   if (missingGlyphs(ctx.font, name)) return { layers: [], warning: NO_GLYPH }
   const R1 = num(v, 'width') / 2
-  const R0 = R1 * 0.72
   const H = num(v, 'height')
+  // Bound the maximum radial slope, including the curved profile's pi/2 factor.
+  const R0 = Math.max(R1 * 0.72, R1 - (H - 3) / (curved ? Math.PI / 2 : 1))
   const wall = num(v, 'wall')
   const floor = 3
   const steps = Math.max(12, Math.round(H / 0.6))
   const layers: GiftLayer[] = [{ colour: 'cup', region: circle(0, 0, R0, 128), z: 0, h: floor }]
   for (let i = 0; i < steps; i++) {
-    const t = (i + 0.5) / steps
+    const t = i / steps
     const k = curved ? Math.sin((t * Math.PI) / 2) : t
     const R = R0 + (R1 - R0) * k
     const z = floor + ((H - floor) * i) / steps
@@ -275,14 +276,15 @@ function photoFrame(ctx: GiftContext, v: GiftValues) {
   const winY = (H / 2 - side) - ph / 2
   const window = rect(0, winY, pw, ph)
   const lip = rect(0, winY, pw - 6, ph - 6)
-  const fit = fitText(ctx.font, name, W * 0.8, bar * 0.7, bar * 0.6, false)
+  const fit = fitText(ctx.font, name, Math.max(1, W - 2 * side - bar), bar * 0.7, bar * 0.6, false)
   const face = fit.art.length ? soft(centreAt(fit.art, 0, -H / 2 + bar / 2), fit.height) : []
   const heart = sized(charmArt('heart'), bar * 0.4)
   const hearts = union(centreAt(heart, -W / 2 + side + bar * 0.25, -H / 2 + bar / 2), centreAt(heart, W / 2 - side - bar * 0.25, -H / 2 + bar / 2))
   return {
     layers: [
       // Back with a slightly smaller window: the photo sits in the front recess on this lip.
-      { colour: 'plate', region: diff(union(outer, plinth(outer, 8)), lip), z: 0, h: 1.6 },
+      standingFoot(outer, 'plate', 1.6 + t, 8),
+      { colour: 'plate', region: diff(outer, lip), z: 0, h: 1.6 },
       { colour: 'plate', region: diff(outer, window), z: 1.6, h: t },
       { colour: 'text', region: face, z: 1.6 + t, h: num(v, 'raise') },
       { colour: 'motif', region: hearts, z: 1.6 + t, h: num(v, 'raise') },
@@ -300,12 +302,14 @@ function magnet(ctx: GiftContext, v: GiftValues) {
   const fit = fitText(ctx.font, name, b.w * 0.72, b.h * 0.42, b.h * 0.34)
   const face = fit.art.length ? soft(centreAt(fit.art, (b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2 - b.h * 0.04), fit.height) : []
   const md = num(v, 'magnet')
-  const t = Math.max(num(v, 'base'), 2.4)
+  const t = Math.max(num(v, 'base'), 3.4)
+  const pocket = circle(b.cx, b.cy, md / 2 + 0.15, 48)
+  if (diff(offset(pocket, 1.2), shape).length) return { layers: [], warning: 'ช่องแม่เหล็กใหญ่เกินรูปทรง ลองลดขนาดแม่เหล็กหรือเพิ่มขนาดป้าย' }
   return {
     layers: [
       { colour: 'plate', region: diff(shape, circle((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, md / 2 + 0.15, 48)), z: 0, h: 2.2 },
       { colour: 'plate', region: shape, z: 2.2, h: t - 2.2 },
-      { colour: 'text', region: face, z: t, h: num(v, 'raise') },
+      { colour: 'text', region: intersect(face, shape), z: t, h: num(v, 'raise') },
     ],
   }
 }
@@ -367,7 +371,8 @@ function musicPlaque(ctx: GiftContext, v: GiftValues, heartbeat: boolean) {
   art.push(diff(circle(0, cy, s * 1.9, 48), offset(play, 0.6)), prev, next)
   return {
     layers: [
-      { colour: 'plate', region: union(plate, plinth(plate, 8)), z: 0, h: t },
+      standingFoot(plate, 'plate', t, 8),
+      { colour: 'plate', region: plate, z: 0, h: t },
       { colour: 'text', region: union(...art), z: t, h: r },
     ],
   }
@@ -387,13 +392,14 @@ function glassesSign(ctx: GiftContext, v: GiftValues) {
   const temples = union(stroke([[-W / 4 - lens / 2 + 1.5, lens * 0.2], [-W / 2 - 6, lens * 0.4]], 3), stroke([[W / 4 + lens / 2 - 1.5, lens * 0.2], [W / 2 + 6, lens * 0.4]], 3))
   const fit = fitText(ctx.font, name, W * 0.85, lens * 0.4, lens * 0.32, false)
   const face = fit.art.length ? soft(centreAt(fit.art, 0, -lens * 0.68), fit.height) : []
-  const body = union(frames, bridge, temples, face.length ? silhouette(face, 3) : [])
+  const body = connectedLetter(union(frames, bridge, temples, face.length ? silhouette(face, 3) : []))
   return {
     layers: [
       // Small gaps between the plinth and the name backing are filled; the lens openings stay.
-      { colour: 'plate', region: fillSmallHoles(union(body, plinth(body, 6)), 200), z: 0, h: t },
+      standingFoot(body, 'plate', t),
+      { colour: 'plate', region: fillSmallHoles(body, 200), z: 0, h: t },
       { colour: 'text', region: face, z: t, h: num(v, 'raise') },
-      { colour: 'motif', region: union(...[-1, 1].map((sx) => offset(lensAt((sx * W) / 4), -3.4))), z: 0, h: 1.2 },
+      { colour: 'motif', region: union(...[-1, 1].map((sx) => offset(lensAt((sx * W) / 4), -2.8))), z: 0, h: 1.2 },
     ],
   }
 }
@@ -482,7 +488,7 @@ export const ROUND3: GiftDesign[] = [
       { key: 'shape', label: 'รูปทรง', kind: 'choice', default: 'cloud', options: KEY_SHAPES },
       { key: 'size', label: 'ขนาด', kind: 'number', default: 50, min: 30, max: 100, step: 1, unit: 'มม.' },
       { key: 'magnet', label: 'ขนาดแม่เหล็ก', kind: 'number', default: 10, min: 6, max: 20, step: 1, unit: 'มม.', hint: 'แม่เหล็กกลมหนา 2 มม.' },
-      ...THICKNESS,
+      ...THICKNESS.map((p) => p.key === 'base' ? { ...p, min: 3.4 } : p),
     ],
     colours: HOME_COLOURS.filter((c) => c.key === 'plate' || c.key === 'text'),
     howTo: ['พิมพ์คว่ำด้านเรียบลง ช่องแม่เหล็กลึก 2.2 มม. กดแม่เหล็กลงแล้วหยดกาวร้อนหรืออีพ็อกซี'],
