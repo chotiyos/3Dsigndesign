@@ -7,7 +7,16 @@ import {
   type GiftContext, type GiftDesign, type GiftLayer, type GiftParam, type GiftValues,
 } from './core'
 import { daisy, leafBranch } from './patterns'
-import { KEY_SHAPES } from './round1'
+
+const KEY_SHAPES = [
+  { id: 'heart', label: 'หัวใจ' },
+  { id: 'star', label: 'ดาว' },
+  { id: 'cloud', label: 'ก้อนเมฆ' },
+  { id: 'flower', label: 'ดอกไม้' },
+  { id: 'circle', label: 'วงกลม' },
+  { id: 'bear', label: 'หมี' },
+  { id: 'cat', label: 'แมว' },
+]
 
 const NO_GLYPH = 'ฟอนต์นี้ไม่มีตัวอักษรบางตัว ลองเปลี่ยนฟอนต์หรือลบอักขระที่ไม่รองรับ'
 

@@ -4,8 +4,8 @@ import { BIRTH } from './birth'
 import { DOUBLE_LINE } from './doubleLine'
 import { LETTERS } from './letters'
 import { NAME_KEYS } from './nameKeys'
-import { ROUND1 } from './round1'
 import { ROUND3 } from './round3'
+import { SIGNS2 } from './signs2'
 import { TOPPERS } from './toppers'
 
 export * from './core'
@@ -14,7 +14,7 @@ export * from './core'
 export const GIFTS: GiftDesign[] = [
   ...LETTERS,
   ...DOUBLE_LINE,
-  ...ROUND1,
+  ...SIGNS2,
   ...AWARDS,
   ...BIRTH,
   ...TOPPERS,

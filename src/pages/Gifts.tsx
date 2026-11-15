@@ -12,7 +12,8 @@ import { Viewer } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
 import { Range } from '../ui/Range'
 
-export const GIFTS_KEY = 'jjdesign-gifts-v1'
+// v2: the designs were rebuilt with new settings; older saves do not fit them.
+export const GIFTS_KEY = 'jjdesign-gifts-v2'
 
 function readSaved(): Record<string, SavedGift> {
   try {
