@@ -5,8 +5,8 @@ import { DOUBLE_LINE } from './doubleLine'
 import { LETTERS } from './letters'
 import { NAME_KEYS } from './nameKeys'
 import { ROUND1 } from './round1'
-import { ROUND2 } from './round2'
 import { ROUND3 } from './round3'
+import { TOPPERS } from './toppers'
 
 export * from './core'
 
@@ -17,7 +17,7 @@ export const GIFTS: GiftDesign[] = [
   ...ROUND1,
   ...AWARDS,
   ...BIRTH,
-  ...ROUND2,
+  ...TOPPERS,
   ...NAME_KEYS,
   ...ROUND3,
 ]
