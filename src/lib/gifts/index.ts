@@ -1,5 +1,6 @@
 import type { GiftDesign } from './core'
 import { DOUBLE_LINE } from './doubleLine'
+import { LETTERS } from './letters'
 import { NAME_KEYS } from './nameKeys'
 import { ROUND1 } from './round1'
 import { ROUND2 } from './round2'
@@ -9,9 +10,9 @@ export * from './core'
 
 /** Every gift design, in catalogue order. */
 export const GIFTS: GiftDesign[] = [
-  ...ROUND1.filter((g) => g.group === 'initial'),
+  ...LETTERS,
   ...DOUBLE_LINE,
-  ...ROUND1.filter((g) => g.group !== 'initial'),
+  ...ROUND1,
   ...ROUND2,
   ...NAME_KEYS,
   ...ROUND3,

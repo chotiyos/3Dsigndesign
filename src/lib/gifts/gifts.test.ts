@@ -171,8 +171,8 @@ describe('gift catalogue', () => {
   it('cleans values to each parameter range', () => {
     const g = GIFTS[0]
     const v = cleanValues(g, { size: 9999, name: 'x'.repeat(50), stand: 'yes' })
-    expect(v.size).toBe(220)
-    expect(String(v.name)).toHaveLength(16)
-    expect(v.stand).toBe(true)
+    expect(v.size).toBe(g.params.find((p) => p.key === 'size')!.max)
+    expect(String(v.name)).toHaveLength(g.params.find((p) => p.key === 'name')!.maxChars!)
+    expect(v.stand).toBe(g.params.find((p) => p.key === 'stand')!.default)
   })
 })
