@@ -258,9 +258,7 @@ function patternText(ctx: GiftContext, v: GiftValues) {
   const layers: GiftLayer[] = [
     { colour: 'base', region: back, z: 0, h: 1.2 },
     { colour: 'pattern', region: patternWeb(str(v, 'pattern') as PatternKind, inner, Math.max(4, fit.height * 0.22)), z: 1.2, h: t - 1.2 },
-    // Opened a hair with square joins: puffed letters can leave the ring with
-    // edges that touch along a line, which does not close as a solid.
-    { colour: 'text', region: offset(offset(diff(face, inner), -0.02, true), 0.02, true), z: 0, h: t + num(v, 'raise') },
+    { colour: 'text', region: diff(face, inner), z: 0, h: t + num(v, 'raise') },
   ]
   if (v.stand) layers.unshift({ colour: 'base', region: plinth(back, 5), z: 0, h: 1.2 })
   return { layers }

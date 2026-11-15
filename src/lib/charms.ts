@@ -1,4 +1,4 @@
-import { bounds, circle, diff, offset, rect, regionArea, rotate, roundRect, scale, stroke, translate, union, type Region } from './geo2d'
+import { bounds, circle, diff, intersect, offset, rect, regionArea, rotate, roundRect, scale, stroke, translate, union, type Region } from './geo2d'
 
 /**
  * Small cute motifs to print beside a name. Each is our own drawing: a solid
@@ -6,7 +6,7 @@ import { bounds, circle, diff, offset, rect, regionArea, rotate, roundRect, scal
  * the base. Drawn on a grid of about ±1 (scaled by U to mm so small details
  * survive clipping), then normalised to 1 mm tall by `charmArt`.
  */
-export type CharmGroup = 'animal' | 'nature' | 'cute'
+export type CharmGroup = 'animal' | 'nature' | 'cute' | 'sport'
 
 export interface Charm {
   id: string
@@ -19,6 +19,7 @@ export const CHARM_GROUPS: { id: CharmGroup; name: string }[] = [
   { id: 'animal', name: 'สัตว์' },
   { id: 'nature', name: 'ธรรมชาติ' },
   { id: 'cute', name: 'ของน่ารัก' },
+  { id: 'sport', name: 'กีฬา' },
 ]
 
 const U = 10
@@ -250,6 +251,99 @@ export const CHARMS: Charm[] = [
       // The ring passes in front of the planet below, behind it above.
       const front = diff(ring, rotate(box(0, 0.5, 3, 1), 0.3))
       return union(diff(c(0, 0, 0.56), offset(front, 0.08 * U)), front, diff(ring, c(0, 0, 0.62)))
+    },
+  },
+  {
+    id: 'basketball', name: 'บาสเกตบอล', group: 'sport',
+    draw: () => diff(
+      c(0, 0, 1),
+      union(
+        box(0, 0, 0.09, 2.2), box(0, 0, 2.2, 0.09),
+        line(0.09, ...arc(-1.25, 0, 0.95, -0.95, 0.95, 20)),
+        line(0.09, ...arc(1.25, 0, 0.95, Math.PI - 0.95, Math.PI + 0.95, 20)),
+      ),
+    ),
+  },
+  {
+    id: 'soccer', name: 'ลูกฟุตบอล', group: 'sport',
+    draw: () => {
+      const pent = (x: number, y: number, r: number, turn: number) =>
+        poly(...Array.from({ length: 5 }, (_, i): [number, number] => {
+          const a = turn + Math.PI / 2 + (i * 2 * Math.PI) / 5
+          return [x + Math.cos(a) * r, y + Math.sin(a) * r]
+        }))
+      const outer = Array.from({ length: 5 }, (_, i) => {
+        const a = Math.PI / 2 + (i * 2 * Math.PI) / 5
+        return pent(Math.cos(a) * 0.86, Math.sin(a) * 0.86, 0.3, a + Math.PI / 2)
+      })
+      const seams = Array.from({ length: 5 }, (_, i) => {
+        const a = Math.PI / 2 + (i * 2 * Math.PI) / 5
+        return line(0.07, [Math.cos(a) * 0.3, Math.sin(a) * 0.3], [Math.cos(a) * 0.62, Math.sin(a) * 0.62])
+      })
+      // Edge patches stay inside a thin rim, so the ball keeps a round outline.
+      return diff(c(0, 0, 1), union(pent(0, 0, 0.32, 0), intersect(union(...outer), c(0, 0, 0.86)), ...seams))
+    },
+  },
+  {
+    id: 'usfootball', name: 'อเมริกันฟุตบอล', group: 'sport',
+    draw: () => {
+      // A lemon shape: where two circles overlap, turned on the diagonal.
+      const body = intersect(c(0, -0.55, 1), c(0, 0.55, 1))
+      const laces = union(box(0, 0, 0.9, 0.1), ...[-0.3, -0.1, 0.1, 0.3].map((x) => box(x, 0, 0.08, 0.32)))
+      const stripes = union(line(0.08, [-0.95, 0.24], [-0.82, -0.24]), line(0.08, [0.95, 0.24], [0.82, -0.24]))
+      return rotate(diff(body, union(laces, stripes)), Math.PI / 6)
+    },
+  },
+  {
+    id: 'goalpost', name: 'เสาประตูอเมริกันฟุตบอล', group: 'sport',
+    draw: () => union(line(0.16, [0, -1], [0, 0]), line(0.16, [-0.8, 0], [0.8, 0]), line(0.16, [-0.8, 0], [-0.8, 1]), line(0.16, [0.8, 0], [0.8, 1]), box(0, -1, 0.7, 0.14, 0.06)),
+  },
+  {
+    id: 'hoop', name: 'แป้นบาส', group: 'sport',
+    draw: () => {
+      const frame = diff(box(0, 0.62, 1.7, 0.95, 0.08), box(0, 0.62, 1.42, 0.67, 0.04))
+      const target = diff(box(0, 0.5, 0.6, 0.4), box(0, 0.52, 0.42, 0.22))
+      const rim = diff(el(0, 0.12, 0.44, 0.12), el(0, 0.13, 0.34, 0.05))
+      const net = diff(poly([-0.36, 0.08], [0.36, 0.08], [0.24, -0.62], [-0.24, -0.62]), union(translate(rotate(box(0, 0, 0.16, 0.16), Math.PI / 4), -0.15 * U, -0.14 * U), translate(rotate(box(0, 0, 0.16, 0.16), Math.PI / 4), 0.15 * U, -0.14 * U), box(0, -0.45, 0.2, 0.13)))
+      return union(frame, target, rim, net)
+    },
+  },
+  {
+    id: 'strawberry', name: 'สตรอว์เบอร์รี่', group: 'nature',
+    draw: () => {
+      const berry = union(el(0, -0.05, 0.78, 0.62), poly([-0.72, -0.2], [0, -1], [0.72, -0.2]))
+      const seeds = union(...[[-0.35, -0.05], [0.05, 0.05], [0.4, -0.08], [-0.15, -0.38], [0.22, -0.4], [0, -0.68]].map(([x, y]) => el(x, y, 0.06, 0.1)))
+      const leaves = union(...[-0.42, -0.14, 0.14, 0.42].map((x) => el(x, 0.6, 0.2, 0.12, x * 0.9)), box(0, 0.86, 0.1, 0.32, 0.04))
+      return union(diff(berry, union(seeds, offset(leaves, 0.06 * U))), leaves)
+    },
+  },
+  {
+    id: 'butterfly', name: 'ผีเสื้อ', group: 'animal',
+    draw: () => {
+      const wings = mirror(union(el(-0.5, 0.32, 0.5, 0.52, 0.5), el(-0.42, -0.42, 0.34, 0.38, -0.4)))
+      const spots = mirror(union(c(-0.55, 0.38, 0.14), c(-0.42, -0.45, 0.1)))
+      const body = union(el(0, -0.05, 0.1, 0.62), line(0.06, [0, 0.5], [-0.24, 0.98]), line(0.06, [0, 0.5], [0.24, 0.98]))
+      return union(diff(wings, union(spots, offset(body, 0.07 * U))), body)
+    },
+  },
+  {
+    id: 'unicorn', name: 'ยูนิคอร์น', group: 'animal',
+    draw: () => {
+      // Head in profile, facing right: skull, muzzle, ear, horn and a wavy mane.
+      const head = union(el(-0.05, 0.05, 0.5, 0.55), el(0.42, -0.25, 0.42, 0.3, -0.35), poly([-0.25, 0.42], [-0.15, 0.85], [0.05, 0.5]))
+      const horn = poly([0.05, 0.48], [0.38, 1], [0.2, 0.42])
+      const mane = union(c(-0.5, 0.4, 0.22), c(-0.62, 0.08, 0.22), c(-0.6, -0.24, 0.2), c(-0.48, -0.52, 0.18))
+      const cut = union(c(0.12, 0.08, 0.07), c(0.68, -0.32, 0.05), line(0.05, [0.24, 0.6], [0.28, 0.66]))
+      return diff(union(head, horn, mane, box(-0.2, -0.65, 0.5, 0.42, 0.1)), union(cut, line(0.06, [-0.32, 0.36], [-0.3, -0.5])))
+    },
+  },
+  {
+    id: 'racecar', name: 'รถแข่ง', group: 'cute',
+    draw: () => {
+      const body = union(box(0, -0.12, 2, 0.46, 0.18), poly([-0.55, 0.1], [-0.3, 0.42], [0.35, 0.42], [0.6, 0.1]), box(-0.92, 0.22, 0.26, 0.36, 0.05))
+      const windowCut = poly([-0.38, 0.14], [-0.22, 0.34], [0.05, 0.34], [0.05, 0.14])
+      const wheels = union(c(-0.58, -0.42, 0.3), c(0.6, -0.42, 0.3))
+      return union(diff(body, union(windowCut, offset(wheels, 0.08 * U), c(0.3, -0.05, 0.13))), diff(wheels, union(c(-0.58, -0.42, 0.1), c(0.6, -0.42, 0.1))))
     },
   },
 ]

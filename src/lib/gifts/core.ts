@@ -1,6 +1,6 @@
 import type * as THREE from 'three'
 import { layoutRows, splits, withTab, words } from '../bubbleKeychain'
-import { bounds, diff, union, type Region } from '../geo2d'
+import { bounds, diff, offset, union, type Region } from '../geo2d'
 import { hb, type LoadedFont } from '../hb'
 import { extrude, merge } from '../solid'
 import { Parts } from '../styles/kit'
@@ -202,6 +202,10 @@ export function resolve(layers: GiftLayer[]): GiftLayer[] {
       a.region = diff(a.region, b.region)
     }
   }
+  // Opened a hair with square joins: cuts and unions can leave edges that touch
+  // along a line (a hole meeting its outline), which does not close as a solid.
+  // Specks under 0.1 mm² are dropped too: they print as nothing and break the mesh.
+  for (const l of out) l.region = offset(offset(l.region, -0.02, true), 0.02, true).filter((poly) => Math.abs(area(poly)) >= 0.1)
   return out.filter((l) => l.region.length && l.h > 0)
 }
 
