@@ -1,9 +1,9 @@
 import { useDeferredValue, useEffect, useMemo, useState, type JSX } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { buildZip, downloadBlob, partsList, partStats, printableStl, safeName } from '../lib/exportModel'
-import { FONT_OPTIONS } from '../lib/fonts'
+import { GIFT_FONTS } from '../lib/fonts'
 import {
-  cleanText, cleanValues, defaults, findGift, GIFT_GROUPS, GIFTS, graphemeCount, parseGiftStorage, toModel, topView,
+  cleanText, cleanValues, DEFAULT_GIFT_FONT, defaults, findGift, fontKey, neededFonts, GIFT_GROUPS, GIFTS, graphemeCount, parseGiftStorage, toModel, topView,
   type GiftDesign, type GiftGroup, type GiftModel, type GiftParam, type GiftValues, type SavedGift,
 } from '../lib/gifts'
 import { loadFont, type LoadedFont } from '../lib/hb'
@@ -13,7 +13,6 @@ import { Icon } from '../ui/Icon'
 import { Range } from '../ui/Range'
 
 export const GIFTS_KEY = 'jjdesign-gifts-v1'
-const DEFAULT_FONT = 'kanit-bold'
 
 function readSaved(): Record<string, SavedGift> {
   try {
@@ -74,22 +73,28 @@ const PAGES: { href: string; name: string; blurb: string; group: GiftGroup; art:
 ]
 const defaultColours = (d: GiftDesign) => Object.fromEntries(d.colours.map((c) => [c.key, c.default]))
 
-function useFont(fontId: string) {
-  const [loaded, setLoaded] = useState<{ id: string; font: LoadedFont } | null>(null)
+/** Loads several fonts; `fonts` is set once every one of them is ready. */
+function useFonts(ids: string[]) {
+  const key = [...new Set(ids)].sort().join('|')
+  const [loaded, setLoaded] = useState<{ key: string; fonts: Record<string, LoadedFont> } | null>(null)
   const [error, setError] = useState(false)
   useEffect(() => {
     let cancelled = false
     setError(false)
-    const option = FONT_OPTIONS.find((f) => f.id === fontId) ?? FONT_OPTIONS[0]
-    loadFont(option.url).then((font) => {
-      if (!cancelled) setLoaded({ id: fontId, font })
-    }).catch(() => {
-      if (!cancelled) setError(true)
-    })
+    const list = key.split('|').filter(Boolean)
+    Promise.all(list.map((id) => loadFont((GIFT_FONTS.find((f) => f.id === id) ?? GIFT_FONTS[0]).url).then((font) => [id, font] as const)))
+      .then((pairs) => { if (!cancelled) setLoaded({ key, fonts: Object.fromEntries(pairs) }) })
+      .catch(() => { if (!cancelled) setError(true) })
     return () => { cancelled = true }
-  }, [fontId])
-  return { font: loaded?.id === fontId ? loaded.font : null, error }
+  }, [key])
+  return { fonts: loaded?.key === key ? loaded.fonts : null, error }
 }
+
+/** The build context from loaded fonts. */
+const contextOf = (fonts: Record<string, LoadedFont>) => ({ font: fonts[DEFAULT_GIFT_FONT] ?? Object.values(fonts)[0], fonts })
+
+/** Fonts the catalogue thumbnails need: every design's default fonts. */
+const THUMB_FONTS = [...new Set(GIFTS.flatMap((d) => neededFonts(d, defaults(d))))]
 
 /** The whole catalogue, or one design when the path names it. */
 export default function Gifts({ id }: { id?: string }) {
@@ -103,7 +108,7 @@ export default function Gifts({ id }: { id?: string }) {
 function GiftCatalogue({ missing = false }: { missing?: boolean }) {
   useTitle('ของขวัญใส่ชื่อ')
   const [group, setGroup] = useState<GiftGroup | 'all'>('all')
-  const { font } = useFont(DEFAULT_FONT)
+  const { fonts: thumbFonts } = useFonts(THUMB_FONTS)
   const groups = GIFT_GROUPS.filter((g) => GIFTS.some((d) => d.group === g.id) || PAGES.some((pg) => pg.group === g.id))
   const shown = GIFTS.filter((d) => group === 'all' || d.group === group)
   const pages = PAGES.filter((pg) => group === 'all' || pg.group === group)
@@ -111,14 +116,15 @@ function GiftCatalogue({ missing = false }: { missing?: boolean }) {
   // Built one design at a time, yielding to the page between them.
   const [thumbs, setThumbs] = useState<Record<string, ReturnType<typeof topView>>>({})
   useEffect(() => {
-    if (!font) return
+    if (!thumbFonts) return
+    const ctx = contextOf(thumbFonts)
     let cancelled = false
     const queue = GIFTS.filter((d) => !thumbs[d.id])
     const next = () => {
       const d = queue.shift()
       if (!d || cancelled) return
       try {
-        const result = d.build({ font }, defaults(d))
+        const result = d.build(ctx, defaults(d))
         const view = topView(result.layers, defaultColours(d), d.upright)
         if (!cancelled) setThumbs((t) => ({ ...t, [d.id]: view }))
       } catch {
@@ -128,9 +134,9 @@ function GiftCatalogue({ missing = false }: { missing?: boolean }) {
     }
     let timer: number | undefined = window.setTimeout(next, 16)
     return () => { cancelled = true; clearTimeout(timer) }
-    // Thumbnails depend on the font only.
+    // Thumbnails depend on the fonts only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [font])
+  }, [thumbFonts])
 
   return (
     <div className="page gifts">
@@ -229,8 +235,9 @@ function GiftEditor({ design }: { design: GiftDesign }) {
     for (const [k, c] of Object.entries(saved.colours ?? {})) if (k in out && typeof c === 'string' && HEX.test(c)) out[k] = c.toLowerCase()
     return out
   })
-  const [fontId, setFontId] = useState(() => (FONT_OPTIONS.some((f) => f.id === saved.fontId) ? saved.fontId! : DEFAULT_FONT))
-  const { font, error: fontError } = useFont(fontId)
+  // Each text keeps its own font in the values (key@font); older saves had one font for all.
+  const { fonts, error: fontError } = useFonts(neededFonts(design, values))
+  const font = fonts ? contextOf(fonts).font : null
   const [explode, setExplode] = useState(0)
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
@@ -251,17 +258,17 @@ function GiftEditor({ design }: { design: GiftDesign }) {
     return () => clearTimeout(timer)
   }, [drafts, design, composing])
 
-  useEffect(() => writeSaved(design.id, { values, colours, fontId }), [design.id, values, colours, fontId])
+  useEffect(() => writeSaved(design.id, { values, colours }), [design.id, values, colours])
 
   const deferred = useDeferredValue(values)
   const model = useMemo<GiftModel | null>(() => {
-    if (!font) return null
+    if (!fonts) return null
     try {
-      return toModel(design, design.build({ font }, deferred), defaultColours(design))
+      return toModel(design, design.build(contextOf(fonts), deferred), defaultColours(design))
     } catch {
       return { parts: [], tints: {}, width: 0, height: 0, thickness: 0, layers: [], warning: 'สร้างแบบไม่สำเร็จ ลองเปลี่ยนข้อความหรือขนาด' }
     }
-  }, [design, font, deferred])
+  }, [design, fonts, deferred])
   const parts = useMemo(() => model?.parts ?? [], [model])
   useEffect(() => () => { parts.forEach((p) => p.geometry.dispose()) }, [parts])
   // Upright designs are modelled standing (z up) for printing; turn a copy to face the viewer.
@@ -344,14 +351,17 @@ function GiftEditor({ design }: { design: GiftDesign }) {
                   onChange={(e) => { setMessage(null); const val = e.target.value; const isComposing = composing || (e.nativeEvent as InputEvent).isComposing; setDrafts((d) => ({ ...d, [p.key]: isComposing ? val : cleanText(val, p.maxChars) })) }}
                 />
                 {p.hint && <small className="note">{p.hint}</small>}
+                <select
+                  className="gift-font"
+                  aria-label={`ฟอนต์ของ${p.label}`}
+                  value={String(values[fontKey(p.key)] ?? DEFAULT_GIFT_FONT)}
+                  onChange={(e) => set(fontKey(p.key), e.target.value)}
+                >
+                  {GIFT_FONTS.map((f) => <option key={f.id} value={f.id}>ฟอนต์ {f.label} · {f.note}</option>)}
+                </select>
               </label>
             ))}
-            <label className="field">
-              <span className="field-label">ฟอนต์</span>
-              <select value={fontId} onChange={(e) => { setMessage(null); setFontId(e.target.value) }}>
-                {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label} · {f.note}</option>)}
-              </select>
-            </label>
+            <p className="note">ฟอนต์อังกฤษตัวอ้วนใช้กับภาษาอังกฤษและตัวเลขเท่านั้น ชื่อภาษาไทยเลือก Kanit Prompt Mitr หรือ Itim</p>
             {fontError && <p className="form-error" role="alert">โหลดฟอนต์ไม่สำเร็จ ลองเปลี่ยนฟอนต์หรือรีเฟรชหน้าอีกครั้ง</p>}
           </section>
 

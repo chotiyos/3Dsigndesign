@@ -1,9 +1,9 @@
 import { initialOf, puffUp } from '../bubbleKeychain'
 import { charmArt } from '../charms'
-import { bounds, circle, diff, intersect, offset, rotate, roundRect, scale, translate, union, type Region } from '../geo2d'
+import { bounds, circle, diff, intersect, offset, roundRect, scale, translate, union, type Region } from '../geo2d'
 import { silhouette } from '../styles/kit'
 import {
-  connectedLetter, filled, standingFoot, fitText, LOOP, missingGlyphs, num, str, textArt, THICKNESS, withTab,
+  connectedLetter, standingFoot, fitText, missingGlyphs, num, str, textArt, THICKNESS,
   type GiftContext, type GiftDesign, type GiftLayer, type GiftParam, type GiftValues,
 } from './core'
 import { daisy, leafBranch, patternWeb, PATTERNS, type PatternKind } from './patterns'
@@ -124,80 +124,6 @@ const SIGN_COLOURS = [
   { key: 'motif', label: 'ลายการ์ตูน', default: '#ffffff' },
 ]
 
-const TWO_LINES: GiftParam[] = [
-  { key: 'line1', label: 'บรรทัดบน (ชื่อ)', kind: 'text', default: 'Mali', maxChars: 16 },
-  { key: 'line2', label: 'บรรทัดล่าง', kind: 'text', default: 'Happy Birthday', maxChars: 24 },
-  { key: 'size', label: 'ความสูงตัวอักษรบรรทัดบน', kind: 'number', default: 26, min: 12, max: 60, step: 1, unit: 'มม.' },
-  { key: 'length', label: 'ความยาวสูงสุด', kind: 'number', default: 160, min: 80, max: 300, step: 5, unit: 'มม.' },
-  { key: 'margin', label: 'ขอบฐานรอบตัวอักษร', kind: 'number', default: 4, min: 2, max: 10, step: 0.2, unit: 'มม.' },
-  { key: 'stand', label: 'ฐานตั้งโต๊ะ', kind: 'toggle', default: true },
-  ...THICKNESS,
-]
-
-/** Two lines of text, the second smaller, centred under the first. */
-function twoLines(ctx: GiftContext, v: GiftValues, room: number) {
-  const h1 = num(v, 'size')
-  const l1 = fitText(ctx.font, str(v, 'line1'), room, h1 * 1.6, h1, false)
-  const l2 = fitText(ctx.font, str(v, 'line2'), room, h1, h1 * 0.45, false)
-  const parts: Region[] = []
-  let y = 0
-  if (l1.art.length) {
-    const b = bounds(l1.art)
-    parts.push(soft(translate(l1.art, -(b.minX + b.maxX) / 2, -b.maxY), l1.height))
-    y = -b.h - l1.height * 0.18
-  }
-  if (l2.art.length) {
-    const b = bounds(l2.art)
-    parts.push(soft(translate(l2.art, -(b.minX + b.maxX) / 2, y - b.maxY), l2.height))
-  }
-  const art = union(...parts)
-  return { art, height: l1.height || l2.height }
-}
-
-function nameSign(ctx: GiftContext, v: GiftValues, motif: string) {
-  if (missingGlyphs(ctx.font, str(v, 'line1') + str(v, 'line2'))) return { layers: [], warning: NO_GLYPH }
-  const t = num(v, 'base')
-  const r = num(v, 'raise')
-  const margin = num(v, 'margin')
-  const length = num(v, 'length')
-  let { art } = twoLines(ctx, v, length - 2 * margin)
-  if (!art.length) return { layers: [] }
-  let tb = bounds(art)
-  let picture: Region = []
-  if (motif) {
-    // The motif to the left, as tall as both lines; the text shrinks to make room.
-    const mh = tb.h * 1.15
-    let m = sized(charmArt(motif), mh)
-    const maxMotifW = (length - 2 * margin) * 0.35
-    if (bounds(m).w > maxMotifW) m = scale(m, maxMotifW / bounds(m).w)
-    const mb = bounds(m)
-    const room = Math.max(1, length - 2 * margin - mb.w - margin)
-    if (tb.w > room) {
-      art = scale(art, room / tb.w)
-      tb = bounds(art)
-    }
-    picture = translate(m, tb.minX - margin - mb.maxX, (tb.minY + tb.maxY) / 2)
-  }
-  const face = union(art, picture)
-  const base = silhouette(face, margin)
-
-  return {
-    layers: [
-      ...(v.stand ? [standingFoot(base, 'base', t)] : []),
-      { colour: 'base', region: base, z: 0, h: t },
-      { colour: 'text', region: art, z: t, h: r },
-      { colour: 'motif', region: picture, z: t, h: r },
-    ],
-  }
-}
-
-const signDesign = (id: string, name: string, blurb: string, motif: string): GiftDesign => ({
-  id, name, blurb, group: 'namesign',
-  params: TWO_LINES,
-  colours: SIGN_COLOURS,
-  build: (ctx, v) => nameSign(ctx, v, motif),
-})
-
 /** The name on a plate filled with a turned pattern, framed by a rim. */
 function patternPlate(ctx: GiftContext, v: GiftValues, kind: PatternKind, banner: boolean) {
   const text = str(v, 'line1')
@@ -276,122 +202,6 @@ export const KEY_SHAPES = [
   { id: 'cat', label: 'แมว' },
 ]
 
-function shapeOf(id: string, h: number): Region {
-  if (id === 'circle') return circle(0, 0, h / 2, 96)
-  return sized(filled(charmArt(id)), h)
-}
-
-const KEY_PARAMS: GiftParam[] = [
-  { key: 'name', label: 'ชื่อ', kind: 'text', default: 'Ploy', maxChars: 12 },
-  { key: 'shape', label: 'รูปทรง', kind: 'choice', default: 'heart', options: KEY_SHAPES },
-  { key: 'size', label: 'ขนาด', kind: 'number', default: 45, min: 25, max: 90, step: 1, unit: 'มม.' },
-  { key: 'border', label: 'ขอบสีที่ 2', kind: 'number', default: 2.4, min: 1.2, max: 6, step: 0.2, unit: 'มม.' },
-  LOOP,
-  ...THICKNESS,
-]
-
-const KEY_COLOURS = [
-  { key: 'base', label: 'ฐาน', default: '#ff8fab' },
-  { key: 'inner', label: 'ชั้นกลาง', default: '#ffffff' },
-  { key: 'text', label: 'ชื่อ', default: '#d6336c' },
-  { key: 'centre', label: 'เกสร', default: '#ffd43b' },
-]
-
-/** A name fitted inside a shape's middle. */
-function nameInside(ctx: GiftContext, name: string, shape: Region, share = 0.72) {
-  const b = bounds(shape)
-  const fit = fitText(ctx.font, name, b.w * share, b.h * 0.42, b.h * 0.34)
-  if (!fit.art.length) return []
-  const nb = bounds(fit.art)
-  return intersect(shape, soft(translate(fit.art, (b.minX + b.maxX) / 2 - (nb.minX + nb.maxX) / 2, (b.minY + b.maxY) / 2 - (nb.minY + nb.maxY) / 2 - b.h * 0.04), fit.height))
-}
-
-function shapeKeychain(ctx: GiftContext, v: GiftValues, three: boolean) {
-  const name = str(v, 'name')
-  if (missingGlyphs(ctx.font, name)) return { layers: [], warning: NO_GLYPH }
-  const t = num(v, 'base')
-  const r = num(v, 'raise')
-  const shape = shapeOf(str(v, 'shape'), num(v, 'size'))
-  const text = nameInside(ctx, name, shape)
-  let base = shape
-  if (v.loop) base = withTab(base)
-  const layers: GiftLayer[] = [{ colour: 'base', region: base, z: 0, h: t }]
-  if (three) {
-    const inner = offset(shape, -num(v, 'border'))
-    layers.push({ colour: 'inner', region: inner, z: t, h: 0.6 })
-    layers.push({ colour: 'text', region: intersect(text, inner), z: t + 0.6, h: r })
-  } else {
-    layers.push({ colour: 'text', region: text, z: t, h: r })
-  }
-  return { layers }
-}
-
-function doubleHeart(ctx: GiftContext, v: GiftValues) {
-  const a = str(v, 'name')
-  const b2 = str(v, 'name2')
-  if (missingGlyphs(ctx.font, a + b2)) return { layers: [], warning: NO_GLYPH }
-  const s = num(v, 'size')
-  const left = translate(rotate(shapeOf('heart', s), 0.18), -s * 0.36, 0)
-  const right = translate(rotate(shapeOf('heart', s), -0.18), s * 0.36, -s * 0.04)
-  const t = num(v, 'base')
-  let base = union(left, right)
-  if (v.loop) base = withTab(base)
-  const ra = nameInside(ctx, a, translate(shapeOf('heart', s), -s * 0.36, 0), 0.62)
-  const rb = nameInside(ctx, b2, translate(shapeOf('heart', s), s * 0.36, -s * 0.04), 0.62)
-  return {
-    layers: [
-      { colour: 'base', region: base, z: 0, h: t },
-      { colour: 'inner', region: union(left, right), z: t, h: 0.6 },
-      { colour: 'text', region: intersect(union(ra, rb), union(left, right)), z: t + 0.6, h: num(v, 'raise') },
-    ],
-  }
-}
-
-function flowerKeychain(ctx: GiftContext, v: GiftValues, nameOnly: boolean) {
-  const name = str(v, 'name')
-  if (missingGlyphs(ctx.font, name)) return { layers: [], warning: NO_GLYPH }
-  const t = num(v, 'base')
-  const r = num(v, 'raise')
-  const s = num(v, 'size')
-  if (nameOnly) {
-    // The name with a daisy at each end, on a base that follows them.
-    const fit = fitText(ctx.font, name, s * 2, s * 0.7, s * 0.5, false)
-    if (!fit.art.length) return { layers: [] }
-    const face = soft(fit.art, fit.height)
-    const b = bounds(face)
-    const R = b.h * 0.62
-    const d1 = daisy(b.minX - R * 0.9, 0, R)
-    const d2 = daisy(b.maxX + R * 0.9, 0, R)
-    let base = silhouette(union(face, d1.petals, d2.petals, d1.centre, d2.centre), 2.4)
-    if (v.loop) base = withTab(base)
-    return {
-      layers: [
-        { colour: 'base', region: base, z: 0, h: t },
-        { colour: 'text', region: face, z: t, h: r },
-        { colour: 'inner', region: union(d1.petals, d2.petals), z: t, h: r },
-        { colour: 'centre', region: union(d1.centre, d2.centre), z: t, h: r + 0.4 },
-      ],
-    }
-  }
-  // A flower whose round centre carries the name.
-  const petals: Region[] = []
-  for (let i = 0; i < 6; i++) {
-    const a = (i * Math.PI) / 3 + Math.PI / 2
-    petals.push(circle(Math.cos(a) * s * 0.3, Math.sin(a) * s * 0.3, s * 0.22, 48))
-  }
-  const centre = circle(0, 0, s * 0.27, 96)
-  let base = union(...petals, centre)
-  if (v.loop) base = withTab(base)
-  const text = nameInside(ctx, name, centre, 0.86)
-  return {
-    layers: [
-      { colour: 'base', region: base, z: 0, h: t },
-      { colour: 'centre', region: centre, z: t, h: 0.6 },
-      { colour: 'text', region: intersect(text, centre), z: t + 0.6, h: r },
-    ],
-  }
-}
-
 export const ROUND1: GiftDesign[] = [
   letterDesign('initial-greenery', 'ป้ายอักษรใบไม้เขียว', 'ตัวอักษรใหญ่ไส้ระแนง มีกิ่งใบไม้พาดและชื่อคาด', 'slats', 'leaves'),
   letterDesign('initial-rattan', 'ป้ายอักษรลายหวาย', 'ตัวอักษรใหญ่ไส้ลายหวายสาน ขอบหนา ชื่อคาดกลาง', 'rattan', 'none'),
@@ -399,10 +209,6 @@ export const ROUND1: GiftDesign[] = [
   letterDesign('initial-lattice', 'ป้ายอักษรตาข่าย', 'ตัวอักษรใหญ่ไส้ตาข่ายข้าวหลามตัด ชื่อคาดกลาง', 'lattice', 'none'),
   letterDesign('initial-hex', 'ป้ายอักษรวงกลมรังผึ้ง', 'วงกลมไส้รังผึ้ง ตัวอักษรตั้งกลาง ชื่อคาดล่าง', 'hex', 'none', true),
   letterDesign('initial-daisy', 'ตัวอักษรดอกเดซี่', 'ตัวอักษรใหญ่ประดับดอกเดซี่ ไส้ลายจุด ชื่อคาด', 'dots', 'daisies'),
-  signDesign('sign-flower', 'ป้ายชื่อ 2 บรรทัด ลายดอกไม้', 'ชื่อตัวใหญ่ ข้อความบรรทัดล่าง และดอกไม้ด้านหน้า', 'flower'),
-  signDesign('sign-rocket', 'ป้ายชื่อ 2 บรรทัด ลายจรวด', 'ชื่อกับข้อความ คู่กับจรวด เหมาะห้องเด็ก', 'rocket'),
-  signDesign('sign-bunny', 'ป้ายชื่อ 2 บรรทัด ลายกระต่าย', 'ชื่อกับข้อความ คู่กับกระต่าย', 'bunny'),
-  signDesign('sign-planet', 'ป้ายชื่อ 2 บรรทัด ลายดาวเคราะห์', 'ชื่อกับข้อความ คู่กับดาวเคราะห์มีวงแหวน', 'planet'),
   {
     id: 'sign-pattern', name: 'ป้ายชื่อพื้นลายเฉียง', group: 'namesign', blurb: 'ป้ายทรงมน พื้นลายเฉียงฉลุ ชื่อนูนบนพื้นเรียบ',
     params: [...PLATE_PARAMS, { key: 'pattern', label: 'ลายพื้น', kind: 'choice', default: 'stripes', options: PATTERNS }],
@@ -424,37 +230,10 @@ export const ROUND1: GiftDesign[] = [
     colours: SIGN_COLOURS,
     build: patternText,
   },
-  {
-    id: 'key-shape2', name: 'พวงกุญแจรูปทรง 2 สี', group: 'keychain', blurb: 'รูปทรงน่ารัก ชื่อนูนอีกสี',
-    params: KEY_PARAMS.filter((p) => p.key !== 'border'), colours: KEY_COLOURS,
-    build: (ctx, v) => shapeKeychain(ctx, v, false),
-  },
-  {
-    id: 'key-shape3', name: 'พวงกุญแจรูปทรง 3 สี', group: 'keychain', blurb: 'รูปทรงมีขอบ ชั้นกลางอีกสี และชื่อสีที่สาม',
-    params: KEY_PARAMS, colours: KEY_COLOURS,
-    build: (ctx, v) => shapeKeychain(ctx, v, true),
-  },
-  {
-    id: 'key-double-heart', name: 'พวงกุญแจหัวใจคู่ 2 ชื่อ', group: 'keychain', blurb: 'หัวใจสองดวงซ้อนกัน ชื่อละดวง',
-    params: [
-      { key: 'name', label: 'ชื่อที่ 1', kind: 'text', default: 'Ploy', maxChars: 10 },
-      { key: 'name2', label: 'ชื่อที่ 2', kind: 'text', default: 'Ton', maxChars: 10 },
-      { key: 'size', label: 'ขนาดหัวใจ', kind: 'number', default: 40, min: 25, max: 80, step: 1, unit: 'มม.' },
-      LOOP, ...THICKNESS,
-    ],
-    colours: KEY_COLOURS,
-    build: doubleHeart,
-  },
-  {
-    id: 'key-flower', name: 'พวงกุญแจดอกไม้', group: 'keychain', blurb: 'ดอกไม้หกกลีบ ชื่ออยู่กลางเกสร',
-    params: KEY_PARAMS.filter((p) => p.key !== 'shape' && p.key !== 'border'), colours: KEY_COLOURS,
-    build: (ctx, v) => flowerKeychain(ctx, v, false),
-  },
-  {
-    id: 'key-daisy-name', name: 'พวงกุญแจชื่อดอกเดซี่', group: 'keychain', blurb: 'ชื่อตัวนูน ดอกเดซี่หัวท้าย',
-    params: KEY_PARAMS.filter((p) => p.key !== 'shape' && p.key !== 'border').map((p) => (p.key === 'size' ? { ...p, label: 'ความสูง', default: 30, min: 18, max: 60 } : p)),
-    colours: KEY_COLOURS,
-    build: (ctx, v) => flowerKeychain(ctx, v, true),
-  },
+
+
+
+
+
 ]
 

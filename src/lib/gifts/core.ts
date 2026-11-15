@@ -1,4 +1,5 @@
 import type * as THREE from 'three'
+import { GIFT_FONTS } from '../fonts'
 import { layoutRows, splits, withTab, words } from '../bubbleKeychain'
 import { bounds, diff, islands, offset, roundRect, stroke, union, type Region } from '../geo2d'
 import { hb, type LoadedFont } from '../hb'
@@ -41,6 +42,8 @@ export interface GiftParam {
   hint?: string
   /** Text: most characters (whole graphemes). */
   maxChars?: number
+  /** Text: the font it starts in (an id from GIFT_FONTS); each text can change its own. */
+  font?: string
   options?: GiftOption[]
   /** Shown only when another setting has this value. */
   when?: { key: string; is: (string | number | boolean)[] }
@@ -69,7 +72,25 @@ export interface GiftLayer {
 export type GiftValues = Record<string, string | number | boolean>
 
 export interface GiftContext {
+  /** The font for text that names no font of its own. */
   font: LoadedFont
+  /** Loaded fonts by id, for texts with their own font. */
+  fonts?: Record<string, LoadedFont>
+}
+
+/** The value key that holds a text's font id. */
+export const fontKey = (key: string) => `${key}@font`
+export const DEFAULT_GIFT_FONT = 'kanit-bold'
+
+/** The font a text should be drawn in: its own choice when loaded, else the context font. */
+export function fontOf(ctx: GiftContext, v: GiftValues, key: string): LoadedFont {
+  return ctx.fonts?.[String(v[fontKey(key)] ?? '')] ?? ctx.font
+}
+
+/** Font ids a design needs for these values. */
+export function neededFonts(design: GiftDesign, v: GiftValues): string[] {
+  const ids = design.params.filter((p) => p.kind === 'text').map((p) => String(v[fontKey(p.key)] ?? p.font ?? DEFAULT_GIFT_FONT))
+  return [...new Set([DEFAULT_GIFT_FONT, ...ids])]
 }
 
 export interface GiftResult {
@@ -111,7 +132,11 @@ export function cleanValues(design: GiftDesign, raw: unknown): GiftValues {
   const out: GiftValues = {}
   for (const p of design.params) {
     const v = o[p.key]
-    if (p.kind === 'text') out[p.key] = typeof v === 'string' ? cleanText(v, p.maxChars) : (p.default as string)
+    if (p.kind === 'text') {
+      out[p.key] = typeof v === 'string' ? cleanText(v, p.maxChars) : (p.default as string)
+      const f = o[fontKey(p.key)]
+      out[fontKey(p.key)] = typeof f === 'string' && GIFT_FONTS.some((x) => x.id === f) ? f : (p.font ?? DEFAULT_GIFT_FONT)
+    }
     else if (p.kind === 'toggle') out[p.key] = typeof v === 'boolean' ? v : (p.default as boolean)
     else if (p.kind === 'choice') out[p.key] = p.options?.some((op) => op.id === v) ? (v as string) : (p.default as string)
     else {

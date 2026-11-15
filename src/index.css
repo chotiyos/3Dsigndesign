@@ -3455,3 +3455,8 @@ input[type='range'] {
   flex: 1 0 auto;
   white-space: nowrap;
 }
+
+.gift-font {
+  margin-top: 6px;
+  font-size: 0.85rem;
+}
