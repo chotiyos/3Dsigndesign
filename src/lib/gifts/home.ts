@@ -45,7 +45,8 @@ function santaBox(ctx: GiftContext, v: GiftValues) {
   const santa = centreAt(sized(charmArt('santa'), H * 0.62), 0, H * 0.72)
   const name = text(ctx, v, 'name', W * 0.85, H * 0.24)
   const face = name.length ? centreAt(name, 0, H * 0.28) : []
-  const front = bounds(ribbed).minY
+  // The plate sinks half into the front wall, past the ribs, so it is fused to the jar.
+  const front = bounds(shape).minY + wall / 2
   layers.push({ colour: 'plate', region: silhouette(union(santa, face), 2.4), z: 0, h: t, stand: front })
   layers.push({ colour: 'santa', region: filled(santa), z: t, h: r, stand: front })
   layers.push({ colour: 'mark', region: diff(filled(santa), santa), z: t + r, h: 0.6, stand: front })

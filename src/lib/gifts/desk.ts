@@ -30,7 +30,7 @@ function text(ctx: GiftContext, v: GiftValues, key: string, w: number, h: number
   return fit.art.length ? puffUp(fit.art, Math.min(0.5, fit.height * 0.035)) : []
 }
 
-/** Front-plate layers on the plane y = front: plate, then pieces raised on it. */
+/** A front plate standing at `front`; callers sink it half into the box wall so it is fused, not just touching. */
 function plate(front: number, t: number, r: number, base: { region: Region; colour: string }, raised: { region: Region; colour: string; up?: number }[]): GiftLayer[] {
   return [
     { colour: base.colour, region: base.region, z: 0, h: t, stand: front },
@@ -60,8 +60,8 @@ function bee(ctx: GiftContext, v: GiftValues) {
   return {
     layers: [
       ...box(shape, H, num(v, 'wall'), 'box'),
-      { colour: 'plate', region: back, z: 0, h: t - 1, stand: -D / 2 },
-      ...plate(-D / 2, t - 1, r, { region: comb, colour: 'comb' }, [
+      { colour: 'plate', region: back, z: 0, h: t - 1, stand: -D / 2 + num(v, 'wall') / 2 },
+      ...plate(-D / 2 + num(v, 'wall') / 2, t - 1, r, { region: comb, colour: 'comb' }, [
         { region: outline, colour: 'outline' },
         { region: face, colour: 'text' },
         { region: filled(b), colour: 'plate' },
@@ -140,8 +140,8 @@ function nameplateBox(ctx: GiftContext, v: GiftValues) {
   return {
     layers: [
       ...box(shape, H * 0.7, num(v, 'wall'), 'box'),
-      { colour: 'lattice', region: lattice, z: 0, h: t - 1, stand: -D / 2 },
-      ...plate(-D / 2, t, r, { region: backing, colour: 'plate' }, art),
+      { colour: 'lattice', region: lattice, z: 0, h: t - 1, stand: -D / 2 + num(v, 'wall') / 2 },
+      ...plate(-D / 2 + num(v, 'wall') / 2, t, r, { region: backing, colour: 'plate' }, art),
     ],
   }
 }
@@ -164,7 +164,7 @@ function catBox(ctx: GiftContext, v: GiftValues) {
     layers: [
       ...box(shape, H, num(v, 'wall'), 'box'),
       { colour: 'box', region: translate(diff(scallops, rect(0, -W, W * 2, W * 2)), 0, H), z: 0, h: num(v, 'wall'), stand: D / 2 },
-      ...plate(-D / 2, t, r, { region: silhouette(union(face, filled(cat)), 2.4), colour: 'outline' }, [
+      ...plate(-D / 2 + num(v, 'wall') / 2, t, r, { region: silhouette(union(face, filled(cat)), 2.4), colour: 'outline' }, [
         { region: face, colour: 'text' },
         { region: filled(cat), colour: 'plate' },
         { region: diff(filled(cat), cat), colour: 'mark', up: r },

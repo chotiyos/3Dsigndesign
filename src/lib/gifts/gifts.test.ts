@@ -5,6 +5,7 @@ import { analyse } from '../solid'
 import { fontFromArrayBuffer } from '../hb'
 import { bounds, diff, islands, offset, rect, regionArea, union } from '../geo2d'
 import { cleanText, cleanValues, connectedLetter, defaults, GIFT_GROUPS, GIFTS, parseGiftStorage, resolve, standingFoot, toModel, topView } from './index'
+import { solidCount } from './connect'
 
 function font(file: string) {
   const bytes = readFileSync(`public/fonts/${file}`)
@@ -147,15 +148,18 @@ describe('gift catalogue', () => {
     expect(failures).toEqual([])
   }, 60_000)
 
-  it('keeps each flat design connected as an assembled object', () => {
+  it('builds every design as one solid, with no loose or floating pieces', () => {
+    // Bookends come as a pair of separate objects.
+    const expected: Record<string, number> = { 'desk-bookends': 2 }
     const failures: string[] = []
-    for (const g of GIFTS.filter((d) => !d.upright)) {
-      const layers = g.build({ font: kanit }, defaults(g)).layers
-      const count = islands(union(...layers.map((l) => l.region))).length
-      if (count !== 1) failures.push(`${g.id}: ${count}`)
+    for (const g of GIFTS) {
+      for (const f of [kanit, mitr]) {
+        const { count, loose } = solidCount(g.build({ font: f }, defaults(g)).layers)
+        if (count !== (expected[g.id] ?? 1)) failures.push(`${g.id}: ${count} :: ${loose.slice(0, 3).join(' | ')}`)
+      }
     }
     expect(failures).toEqual([])
-  }, 60_000)
+  }, 300_000)
 
   it('profiles default drawing and model generation', () => {
     const timings: { id: string; draw: number; model: number }[] = []
