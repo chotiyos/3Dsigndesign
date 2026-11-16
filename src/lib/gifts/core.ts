@@ -1,7 +1,7 @@
 import type * as THREE from 'three'
 import { GIFT_FONTS } from '../fonts'
 import { layoutRows, splits, withTab, words } from '../bubbleKeychain'
-import { bounds, diff, islands, offset, roundRect, stroke, union, type Region } from '../geo2d'
+import { bounds, diff, islands, offset, roundRect, stroke, translate, union, type Region } from '../geo2d'
 import { hb, type LoadedFont } from '../hb'
 import { extrude, merge } from '../solid'
 import { Parts } from '../styles/kit'
@@ -67,7 +67,16 @@ export interface GiftLayer {
    * the plane at y = stand (plus z) — a name plate on the front of a cup.
    */
   stand?: number
+  /**
+   * Wrapped layers (round containers): the region's x is the distance round
+   * a cylinder of this radius (0 = straight ahead, the front), its y the
+   * height; it is raised outwards by h from the cylinder, starting at z.
+   */
+  wrap?: number
 }
+
+/** Which plane a layer lies in: only layers in the same plane can overlap. */
+const planeOf = (l: GiftLayer) => (l.wrap !== undefined ? `w${l.wrap}` : l.stand !== undefined ? `s${l.stand}` : 'flat')
 
 export type GiftValues = Record<string, string | number | boolean>
 
@@ -292,7 +301,7 @@ export function resolve(layers: GiftLayer[]): GiftLayer[] {
     const cutters = valid.slice(i + 1).filter((b, j) => {
       const bb = boxes[i + 1 + j]
       return box.minX < bb.maxX && bb.minX < box.maxX && box.minY < bb.maxY && bb.minY < box.maxY &&
-        (layer.stand ?? null) === (b.stand ?? null) && b.z < layer.z + layer.h - 1e-6 && layer.z < b.z + b.h - 1e-6
+        planeOf(layer) === planeOf(b) && b.z < layer.z + layer.h - 1e-6 && layer.z < b.z + b.h - 1e-6
     })
     const cuts = [...new Set([layer.z, layer.z + layer.h, ...cutters.flatMap((b) =>
       [Math.max(layer.z, b.z), Math.min(layer.z + layer.h, b.z + b.h)])])].sort((a, b) => a - b)
@@ -342,6 +351,7 @@ export function toModel(design: GiftDesign, result: GiftResult, colours: Record<
   const order = design.colours.filter((c) => layers.some((l) => l.colour === c.key))
   order.forEach((c, i) => {
     const geometries: THREE.BufferGeometry[] = layers.filter((l) => l.colour === c.key).map((l) => {
+      if (l.wrap !== undefined) return wrapped(l)
       const g = extrude(l.region, l.h, l.z)
       // Stand it up: drawing y becomes height, the extrusion points to the front (−y).
       if (l.stand !== undefined) g.rotateX(Math.PI / 2).translate(0, l.stand, 0)
@@ -401,11 +411,37 @@ export function topView(layers: GiftLayer[], colours: Record<string, string>, up
  * height boxes, standing layers keep their drawing, front-most drawn last.
  */
 function frontView(layers: GiftLayer[]): GiftLayer[] {
-  const flat = layers.filter((l) => l.stand === undefined && l.region.length).map((l) => {
+  const flat = layers.filter((l) => l.stand === undefined && l.wrap === undefined && l.region.length).map((l) => {
     const b = bounds(l.region)
     const region: Region = [[[b.minX, l.z], [b.maxX, l.z], [b.maxX, l.z + l.h], [b.minX, l.z + l.h]]]
     return { ...l, region, z: -b.minY, h: 0 }
   })
   const standing = layers.filter((l) => l.stand !== undefined).map((l) => ({ ...l, z: 1e6 - (l.stand ?? 0) + l.z, h: 0 }))
+  const round = layers.filter((l) => l.wrap !== undefined).map((l) => ({ ...l, region: translate(l.region, 0, l.z), z: 2e6, h: 0 }))
+  standing.push(...round)
   return [...flat, ...standing]
+}
+
+/**
+ * A wrapped layer as a solid: the flat drawing, with its edges split into
+ * short steps, extruded and bent round the cylinder.
+ */
+function wrapped(l: GiftLayer): THREE.BufferGeometry {
+  const R = l.wrap!
+  const step = 1
+  const fine = l.region.map((poly) => poly.flatMap((p, i) => {
+    const q = poly[(i + 1) % poly.length]
+    const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / step))
+    return Array.from({ length: n }, (_, k) => [p[0] + ((q[0] - p[0]) * k) / n, p[1] + ((q[1] - p[1]) * k) / n] as [number, number])
+  }))
+  const g = extrude(fine, l.h, 0)
+  const pos = g.getAttribute('position')
+  for (let i = 0; i < pos.count; i++) {
+    const a = pos.getX(i) / R
+    const r = R + pos.getZ(i)
+    pos.setXYZ(i, Math.sin(a) * r, -Math.cos(a) * r, pos.getY(i) + l.z)
+  }
+  pos.needsUpdate = true
+  g.computeVertexNormals()
+  return g
 }

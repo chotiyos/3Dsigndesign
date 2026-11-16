@@ -1,10 +1,12 @@
 import type { GiftDesign } from './core'
 import { AWARDS } from './awards'
 import { BIRTH } from './birth'
+import { DESK } from './desk'
 import { DOUBLE_LINE } from './doubleLine'
+import { HOME } from './home'
 import { LETTERS } from './letters'
+import { CONNECT, MUSIC } from './music'
 import { NAME_KEYS } from './nameKeys'
-import { ROUND3 } from './round3'
 import { SIGNS2 } from './signs2'
 import { TOPPERS } from './toppers'
 
@@ -19,7 +21,10 @@ export const GIFTS: GiftDesign[] = [
   ...BIRTH,
   ...TOPPERS,
   ...NAME_KEYS,
-  ...ROUND3,
+  ...DESK,
+  ...HOME,
+  ...MUSIC,
+  CONNECT,
 ]
 
 export const findGift = (id: string) => GIFTS.find((g) => g.id === id)

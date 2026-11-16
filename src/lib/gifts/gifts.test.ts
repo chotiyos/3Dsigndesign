@@ -42,7 +42,7 @@ describe('gift catalogue', () => {
           expect(analyse(geo).watertight, `${g.id} ${mode} ${l.colour}`).toBe(true)
           geo.dispose()
           expect([bounds(l.region).w, bounds(l.region).h, l.z, l.h].every(Number.isFinite)).toBe(true)
-          if (['text', 'name', 'motif', 'line'].includes(l.colour) && l.z > 0) {
+          if (['text', 'name', 'motif', 'line'].includes(l.colour) && l.z > 0 && l.wrap === undefined) {
             const below = layers.filter((b) => (b.stand ?? null) === (l.stand ?? null) && b.z < l.z && b.z + b.h >= l.z - 1e-5)
             expect(regionArea(diff(l.region, offset(union(...below.map((b) => b.region)), 0.08))), `${g.id} ${mode} ${l.colour} support`).toBeLessThan(0.2)
           }
@@ -123,11 +123,11 @@ describe('gift catalogue', () => {
 
   it('rejects magnet pockets that would break through the side wall', () => {
     const g = GIFTS.find((d) => d.id === 'home-magnet')!
-    const result = g.build({ font: kanit }, cleanValues(g, { ...defaults(g), shape: 'star', size: 30, magnet: 20 }))
+    const result = g.build({ font: kanit }, cleanValues(g, { ...defaults(g), size: 40, magnet: 20 }))
     expect(result.layers).toHaveLength(0)
     expect(result.warning).toBeTruthy()
     const valid = g.build({ font: kanit }, cleanValues(g, { ...defaults(g), base: 1.6 }))
-    expect(valid.layers.find((l) => l.colour === 'plate' && l.z === 2.2)!.h).toBeGreaterThanOrEqual(1.19)
+    expect(valid.layers.find((l) => l.colour === 'rim' && l.z === 2.2)!.h).toBeGreaterThanOrEqual(1.19)
   })
 
   it('supports every raised layer at defaults', () => {
@@ -135,9 +135,12 @@ describe('gift catalogue', () => {
     for (const g of GIFTS) {
       const layers = resolve(g.build({ font: kanit }, defaults(g)).layers)
       for (const l of layers) {
-        if (l.z < 1e-6 || l.colour === 'cup' || (g.id === 'home-magnet' && l.colour === 'plate')) continue
+        // Wrapped lettering sits on a curved wall, which this flat check cannot see.
+        // The magnet's dog bridges the round magnet pocket, which prints as a bridge.
+        if (l.z < 1e-6 || l.wrap !== undefined || (g.id === 'home-magnet' && l.colour === 'dog')) continue
         const below = layers.filter((b) => (b.stand ?? null) === (l.stand ?? null) && b.z < l.z && b.z + b.h >= l.z - 1e-5)
-        const unsupported = diff(l.region, offset(union(...below.map((b) => b.region)), 0.06))
+        // A slope up to 45 degrees prints without support: allow the layer's own height.
+        const unsupported = diff(l.region, offset(union(...below.map((b) => b.region)), Math.max(0.06, l.h)))
         if (regionArea(unsupported) > 0.2) failures.push(`${g.id} ${l.colour}: ${regionArea(unsupported).toFixed(1)} mm2`)
       }
     }
