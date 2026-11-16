@@ -349,7 +349,11 @@ export function toModel(design: GiftDesign, result: GiftResult, colours: Record<
   const parts = new Parts()
   const tints: Record<string, string> = {}
   const order = design.colours.filter((c) => layers.some((l) => l.colour === c.key))
-  order.forEach((c, i) => {
+  // The exploded view lifts colours in the order they stack: a colour's place is
+  // its lowest layer, so nothing lower ever rises through something above it.
+  const base = (key: string) => Math.min(...layers.filter((l) => l.colour === key).map((l) => l.z))
+  const lift = new Map([...new Set(order.map((c) => base(c.key)))].sort((a, b) => a - b).map((z, i) => [z, i * 0.6]))
+  order.forEach((c) => {
     const geometries: THREE.BufferGeometry[] = layers.filter((l) => l.colour === c.key).map((l) => {
       if (l.wrap !== undefined) return wrapped(l)
       const g = extrude(l.region, l.h, l.z)
@@ -359,7 +363,7 @@ export function toModel(design: GiftDesign, result: GiftResult, colours: Record<
     })
     const geometry = merge(geometries)
     geometries.forEach((g) => g.dispose())
-    parts.solid(c.label, 'print', geometry, i * 0.6)
+    parts.solid(c.label, 'print', geometry, lift.get(base(c.key)) ?? 0)
   })
   const list = parts.done()
   list.forEach((p, i) => (tints[p.code] = colours[order[i].key] ?? order[i].default))
