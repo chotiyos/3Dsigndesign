@@ -315,7 +315,7 @@ export function buildLightbox(
   placed = placed.map((region) => (region.length ? intersect(region, window) : []))
 
   const double = o.sides === 2
-  // Double-sided: back chamber 0..depth, the divider (two tray floors), then the front chamber.
+  // Double-sided: back chamber 0..depth, the divider, then the front chamber.
   const z = double ? o.depth * 2 + o.back * 2 : o.back + o.depth
   const inner = offset(shape, -o.wall - o.gap)
   const plug = Math.min(3, o.depth - 2)
@@ -325,22 +325,25 @@ export function buildLightbox(
     const frame = ring(shape, o.wall)
     const sb = bounds(shape)
     const wireD = o.rear.wireD ?? 6
-    // The wire enters through a notch in the back tray's bottom wall at the seam,
+    // The wire enters through a notch in the bottom wall beside the divider,
     // and reaches the front chamber through a hole in the divider.
     const wire = o.rear.wire > 0
     const hole = wire ? circle(0, sb.minY + o.wall + wireD / 2 + 3, wireD / 2, 32) : []
     const floor = diff(shape, hole)
     const notchH = wire ? Math.min(wireD, o.depth - plug - 1) : 0
     const notch = rect(0, sb.minY + o.wall / 2, wireD, o.wall * 4)
-    const backTray = merge([
+    // One piece: the side frame with the divider across its middle. It prints
+    // standing on its bottom edge, so the divider is a wall, not a bridge.
+    const body = merge([
       extrude(frame, o.depth - notchH, 0),
       ...(notchH > 0 ? [extrude(diff(frame, notch), notchH, o.depth - notchH)] : []),
-      extrude(floor, o.back, o.depth),
+      extrude(floor, o.back * 2, o.depth),
+      extrude(frame, o.depth, o.depth + o.back * 2),
     ])
-    const frontTray = merge([extrude(floor, o.back, o.depth + o.back), extrude(frame, o.depth, o.depth + o.back * 2)])
     parts
-      .solid('กรอบหลังพร้อมแผ่นกั้นกลาง', 'print', backTray, -0.5)
-      .solid('กรอบหน้าพร้อมแผ่นกั้นกลาง', 'print', frontTray, 0)
+      .solid('กรอบพร้อมแผ่นกั้นกลาง', 'print', body, 0)
+      // Keeps letter B free, so the diffuser stays C as in a one-sided box.
+      .solid('', 'print', new BufferGeometry(), 0)
   } else {
     parts
       .back('ฝาหลังสวมใน', 'print', inner, o.back, 0, -1, offset(shape, -o.wall - 1))
@@ -376,10 +379,11 @@ export function buildLightbox(
       parts.slab('สี ' + (j + 1) + ' ' + layers[j].colour + (double ? ' หน้า' : ''), 'accent', region, layers[j].thick, z + o.diffuser, 1.5 + j * 0.15)
     })
     // The back reads the right way round from behind: the picture mirrored left to right.
+    // A contour box is not symmetric, so there the back keeps the outline and shows the picture reversed.
     if (double) placed.forEach((region, j) => {
       if (!region.length) return
       order.push(j)
-      parts.slab('สี ' + (j + 1) + ' ' + layers[j].colour + ' หลัง', 'accent', mirrorX(region), layers[j].thick, -o.diffuser - layers[j].thick, -2 - j * 0.15)
+      parts.slab('สี ' + (j + 1) + ' ' + layers[j].colour + ' หลัง', 'accent', o.shape === 'contour' ? region : mirrorX(region), layers[j].thick, -o.diffuser - layers[j].thick, -2 - j * 0.15)
     })
   }
   // Wire and wall fixings belong to a back plate; a double-sided box has none.
@@ -399,6 +403,7 @@ export function buildLightbox(
     window,
     face: shape,
     top: z + o.diffuser,
+    back: double ? { at: -o.diffuser, mirror: o.shape !== 'contour' } : undefined,
   }
   return { parts: applyMaterials(built, picks), colours: tints, width: b.w, height: b.h, art }
 }
@@ -412,13 +417,15 @@ export interface FaceArt {
   face: Region
   /** Height of the face's front surface. */
   top: number
+  /** Double-sided: the back face's outer surface, and whether its picture is mirrored to read right from behind. */
+  back?: { at: number; mirror: boolean }
 }
 
 /**
  * A paper-thin preview of the printed picture on the face, with texture
  * coordinates that map `rect` onto the image. Preview only, never exported.
  */
-export function faceDecal(art: FaceArt, image: string): SignPart {
+export function faceDecal(art: FaceArt, image: string, side: 'front' | 'back' = 'front'): SignPart {
   // Only where the picture is: the margin round it shows the plain panel.
   const { x, y, w, h } = art.rect
   const shown = intersect(art.window, [[[x, y], [x + w, y], [x + w, y + h], [x, y + h]]])
@@ -427,6 +434,18 @@ export function faceDecal(art: FaceArt, image: string): SignPart {
   const uv: number[] = []
   for (let i = 0; i < pos.count; i++) uv.push((pos.getX(i) - art.rect.x) / art.rect.w, (pos.getY(i) - art.rect.y) / art.rect.h)
   geometry.setAttribute('uv', new Float32BufferAttribute(uv, 2))
+  if (side === 'back' && art.back) {
+    // Facing backwards: mirrored left to right (which also turns the triangles to face -z),
+    // so the picture reads the right way round from behind.
+    const nrm = geometry.getAttribute('normal')
+    for (let i = 0; i < pos.count; i++) {
+      if (art.back.mirror) pos.setX(i, -pos.getX(i))
+      nrm.setXYZ(i, 0, 0, -1)
+    }
+    if (!art.back.mirror) geometry.setIndex(geometry.getIndex() ? Array.from(geometry.getIndex()!.array).map((_, k, a) => a[k - (k % 3) + [0, 2, 1][k % 3]]) : null)
+    geometry.translate(0, 0, art.back.at - 0.05)
+    return { id: 'face-art-back', code: 'ลาย', label: 'ลายพิมพ์บนแผ่นหลัง', material: 'opal', geometry, explode: -1.5, image }
+  }
   geometry.translate(0, 0, art.top + 0.05)
   return { id: 'face-art', code: 'ลาย', label: 'ลายพิมพ์บนหน้าแผ่น', material: 'opal', geometry, explode: 1, image }
 }

@@ -1429,6 +1429,15 @@ input[type='range'] {
   align-content: start;
 }
 
+/* Keep long words (a photo's file name) inside the column, never under the viewer. */
+.gen-form > * {
+  min-width: 0;
+}
+
+.gen-form .drop strong {
+  overflow-wrap: anywhere;
+}
+
 .gen-sub {
   font-size: 1.05rem;
   margin: 12px 0 0;

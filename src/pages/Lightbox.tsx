@@ -200,9 +200,13 @@ export default function Lightbox() {
   const printOf = (part: (typeof parts)[number]): MaterialId =>
     printPicks[faceOf(part)] ?? (part.label.startsWith('แผ่นกระจายแสง') ? 'opalprint' : part.label.startsWith('สี ') ? 'accent' : 'print')
   // The printed picture drawn on the face, preview only.
-  const decal = useMemo(() => (printedFace && model?.art && photo ? faceDecal(model.art, photo.url) : null), [printedFace, model, photo])
-  useEffect(() => () => decal?.geometry.dispose(), [decal])
-  const viewParts = useMemo(() => (decal ? [...parts, decal] : parts), [parts, decal])
+  // A double-sided box shows the printed picture on both faces.
+  const decals = useMemo(() => {
+    if (!printedFace || !model?.art || !photo) return []
+    return [faceDecal(model.art, photo.url), ...(model.art.back ? [faceDecal(model.art, photo.url, 'back')] : [])]
+  }, [printedFace, model, photo])
+  useEffect(() => () => decals.forEach((d) => d.geometry.dispose()), [decals])
+  const viewParts = useMemo(() => (decals.length ? [...parts, ...decals] : parts), [parts, decals])
   const dpi = printedFace && model?.art && photo ? effectiveDpi(model.art, photo.width) : 0
   /** Files a part gets: printed parts STL; sheet parts DXF, or DXF and STL. */
   function outputOf(part: (typeof parts)[number]): PartOutput {
@@ -277,7 +281,7 @@ export default function Lightbox() {
               <button type="button" aria-pressed={options.sides === 1} onClick={() => set('sides', 1)}>ไฟออกด้านหน้า</button>
               <button type="button" aria-pressed={options.sides === 2} onClick={() => set('sides', 2)}>ไฟออกหน้า-หลัง</button>
             </div>
-            {options.sides === 2 && <p className="note">สองฝั่งมีแผ่นกั้นกลางทึบแบ่งเป็น 2 ช่อง ไฟเส้นแยกแต่ละฝั่ง รูด้านหลังกลับซ้าย-ขวาให้อ่านถูกเมื่อมองจากด้านหลัง กรอบพิมพ์เป็น 2 ถาด แล้วติดกาวหลังชนกัน</p>}
+            {options.sides === 2 && <p className="note">กรอบกับแผ่นกั้นกลางเป็นชิ้นเดียว แบ่งเป็น 2 ช่อง ไฟเส้นแยกแต่ละฝั่ง พิมพ์กรอบตั้งบนขอบล่าง รูปด้านหลังกลับซ้าย-ขวาให้อ่านถูกเมื่อมองจากด้านหลัง (ทรงตามรูปจะเห็นรูปกลับด้าน)</p>}
             <div className="seg seg-small" role="group" aria-label="รูปทรงกล่อง">
               {SHAPES.map((s) => (
                 <button key={s.id} type="button" aria-pressed={options.shape === s.id} onClick={() => set('shape', s.id)}>{s.label}</button>

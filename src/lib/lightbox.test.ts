@@ -3,7 +3,7 @@ import { analyse } from './solid'
 import { describe, expect, it } from 'vitest'
 import { buildZip } from './exportModel'
 import { bounds, diff, offset, rect, regionArea } from './geo2d'
-import { borderColour, buildLightbox, DEFAULT_LIGHTBOX, quantize, stripLength, toHex, traceColours, type LightboxShape } from './lightbox'
+import { borderColour, buildLightbox, DEFAULT_LIGHTBOX, faceDecal, quantize, stripLength, toHex, traceColours, type LightboxShape } from './lightbox'
 
 /** 60×40 navy picture with a large green field and a small yellow square, plus a few anti-aliased edge pixels. */
 function picture() {
@@ -173,28 +173,32 @@ describe('double-sided lightbox', () => {
     return p.geometry.boundingBox!
   }
 
-  it('lights both faces, with two trays whose floors make the middle divider', () => {
+  it('lights both faces, with one frame whose middle divider splits the two chambers', () => {
     const { parts } = buildLightbox(q, colours, layers, o)
     try {
       const labels = parts.map((p) => p.label)
       expect(labels).not.toContain('ฝาหลังสวมใน')
-      expect(labels).toEqual(expect.arrayContaining(['กรอบหลังพร้อมแผ่นกั้นกลาง', 'กรอบหน้าพร้อมแผ่นกั้นกลาง', 'แผ่นกระจายแสงหน้า', 'แผ่นกระจายแสงหลัง', 'ไฟเส้น LED หน้า', 'ไฟเส้น LED หลัง']))
-      // The faces are single closed solids; each tray is a wall and a floor stacked as touching solids.
+      expect(labels).toEqual(expect.arrayContaining(['กรอบพร้อมแผ่นกั้นกลาง', 'แผ่นกระจายแสงหน้า', 'แผ่นกระจายแสงหลัง', 'ไฟเส้น LED หน้า', 'ไฟเส้น LED หลัง']))
+      // The faces are single closed solids; the frame is its walls and divider stacked as touching solids.
       for (const label of ['แผ่นกระจายแสงหน้า', 'แผ่นกระจายแสงหลัง']) expect(analyse(parts.find((p) => p.label === label)!.geometry).watertight, label).toBe(true)
-      for (const label of ['กรอบหลังพร้อมแผ่นกั้นกลาง', 'กรอบหน้าพร้อมแผ่นกั้นกลาง']) expect(analyse(parts.find((p) => p.label === label)!.geometry).volume, label).toBeGreaterThan(0)
+      const frame = parts.find((p) => p.label === 'กรอบพร้อมแผ่นกั้นกลาง')!
+      expect(frame.code).toBe('A')
+      expect(analyse(frame.geometry).volume).toBeGreaterThan(0)
+      // Exploding the view keeps the frame and divider together, in one piece.
+      expect(frame.explode).toBe(0)
       // Both diffusers are the same solid turned over: equal and positive volume.
       const front = parts.find((p) => p.label === 'แผ่นกระจายแสงหน้า')!
       const back = parts.find((p) => p.label === 'แผ่นกระจายแสงหลัง')!
       const vf = analyse(front.geometry).volume
+      expect(front.code).toBe('C')
       expect(vf).toBeGreaterThan(0)
       expect(analyse(back.geometry).volume).toBeCloseTo(vf, 0)
-      // The back face sits at the bottom with its plug inside the back tray; the front on top.
-      const backTray = box(parts.find((p) => p.label === 'กรอบหลังพร้อมแผ่นกั้นกลาง')!)
-      const frontTray = box(parts.find((p) => p.label === 'กรอบหน้าพร้อมแผ่นกั้นกลาง')!)
+      // The back face sits at the bottom with its plug inside the frame; the front on top.
+      const fb = box(frame)
       expect(box(back).min.z).toBeCloseTo(-o.diffuser, 3)
-      expect(backTray.min.z).toBeCloseTo(0, 3)
-      expect(backTray.max.z).toBeCloseTo(frontTray.min.z, 3)
-      expect(box(front).min.z).toBeLessThan(frontTray.max.z)
+      expect(fb.min.z).toBeCloseTo(0, 3)
+      expect(fb.max.z).toBeCloseTo(o.depth * 2 + o.back * 2, 3)
+      expect(box(front).min.z).toBeLessThan(fb.max.z)
       // Each side has its own colour layers; the back ones are mirrored and behind the back face.
       const printed = parts.filter((p) => p.material === 'accent')
       const fronts = printed.filter((p) => p.label.endsWith('หน้า'))
@@ -221,6 +225,28 @@ describe('double-sided lightbox', () => {
       const [ledF, ledB] = ['ไฟเส้น LED หน้า', 'ไฟเส้น LED หลัง'].map((l) => box(parts.find((p) => p.label === l)!))
       expect(ledB.max.z).toBeLessThanOrEqual(o.depth + 1e-6)
       expect(ledF.min.z).toBeGreaterThanOrEqual(o.depth + o.back * 2 - 1e-6)
+    } finally {
+      parts.forEach((p) => p.geometry.dispose())
+    }
+  })
+
+  it('shows a printed (UV or sticker) picture on the back too, facing backwards', () => {
+    const { parts, art } = buildLightbox(q, colours, layers, { ...o, face: 'uv' })
+    try {
+      expect(parts.filter((p) => p.material === 'accent')).toHaveLength(0)
+      expect(art!.back).toEqual({ at: -o.diffuser, mirror: true })
+      const front = faceDecal(art!, 'x.png')
+      const back = faceDecal(art!, 'x.png', 'back')
+      const [fb, bb] = [box(front), box(back)]
+      expect(bb.max.z).toBeLessThan(-o.diffuser)
+      expect(bb.min.x).toBeCloseTo(-fb.max.x, 3)
+      expect(back.geometry.getAttribute('normal').getZ(0)).toBe(-1)
+      // Same texture place for the mirrored point, so the picture reads right from behind.
+      const pf = front.geometry.getAttribute('position'), uf = front.geometry.getAttribute('uv')
+      const pb = back.geometry.getAttribute('position'), ub = back.geometry.getAttribute('uv')
+      expect(pb.getX(0)).toBeCloseTo(-pf.getX(0), 6)
+      expect(ub.getX(0)).toBeCloseTo(uf.getX(0), 6)
+      front.geometry.dispose(); back.geometry.dispose()
     } finally {
       parts.forEach((p) => p.geometry.dispose())
     }
