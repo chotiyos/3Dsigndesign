@@ -194,9 +194,11 @@ export default function Lightbox() {
 
   const strip = stripLength(parts)
   const printedFace = options.face === 'layers' ? null : options.face
+  /** The back face of a double-sided box is made like the front one: its choices are the front's. */
+  const faceOf = (part: (typeof parts)[number]) => (part.label === 'แผ่นกระจายแสงหลัง' ? DIFFUSER_CODE : part.code)
   /** Plastic for the STL of a part that gets both files. */
   const printOf = (part: (typeof parts)[number]): MaterialId =>
-    printPicks[part.code] ?? (part.code === DIFFUSER_CODE ? 'opalprint' : part.label.startsWith('สี ') ? 'accent' : 'print')
+    printPicks[faceOf(part)] ?? (part.label.startsWith('แผ่นกระจายแสง') ? 'opalprint' : part.label.startsWith('สี ') ? 'accent' : 'print')
   // The printed picture drawn on the face, preview only.
   const decal = useMemo(() => (printedFace && model?.art && photo ? faceDecal(model.art, photo.url) : null), [printedFace, model, photo])
   useEffect(() => () => decal?.geometry.dispose(), [decal])
@@ -205,7 +207,7 @@ export default function Lightbox() {
   /** Files a part gets: printed parts STL; sheet parts DXF, or DXF and STL. */
   function outputOf(part: (typeof parts)[number]): PartOutput {
     if (!part.cut) return 'stl'
-    return outputs[part.code] === 'dxf' ? 'dxf' : 'both'
+    return outputs[faceOf(part)] === 'dxf' ? 'dxf' : 'both'
   }
 
   return (
@@ -271,6 +273,11 @@ export default function Lightbox() {
 
           <section className="lbx-step" aria-labelledby="lbx-3">
             <h2 id="lbx-3"><span>3</span> รูปทรงและขนาดกล่อง</h2>
+            <div className="seg seg-small" role="group" aria-label="ด้านที่ไฟออก">
+              <button type="button" aria-pressed={options.sides === 1} onClick={() => set('sides', 1)}>ไฟออกด้านหน้า</button>
+              <button type="button" aria-pressed={options.sides === 2} onClick={() => set('sides', 2)}>ไฟออกหน้า-หลัง</button>
+            </div>
+            {options.sides === 2 && <p className="note">สองฝั่งมีแผ่นกั้นกลางทึบแบ่งเป็น 2 ช่อง ไฟเส้นแยกแต่ละฝั่ง รูด้านหลังกลับซ้าย-ขวาให้อ่านถูกเมื่อมองจากด้านหลัง กรอบพิมพ์เป็น 2 ถาด แล้วติดกาวหลังชนกัน</p>}
             <div className="seg seg-small" role="group" aria-label="รูปทรงกล่อง">
               {SHAPES.map((s) => (
                 <button key={s.id} type="button" aria-pressed={options.shape === s.id} onClick={() => set('shape', s.id)}>{s.label}</button>
@@ -279,7 +286,7 @@ export default function Lightbox() {
             <Range label={options.shape === 'circle' || options.shape === 'hex' ? 'เส้นผ่านศูนย์กลาง' : 'ความกว้าง'} unit="มม." value={options.width} min={60} max={400} step={1} onChange={(v) => set('width', v)} />
             {options.shape === 'rect' && <Range label="มุมโค้ง" unit="มม." value={options.radius} min={0} max={60} step={1} onChange={(v) => set('radius', v)} />}
             <Range label="ขอบรอบรูป" unit="มม." value={options.margin} min={0} max={30} step={0.5} onChange={(v) => set('margin', v)} />
-            <Range label="ความลึกกล่อง" unit="มม." value={options.depth} min={12} max={80} step={1} hint="ช่องว่างสำหรับไฟเส้นและสายไฟ ยิ่งลึกแสงยิ่งกระจายเรียบ" onChange={(v) => set('depth', v)} />
+            <Range label={options.sides === 2 ? 'ความลึกแต่ละฝั่ง' : 'ความลึกกล่อง'} unit="มม." value={options.depth} min={12} max={80} step={1} hint="ช่องว่างสำหรับไฟเส้นและสายไฟ ยิ่งลึกแสงยิ่งกระจายเรียบ" onChange={(v) => set('depth', v)} />
             <Range label="ความหนาผนัง" unit="มม." value={options.wall} min={1.2} max={6} step={0.2} onChange={(v) => set('wall', v)} />
           </section>
 
@@ -287,19 +294,19 @@ export default function Lightbox() {
             <h2 id="lbx-4"><span>4</span> ไฟและการติดตั้ง</h2>
             <div className="option-card" data-on={options.rear.wire > 0 || undefined}>
               <label className="option-head">
-                <span><span className="option-title">รูสายไฟที่ฝาหลัง</span></span>
+                <span><span className="option-title">{options.sides === 2 ? 'ช่องสายไฟใต้กล่อง' : 'รูสายไฟที่ฝาหลัง'}</span></span>
                 <input type="checkbox" role="switch" className="switch" checked={options.rear.wire > 0} onChange={(e) => setRear('wire', e.target.checked ? 1 : 0)} />
               </label>
               {options.rear.wire > 0 && <Range label="ขนาดรูสายไฟ" unit="มม." value={options.rear.wireD} min={3} max={14} step={0.5} onChange={(v) => setRear('wireD', v)} />}
             </div>
-            <div className="option-card" data-on={options.rear.mount > 0 || undefined}>
+            {options.sides === 1 && <div className="option-card" data-on={options.rear.mount > 0 || undefined}>
               <div className="option-head"><span><span className="option-title">ยึดผนัง</span></span></div>
               <div className="seg seg-small" role="group" aria-label="ยึดผนัง">
                 {MOUNTS.map((m, i) => (
                   <button key={m} type="button" aria-pressed={options.rear.mount === i} onClick={() => setRear('mount', i)}>{m}</button>
                 ))}
               </div>
-            </div>
+            </div>}
             <div className="option-card" data-on={options.rear.deskBase > 0 || undefined}>
               <label className="option-head">
                 <span><span className="option-title">ฐานตั้งโต๊ะ</span></span>
@@ -314,6 +321,14 @@ export default function Lightbox() {
             <h2 id="lbx-5"><span>5</span> วิธีผลิตแต่ละชิ้น</h2>
             <ul className="lbx-make">
               {parts.filter((part) => part.material !== 'led').map((part) => {
+                if (faceOf(part) !== part.code) return (
+                  <li key={part.id}>
+                    <span className="lbx-make-name">
+                      <strong><span className="layer-code">{part.code}</span> {part.label}</strong>
+                      <small>ทำแบบเดียวกับ {DIFFUSER_CODE} แผ่นกระจายแสงหน้า</small>
+                    </span>
+                  </li>
+                )
                 const canCut = part.code === DIFFUSER_CODE || Boolean(part.profile && part.profile.depth <= 12)
                 const cut = Boolean(part.cut)
                 const pick = (m: MaterialId) => { setMessage(null); setPicks((p) => ({ ...p, [part.code]: m })) }

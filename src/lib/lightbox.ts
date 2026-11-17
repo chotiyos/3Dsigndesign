@@ -1,6 +1,6 @@
 import { traceMask } from './artwork'
 import { BufferGeometry, Float32BufferAttribute, ShapeGeometry } from 'three'
-import { band, bounds, diff, hull, intersect, islands, ngon, offset, regionArea, regionToShapes, ring, roundRect, union, type Region } from './geo2d'
+import { band, bounds, circle, diff, hull, intersect, islands, ngon, offset, rect, regionArea, regionToShapes, ring, roundRect, union, type Region } from './geo2d'
 import { extrude, merge } from './solid'
 import { applyMaterials, codeAt, isCuttable, Parts } from './styles/kit'
 import { applyRear } from './styles/rear'
@@ -180,6 +180,12 @@ export interface LightboxOptions {
   back: number
   diffuser: number
   gap: number
+  /**
+   * 1: lit on the front only, closed by a back plate. 2: lit front and back,
+   * two trays glued back to back whose floors make an opaque middle divider,
+   * a lit chamber and LED strip on each side.
+   */
+  sides: 1 | 2
   /** Rear add-ons, as in common.rear(): wire, wireD, mount, screwD, deskBase, baseH, baseOver. */
   rear: Record<string, number>
 }
@@ -195,11 +201,33 @@ export const DEFAULT_LIGHTBOX: LightboxOptions = {
   back: 2,
   diffuser: 0.8,
   gap: 0.2,
+  sides: 1,
   rear: { wire: 1, wireD: 6, mount: 2, screwD: 4, deskBase: 0, baseH: 15, baseOver: 25 },
 }
 
 /** Removes slivers thinner than `size` mm, which will not print. */
 const opening = (region: Region, size: number) => offset(offset(region, -size / 2), size / 2)
+
+/** Mirrored left to right, with each outline still wound the same way. */
+const mirrorX = (region: Region): Region => region.map((poly) => poly.map(([x, y]) => [-x, y] as [number, number]).reverse())
+
+/** Turned over through z = 0, keeping triangles facing outwards. */
+function mirrorZ(g: BufferGeometry): BufferGeometry {
+  const out = g.index ? g.toNonIndexed() : g
+  if (out !== g) g.dispose()
+  out.scale(1, 1, -1)
+  for (const name of ['position', 'normal']) {
+    const a = out.getAttribute(name)
+    if (!a) continue
+    for (let i = 0; i + 2 < a.count; i += 3) {
+      const x = a.getX(i + 1), y = a.getY(i + 1), zz = a.getZ(i + 1)
+      a.setXYZ(i + 1, a.getX(i + 2), a.getY(i + 2), a.getZ(i + 2))
+      a.setXYZ(i + 2, x, y, zz)
+    }
+    a.needsUpdate = true
+  }
+  return out
+}
 
 /** Join the face and its plug without the two buried, touching cap surfaces. */
 function diffuserSolid(shape: Region, plugRing: Region, thick: number, plug: number, z: number) {
@@ -286,28 +314,76 @@ export function buildLightbox(
   const window = offset(shape, -o.wall)
   placed = placed.map((region) => (region.length ? intersect(region, window) : []))
 
-  const z = o.back + o.depth
+  const double = o.sides === 2
+  // Double-sided: back chamber 0..depth, the divider (two tray floors), then the front chamber.
+  const z = double ? o.depth * 2 + o.back * 2 : o.back + o.depth
   const inner = offset(shape, -o.wall - o.gap)
   const plug = Math.min(3, o.depth - 2)
+  const stripH = Math.min(10, o.depth - 2 - plug)
   const parts = new Parts()
-    .back('ฝาหลังสวมใน', 'print', inner, o.back, 0, -1, offset(shape, -o.wall - 1))
-    .slab('กรอบข้าง', 'print', ring(shape, o.wall), z, 0)
+  if (double) {
+    const frame = ring(shape, o.wall)
+    const sb = bounds(shape)
+    const wireD = o.rear.wireD ?? 6
+    // The wire enters through a notch in the back tray's bottom wall at the seam,
+    // and reaches the front chamber through a hole in the divider.
+    const wire = o.rear.wire > 0
+    const hole = wire ? circle(0, sb.minY + o.wall + wireD / 2 + 3, wireD / 2, 32) : []
+    const floor = diff(shape, hole)
+    const notchH = wire ? Math.min(wireD, o.depth - plug - 1) : 0
+    const notch = rect(0, sb.minY + o.wall / 2, wireD, o.wall * 4)
+    const backTray = merge([
+      extrude(frame, o.depth - notchH, 0),
+      ...(notchH > 0 ? [extrude(diff(frame, notch), notchH, o.depth - notchH)] : []),
+      extrude(floor, o.back, o.depth),
+    ])
+    const frontTray = merge([extrude(floor, o.back, o.depth + o.back), extrude(frame, o.depth, o.depth + o.back * 2)])
+    parts
+      .solid('กรอบหลังพร้อมแผ่นกั้นกลาง', 'print', backTray, -0.5)
+      .solid('กรอบหน้าพร้อมแผ่นกั้นกลาง', 'print', frontTray, 0)
+  } else {
+    parts
+      .back('ฝาหลังสวมใน', 'print', inner, o.back, 0, -1, offset(shape, -o.wall - 1))
+      .slab('กรอบข้าง', 'print', ring(shape, o.wall), z, 0)
+  }
   // A cut sheet (opal acrylic) is a flat panel laid on the frame's front edge;
   // a printed face carries a plug ring that pushes into the frame.
   const face = picks[DIFFUSER_CODE]
-  if (face && isCuttable(face, o.diffuser) && faceKeepsPlug) parts.solid('แผ่นกระจายแสง', face, diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, z), 1, shape)
-  else if (face && isCuttable(face, o.diffuser)) parts.slab('แผ่นกระจายแสง', face, shape, o.diffuser, z, 1)
-  else parts.solid('แผ่นกระจายแสง', 'opalprint', diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, z), 1)
-  parts
-    // Reference only: a strip stuck around the inside of the frame, facing in.
-    .slab('ไฟเส้น LED', 'led', band(shape, o.wall + 0.2, 2), Math.min(10, o.depth - 2 - plug), o.back + 2, -0.4)
+  const addFace = (label: string, at: number, back: boolean) => {
+    const explode = back ? -1.5 : 1
+    // The back face is the front face turned over, its plug pointing into the back tray.
+    const turn = (g: BufferGeometry) => (back ? mirrorZ(g) : g)
+    if (face && isCuttable(face, o.diffuser) && faceKeepsPlug) parts.solid(label, face, turn(diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, at)), explode, shape)
+    else if (face && isCuttable(face, o.diffuser)) parts.slab(label, face, shape, o.diffuser, back ? -o.diffuser : at, explode)
+    else parts.solid(label, 'opalprint', turn(diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, at)), explode)
+  }
+  addFace(double ? 'แผ่นกระจายแสงหน้า' : 'แผ่นกระจายแสง', z, false)
+  if (double) addFace('แผ่นกระจายแสงหลัง', 0, true)
+  // Reference only: a strip stuck around the inside of the frame, facing in.
+  const strip = band(shape, o.wall + 0.2, 2)
+  if (double) {
+    // One strip per chamber, along the divider.
+    parts
+      .slab('ไฟเส้น LED หน้า', 'led', strip, stripH, o.depth + o.back * 2, -0.4)
+      .slab('ไฟเส้น LED หลัง', 'led', strip, stripH, o.depth - stripH, -0.4)
+  } else parts.slab('ไฟเส้น LED', 'led', strip, stripH, o.back + 2, -0.4)
   const order: number[] = []
   // Printed artwork (UV or sticker) replaces the colour layers.
-  if (o.face === 'layers') placed.forEach((region, j) => {
-    if (region.length) order.push(j)
-    if (region.length) parts.slab(`สี ${j + 1} ${layers[j].colour}`, 'accent', region, layers[j].thick, z + o.diffuser, 1.5 + j * 0.15)
-  })
-  const built = applyRear(parts.done(), { ...o.rear })
+  if (o.face === 'layers') {
+    placed.forEach((region, j) => {
+      if (!region.length) return
+      order.push(j)
+      parts.slab('สี ' + (j + 1) + ' ' + layers[j].colour + (double ? ' หน้า' : ''), 'accent', region, layers[j].thick, z + o.diffuser, 1.5 + j * 0.15)
+    })
+    // The back reads the right way round from behind: the picture mirrored left to right.
+    if (double) placed.forEach((region, j) => {
+      if (!region.length) return
+      order.push(j)
+      parts.slab('สี ' + (j + 1) + ' ' + layers[j].colour + ' หลัง', 'accent', mirrorX(region), layers[j].thick, -o.diffuser - layers[j].thick, -2 - j * 0.15)
+    })
+  }
+  // Wire and wall fixings belong to a back plate; a double-sided box has none.
+  const built = applyRear(parts.done(), double ? { ...o.rear, wire: 0, mount: 0 } : { ...o.rear })
   // Preview colour per part letter, for the viewer.
   const tints: Record<string, string> = {}
   built.filter((part) => part.material === 'accent').forEach((part, i) => {

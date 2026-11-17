@@ -9,9 +9,10 @@ export function lightboxReadme(parts: SignPart[]) {
   const size = modelSize(parts)
   const cut = parts.filter((part) => part.cut)
   // A flat cut face has no plug ring: its solid is a plain slab (it carries a profile).
-  const sheetFace = parts.some((part) => part.label === 'แผ่นกระจายแสง' && part.cut && part.profile)
+  const sheetFace = parts.some((part) => part.label.startsWith('แผ่นกระจายแสง') && part.cut && part.profile)
+  const double = parts.some((part) => part.label === 'แผ่นกระจายแสงหลัง')
   return [
-    `JJDesign — กล่องไฟจากรูป`,
+    `JJDesign — กล่องไฟจากรูป${double ? ' (ไฟออกหน้า-หลัง)' : ''}`,
     `ขนาด ${size.w.toFixed(1)} × ${size.h.toFixed(1)} มม. ลึก ${size.d.toFixed(1)} มม.`,
     '',
     list,
@@ -25,9 +26,13 @@ export function lightboxReadme(parts: SignPart[]) {
           'วิธีพิมพ์หน้า: เปิดแผ่นกระจายแสงกับไฟล์สีทุกสีพร้อมกันเป็นชิ้นเดียว (ตำแหน่งตรงกันทุกไฟล์) กำหนดเส้นพลาสติกให้แต่ละชิ้น',
           'แล้วพลิกคว่ำให้ด้านสีอยู่บนฐานพิมพ์ แผ่นกระจายแสงใช้เส้นสีขาว',
         ]),
-    'กรอบข้างพิมพ์ตั้งตรง ฝาหลังสวมเข้าด้านในกรอบ' + (sheetFace ? '' : ' แผ่นหน้ามีขอบสวมลงในกรอบ ถอดเปลี่ยนไฟได้'),
+    double
+      ? 'กรอบหน้าและกรอบหลังพิมพ์คว่ำ (พื้นถาดลงฐานพิมพ์) ติดไฟเส้นในแต่ละถาด ร้อยสายผ่านรูแผ่นกั้น แล้วติดกาวพื้นถาดหลังชนกันเป็นแผ่นกั้นกลาง' +
+        (sheetFace ? '' : ' แผ่นหน้าและแผ่นหลังมีขอบสวมลงในกรอบ ถอดเปลี่ยนไฟได้')
+      : 'กรอบข้างพิมพ์ตั้งตรง ฝาหลังสวมเข้าด้านในกรอบ' + (sheetFace ? '' : ' แผ่นหน้ามีขอบสวมลงในกรอบ ถอดเปลี่ยนไฟได้'),
+    ...(double ? ['ชั้นสีด้านหลังกลับซ้าย-ขวาไว้แล้ว พิมพ์แบบเดียวกับด้านหน้า (คว่ำด้านสีลงฐานพิมพ์) ถ้าใช้สติกเกอร์หรือ UV ให้ทำ 2 ชุด ด้านละชุด'] : []),
     ...(cut.length ? ['', `ชิ้นที่ตัดจากแผ่น (ไฟล์ DXF ในโฟลเดอร์ของวัสดุ): ${cut.map((part) => `${part.code} ${part.label}`).join(', ')}`, 'ความหนาแผ่นให้ตรงกับที่ระบุในรายการชิ้นส่วน'] : []),
-    `ไฟเส้น LED รอบด้านในกรอบยาวประมาณ ${(stripLength(parts) / 10).toFixed(0)} ซม.`,
+    `ไฟเส้น LED รอบด้านในกรอบยาวประมาณ ${(stripLength(parts) / 10).toFixed(0)} ซม.${double ? ' ต่อฝั่ง (รวม 2 เส้น)' : ''}`,
     '',
     printGuide(listed),
     '',

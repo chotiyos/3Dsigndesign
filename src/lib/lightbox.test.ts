@@ -161,3 +161,68 @@ it('keeps the LED strip clear of the diffuser plug at minimum depth', () => {
     expect(led.boundingBox!.max.z).toBeLessThanOrEqual(face.boundingBox!.min.z)
   } finally { parts.forEach(p => p.geometry.dispose()) }
 })
+
+describe('double-sided lightbox', () => {
+  const q = quantize(picture(), 3)
+  const colours = traceColours(q)
+  const background = borderColour(q)
+  const layers = q.palette.map((c, j) => ({ on: j !== background, colour: toHex(c), thick: 0.6 }))
+  const o = { ...DEFAULT_LIGHTBOX, sides: 2 as const }
+  const box = (p: { geometry: import('three').BufferGeometry }) => {
+    p.geometry.computeBoundingBox()
+    return p.geometry.boundingBox!
+  }
+
+  it('lights both faces, with two trays whose floors make the middle divider', () => {
+    const { parts } = buildLightbox(q, colours, layers, o)
+    try {
+      const labels = parts.map((p) => p.label)
+      expect(labels).not.toContain('ฝาหลังสวมใน')
+      expect(labels).toEqual(expect.arrayContaining(['กรอบหลังพร้อมแผ่นกั้นกลาง', 'กรอบหน้าพร้อมแผ่นกั้นกลาง', 'แผ่นกระจายแสงหน้า', 'แผ่นกระจายแสงหลัง', 'ไฟเส้น LED หน้า', 'ไฟเส้น LED หลัง']))
+      // The faces are single closed solids; each tray is a wall and a floor stacked as touching solids.
+      for (const label of ['แผ่นกระจายแสงหน้า', 'แผ่นกระจายแสงหลัง']) expect(analyse(parts.find((p) => p.label === label)!.geometry).watertight, label).toBe(true)
+      for (const label of ['กรอบหลังพร้อมแผ่นกั้นกลาง', 'กรอบหน้าพร้อมแผ่นกั้นกลาง']) expect(analyse(parts.find((p) => p.label === label)!.geometry).volume, label).toBeGreaterThan(0)
+      // Both diffusers are the same solid turned over: equal and positive volume.
+      const front = parts.find((p) => p.label === 'แผ่นกระจายแสงหน้า')!
+      const back = parts.find((p) => p.label === 'แผ่นกระจายแสงหลัง')!
+      const vf = analyse(front.geometry).volume
+      expect(vf).toBeGreaterThan(0)
+      expect(analyse(back.geometry).volume).toBeCloseTo(vf, 0)
+      // The back face sits at the bottom with its plug inside the back tray; the front on top.
+      const backTray = box(parts.find((p) => p.label === 'กรอบหลังพร้อมแผ่นกั้นกลาง')!)
+      const frontTray = box(parts.find((p) => p.label === 'กรอบหน้าพร้อมแผ่นกั้นกลาง')!)
+      expect(box(back).min.z).toBeCloseTo(-o.diffuser, 3)
+      expect(backTray.min.z).toBeCloseTo(0, 3)
+      expect(backTray.max.z).toBeCloseTo(frontTray.min.z, 3)
+      expect(box(front).min.z).toBeLessThan(frontTray.max.z)
+      // Each side has its own colour layers; the back ones are mirrored and behind the back face.
+      const printed = parts.filter((p) => p.material === 'accent')
+      const fronts = printed.filter((p) => p.label.endsWith('หน้า'))
+      const backs = printed.filter((p) => p.label.endsWith('หลัง'))
+      expect(fronts).toHaveLength(2)
+      expect(backs).toHaveLength(2)
+      fronts.forEach((f, i) => {
+        const a = box(f), b = box(backs[i])
+        expect(b.max.z).toBeLessThanOrEqual(-o.diffuser + 1e-6)
+        expect(b.min.x).toBeCloseTo(-a.max.x, 3)
+        expect(b.max.x).toBeCloseTo(-a.min.x, 3)
+      })
+    } finally {
+      parts.forEach((p) => p.geometry.dispose())
+    }
+  })
+
+  it('makes the back face from the same sheet as the front, and keeps the LED strips in their chambers', () => {
+    const { parts } = buildLightbox(q, colours, layers, o, { C: 'opal' }, false)
+    try {
+      const back = parts.find((p) => p.label === 'แผ่นกระจายแสงหลัง')!
+      expect(back.material).toBe('opal')
+      expect(back.cut).toBeTruthy()
+      const [ledF, ledB] = ['ไฟเส้น LED หน้า', 'ไฟเส้น LED หลัง'].map((l) => box(parts.find((p) => p.label === l)!))
+      expect(ledB.max.z).toBeLessThanOrEqual(o.depth + 1e-6)
+      expect(ledF.min.z).toBeGreaterThanOrEqual(o.depth + o.back * 2 - 1e-6)
+    } finally {
+      parts.forEach((p) => p.geometry.dispose())
+    }
+  })
+})
