@@ -30,7 +30,7 @@ describe('fixes from the full audit', () => {
 
   it('refuses a keychain name that is only punctuation or a tone mark', () => {
     const colours = PALETTES[0].colours
-    for (const text of ['.', '่', '-']) {
+    for (const text of ['.', '่', '-', 'ำ', 'เ', 'ๆ']) {
       const model = buildBubble(mitr, { ...DEFAULT_BUBBLE, text }, colours)
       expect(model.parts).toHaveLength(0)
       expect(model.warning).toBeTruthy()

@@ -15,7 +15,7 @@ const centreAt = (region: Region, x: number, y: number): Region => {
 const ell = (x: number, y: number, rx: number, ry: number, turn = 0): Region => translate(rotate(scale(circle(0, 0, 1, 40), rx, ry), turn), x, y)
 
 /** Small icons for the facts bar, `s` mm tall, centred on (x, y). */
-function factIcon(kind: number, s: number, x: number, y: number): Region {
+export function factIcon(kind: number, s: number, x: number, y: number): Region {
   const h = s / 2
   if (kind === 0) {
     // Calendar: a page with two rings and a grid of days cut out.

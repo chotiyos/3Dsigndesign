@@ -128,7 +128,7 @@ function deskBase(parts: SignPart[], v: Record<string, number>, index: number): 
  * Applies the rear add-ons a style was built with: holes cut into its back
  * plate, and an optional desk base added as the last part.
  */
-export function applyRear(parts: SignPart[], v: Record<string, number>): SignPart[] {
+export function applyRear(parts: SignPart[], v: Record<string, number>, nextIndex?: number): SignPart[] {
   if (!REAR_KEYS.some((key) => v[key] > 0)) return parts
   let out = parts
   const back = parts.find((part) => part.rear && part.profile)
@@ -150,7 +150,7 @@ export function applyRear(parts: SignPart[], v: Record<string, number>): SignPar
     out = out.map((part) => (part === back ? next : part))
   }
   if (v.deskBase > 0) {
-    const base = deskBase(out, v, Math.max(-1, ...out.map(partIndex)) + 1)
+    const base = deskBase(out, v, Math.max(nextIndex ?? 0, Math.max(-1, ...out.map(partIndex)) + 1))
     if (base) {
       // Letters that end above the base (upper vowels, tone marks, dots) need fixing to it.
       const outline = back?.profile?.region ?? []

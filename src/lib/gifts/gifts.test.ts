@@ -40,7 +40,12 @@ describe('gift catalogue', () => {
           expect(Boolean(result.warning) || mode === 'empty', `${g.id} ${mode}: empty without explanation`).toBe(true)
           continue
         }
-        const layers = resolve(result.layers)
+        let layers = resolve(result.layers)
+        // Designs printed face down are checked the way up they print.
+        if (g.printFlipped) {
+          const top = Math.max(...layers.map((l) => l.z + l.h))
+          layers = layers.map((l) => ({ ...l, z: top - l.z - l.h }))
+        }
         for (const l of layers) {
           const geo = extrude(l.region, l.h, l.z)
           expect(analyse(geo).watertight, `${g.id} ${mode} ${l.colour}`).toBe(true)
@@ -137,7 +142,12 @@ describe('gift catalogue', () => {
   it('supports every raised layer at defaults', () => {
     const failures: string[] = []
     for (const g of GIFTS) {
-      const layers = resolve(g.build({ font: kanit, fonts: allFonts }, defaults(g)).layers)
+      let layers = resolve(g.build({ font: kanit, fonts: allFonts }, defaults(g)).layers)
+      // Designs printed face down are checked the way up they print.
+      if (g.printFlipped) {
+        const top = Math.max(...layers.map((l) => l.z + l.h))
+        layers = layers.map((l) => ({ ...l, z: top - l.z - l.h }))
+      }
       for (const l of layers) {
         // Wrapped lettering sits on a curved wall, which this flat check cannot see.
         // The magnet's dog bridges the round magnet pocket, which prints as a bridge.
@@ -152,8 +162,8 @@ describe('gift catalogue', () => {
   }, 60_000)
 
   it('builds every design as one solid, with no loose or floating pieces', () => {
-    // Bookends come as a pair of separate objects.
-    const expected: Record<string, number> = { 'desk-bookends': 2 }
+    // Bookends come as a pair; the LED sign's back cover prints beside it.
+    const expected: Record<string, number> = { 'desk-bookends': 2, 'home-christmas-led': 2 }
     const failures: string[] = []
     for (const g of GIFTS) {
       for (const f of [kanit, mitr]) {

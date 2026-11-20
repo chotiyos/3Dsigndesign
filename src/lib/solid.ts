@@ -25,7 +25,18 @@ export function merge(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry 
       return flat
     })
   if (usable.length === 0) return new THREE.BufferGeometry()
-  return mergeGeometries(usable, false) ?? new THREE.BufferGeometry()
+  const merged = mergeGeometries(usable, false) ?? new THREE.BufferGeometry()
+  // Where each source solid lies (vertex ranges, nested merges included), so
+  // exporters can keep touching solids as separate shells.
+  const shells: [number, number][] = []
+  let at = 0
+  for (const g of usable) {
+    const inner = (g.userData.shells as [number, number][] | undefined) ?? [[0, g.getAttribute('position').count]]
+    for (const [a, b] of inner) shells.push([at + a, at + b])
+    at += g.getAttribute('position').count
+  }
+  merged.userData.shells = shells
+  return merged
 }
 
 /** A stack of shrinking layers, which prints as a chamfer or rounded shoulder. */

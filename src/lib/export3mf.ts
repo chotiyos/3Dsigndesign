@@ -11,12 +11,28 @@ function colour3mf(hex: string | undefined) {
   return `#${(m ? m[1] : 'cccccc').toUpperCase()}FF`
 }
 
-/** One part's mesh: shared vertices, then triangles, in millimetres. */
+/**
+ * The separate solids inside one part. A part merged from several solids
+ * records each one (see merge in solid.ts); welding across them would join touching
+ * shells at shared edges, which 3MF forbids (every edge in exactly two
+ * triangles), so each solid becomes its own mesh.
+ */
+function shells(geometry: THREE.BufferGeometry): THREE.BufferGeometry[] {
+  const flat = geometry.index ? geometry.toNonIndexed() : geometry
+  const pos = flat.getAttribute('position')
+  const ranges = (geometry.userData.shells as [number, number][] | undefined) ?? [[0, pos.count]]
+  const out = ranges.map(([a, b]) => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute((pos.array as Float32Array).slice(a * 3, Math.min(b, pos.count) * 3), 3))
+    return g
+  })
+  if (flat !== geometry) flat.dispose()
+  return out
+}
+
+/** One solid's mesh: shared vertices, then triangles, in millimetres; empty when nothing is left. */
 function meshXml(geometry: THREE.BufferGeometry) {
-  const bare = new THREE.BufferGeometry()
-  bare.setAttribute('position', geometry.getAttribute('position'))
-  if (geometry.index) bare.setIndex(geometry.index)
-  const welded = mergeVertices(bare, 1e-4)
+  const welded = mergeVertices(geometry, 1e-4)
   const p = welded.getAttribute('position')
   const index = welded.index!
   const vertices: string[] = []
@@ -28,6 +44,7 @@ function meshXml(geometry: THREE.BufferGeometry) {
     triangles.push(`<triangle v1="${a}" v2="${b}" v3="${c}"/>`)
   }
   welded.dispose()
+  if (!triangles.length) return ''
   return `<mesh><vertices>${vertices.join('')}</vertices><triangles>${triangles.join('')}</triangles></mesh>`
 }
 
@@ -41,10 +58,20 @@ export function build3mf(parts: SignPart[], tints: Record<string, string>, name:
   const printed = parts.filter((part) => part.material !== 'led' && part.geometry.getAttribute('position')?.count)
   if (!printed.length) throw new Error('ไม่มีชิ้นส่วนสำหรับพิมพ์ 3D')
   const materials = printed.map((part) => `<base name="${esc(`${part.code} ${part.label}`)}" displaycolor="${colour3mf(tints[part.code])}"/>`)
-  const objects = printed.map((part, i) =>
-    `<object id="${i + 2}" type="model" name="${esc(`${part.code} ${part.label}`)}" pid="1" pindex="${i}">${meshXml(part.geometry)}</object>`)
-  const group = printed.map((_, i) => `<component objectid="${i + 2}"/>`).join('')
-  const groupId = printed.length + 2
+  const objects: string[] = []
+  const group: string[] = []
+  printed.forEach((part, i) => {
+    for (const shell of shells(part.geometry)) {
+      const mesh = meshXml(shell)
+      shell.dispose()
+      if (!mesh) continue
+      const id = objects.length + 2
+      objects.push(`<object id="${id}" type="model" name="${esc(`${part.code} ${part.label}`)}" pid="1" pindex="${i}">${mesh}</object>`)
+      group.push(`<component objectid="${id}"/>`)
+    }
+  })
+  if (!objects.length) throw new Error('ไม่มีชิ้นส่วนสำหรับพิมพ์ 3D')
+  const groupId = objects.length + 2
   const model = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<model unit="millimeter" xml:lang="th-TH" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
@@ -53,7 +80,7 @@ export function build3mf(parts: SignPart[], tints: Record<string, string>, name:
     '<resources>',
     `<basematerials id="1">${materials.join('')}</basematerials>`,
     ...objects,
-    `<object id="${groupId}" type="model" name="${esc(name)}"><components>${group}</components></object>`,
+    `<object id="${groupId}" type="model" name="${esc(name)}"><components>${group.join('')}</components></object>`,
     '</resources>',
     `<build><item objectid="${groupId}"/></build>`,
     '</model>',

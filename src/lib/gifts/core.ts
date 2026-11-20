@@ -118,6 +118,11 @@ export interface GiftDesign {
   howTo?: string[]
   /** Modelled standing up in print orientation (cups, bookends): the preview turns it to face the viewer. */
   upright?: boolean
+  /**
+   * Printed turned over (face down on the bed), like lit boxes whose face is
+   * a bridge in this orientation: support is checked the other way up.
+   */
+  printFlipped?: boolean
   build(ctx: GiftContext, v: GiftValues): GiftResult
 }
 

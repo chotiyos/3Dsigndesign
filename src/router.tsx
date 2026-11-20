@@ -25,14 +25,23 @@ function savePosition() {
 // it, and the next link click silently does nothing. Save once scrolling pauses.
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 function saveSoon() {
+  if (saveTimer !== undefined) return
+  saveTimer = setTimeout(() => {
+    saveTimer = undefined
+    savePosition()
+  }, 150)
+}
+function cancelSave() {
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(savePosition, 150)
+  saveTimer = undefined
 }
 
 history.scrollRestoration = 'manual'
 window.addEventListener('scroll', saveSoon, { passive: true })
 window.addEventListener('pagehide', savePosition)
 window.addEventListener('popstate', () => {
+  // A save still waiting belongs to the page just left, not this one.
+  cancelSave()
   restorePosition = history.state?.jjScroll
   restoring = true
   notify()
@@ -49,7 +58,7 @@ export function navigate(to: string, replace = false) {
     if (location.hash === '#content') target?.focus({ preventScroll: true })
     return
   }
-  clearTimeout(saveTimer)
+  cancelSave()
   savePosition()
   restoring = true
   restorePosition = undefined

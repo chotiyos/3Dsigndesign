@@ -2,6 +2,7 @@ import { strFromU8, unzipSync } from 'fflate'
 import { BoxGeometry } from 'three'
 import { describe, expect, it } from 'vitest'
 import { build3mf } from './export3mf'
+import { merge } from './solid'
 import type { SignPart } from './styles'
 
 const part = (code: string, label: string, material: SignPart['material'], x: number): SignPart => ({
@@ -37,5 +38,27 @@ describe('3MF export', () => {
 
   it('refuses a model with nothing to print', () => {
     expect(() => build3mf([part('A', 'ไฟ', 'led', 0)], {}, 'x')).toThrow()
+  })
+
+  it('keeps touching solids of one colour as separate closed shells (3MF needs every edge in exactly two triangles)', () => {
+    // Two boxes stacked face to face, merged into one colour part.
+    const stacked = merge([new BoxGeometry(10, 10, 2).translate(0, 0, 1), new BoxGeometry(10, 10, 2).translate(0, 0, 3)])
+    const files = unzipSync(build3mf([{ id: 'A-0', code: 'A', label: 'ฐาน', material: 'print', explode: 0, geometry: stacked }], { A: '#ffffff' }, 'x'))
+    const xml = strFromU8(files['3D/3dmodel.model'])
+    const bodies = all(xml, /<object id="\d+" type="model" name="A ฐาน" pid="1" pindex="0">([\s\S]*?)<\/object>/g)
+    expect(bodies).toHaveLength(2)
+    for (const [, mesh] of bodies) {
+      const edges = new Map<string, number>()
+      for (const [, a, b, c] of all(mesh, /v1="(\d+)" v2="(\d+)" v3="(\d+)"/g)) {
+        for (const [u, v] of [[a, b], [b, c], [c, a]]) edges.set(`${u}>${v}`, (edges.get(`${u}>${v}`) ?? 0) + 1)
+      }
+      // Every directed edge once, and its reverse once: closed and consistently wound.
+      for (const [key, n] of edges) {
+        const [u, v] = key.split('>')
+        expect(n).toBe(1)
+        expect(edges.get(`${v}>${u}`)).toBe(1)
+      }
+    }
+    stacked.dispose()
   })
 })

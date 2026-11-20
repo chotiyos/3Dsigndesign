@@ -38,6 +38,7 @@ export async function faceFiles(src: string, art: FaceArt, kind: Exclude<Lightbo
     const flip = (region: Region): Region => region.map((poly) => poly.map(([x, y]) => [-x, y] as [number, number]).reverse())
     const back = { ...art, window: flip(art.window), face: flip(art.face) }
     files[`${folder}/ด้านหลัง/ลายแผ่นหลัง-${size}-${Math.round(dpi)}dpi.png`] = await facePng(image, art, dpi, true)
+    if (kind === 'uv') files[`${folder}/ด้านหลัง/ลายแผ่นหลัง-กลับด้าน-${size}-${Math.round(dpi)}dpi.png`] = await facePng(image, art, dpi, false)
     files[`${folder}/ด้านหลัง/เส้นตัดแผ่นหลัง-${size}.dxf`] = strToU8(buildDxf([{ layer: 'CUT', region: back.window }, { layer: 'PANEL', region: back.face }]))
     files[`${folder}/ด้านหลัง/เส้นตัดแผ่นหลัง-${size}.svg`] = strToU8(cutSvg(back))
   }

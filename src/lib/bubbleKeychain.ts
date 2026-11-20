@@ -263,7 +263,7 @@ export function buildBubble(font: LoadedFont, o: BubbleOptions, colours: BubbleC
   const missing = buffer.getGlyphInfos().some((g) => g.codepoint === 0)
   if (missing) return { ...empty, warning: 'ฟอนต์นี้ไม่มีตัวอักษรบางตัว ลองเปลี่ยนฟอนต์หรือลบอักขระที่ไม่รองรับ' }
   // Punctuation or a lone tone mark alone would be blown up to the whole piece.
-  if (o.text.trim() && !/[\p{L}\p{N}]/u.test(o.text.replace(/[ัิ-ฺ็-๎]/g, ''))) {
+  if (o.text.trim() && !/[\p{L}\p{N}]/u.test(o.text.replace(/[ฯ-๏]/g, ''))) {
     return { ...empty, warning: 'ใส่ตัวอักษรหรือตัวเลขอย่างน้อย 1 ตัว (เครื่องหมายหรือวรรณยุกต์อย่างเดียวทำไม่ได้)' }
   }
   const cache = new Map<string, Region>()

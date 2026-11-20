@@ -3484,5 +3484,5 @@ input[type='range'] {
 .page h1,
 .page p,
 .page td {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }

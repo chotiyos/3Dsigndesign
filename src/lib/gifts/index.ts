@@ -7,6 +7,7 @@ import { HOME } from './home'
 import { LETTERS } from './letters'
 import { CONNECT, MUSIC } from './music'
 import { NAME_KEYS } from './nameKeys'
+import { SEASONAL } from './seasonal'
 import { SIGNS2 } from './signs2'
 import { TOPPERS } from './toppers'
 
@@ -25,6 +26,7 @@ export const GIFTS: GiftDesign[] = [
   ...HOME,
   ...MUSIC,
   CONNECT,
+  ...SEASONAL,
 ]
 
 export const findGift = (id: string) => GIFTS.find((g) => g.id === id)

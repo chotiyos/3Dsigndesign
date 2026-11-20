@@ -1,6 +1,6 @@
 import { initialOf, puffUp } from '../bubbleKeychain'
 import { charmArt } from '../charms'
-import { bounds, diff, intersect, offset, roundRect, rotate, scale, translate, union, type Region } from '../geo2d'
+import { bounds, diff, intersect, offset, regionArea, roundRect, rotate, scale, translate, union, type Region } from '../geo2d'
 import { silhouette } from '../styles/kit'
 import {
   connectedLetter, filled, fitText, fontOf, missingGlyphs, num, str, textArt,
@@ -41,9 +41,15 @@ function leaning(ctx: GiftContext, v: GiftValues) {
     { colour: 'frame', region: diff(letter, inner), z: 0, h: t },
     { colour: 'slab', region: diff(slab, letter), z: 0, h: t },
   ]
-  const fit = fitText(fontOf(ctx, v, 'name'), name, b.w * 0.8, H * 0.18, H * 0.14, false)
+  // The name runs down the letter's first stroke: from its top-left corner
+  // towards the bottom, reading downwards along the stroke.
+  const top: [number, number] = [b.minX + b.w * 0.13, b.maxY - H * 0.08]
+  const foot: [number, number] = [b.minX + b.w * 0.3, b.minY + H * 0.12]
+  const along = Math.atan2(foot[1] - top[1], foot[0] - top[0])
+  const length = Math.hypot(foot[0] - top[0], foot[1] - top[1])
+  const fit = fitText(fontOf(ctx, v, 'name'), name, length * 0.95, H * 0.22, H * 0.17, false)
   if (fit.art.length) {
-    const face = centreAt(rotate(puffUp(fit.art, 0.4), tilt), (b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2 + H * 0.12)
+    const face = centreAt(rotate(puffUp(fit.art, 0.4), along), (top[0] + foot[0]) / 2, (top[1] + foot[1]) / 2)
     layers.push({ colour: 'plate', region: silhouette(face, 2), z: 0, h: t + 0.8 })
     layers.push({ colour: 'name', region: face, z: t + 0.8, h: r })
   }
@@ -66,8 +72,17 @@ function loveBanner(ctx: GiftContext, v: GiftValues) {
   ]
   const hb = bounds(heart)
   const wf = fitText(fontOf(ctx, v, 'word'), word, hb.w * 0.64, S * 0.4, S * 0.3, false)
-  // The word stands on the inner panel only: anything past its edge would hang over the rim.
-  if (wf.art.length) layers.push({ colour: 'word', region: intersect(centreAt(rotate(puffUp(wf.art, 0.4), 0.12), 0, hb.maxY - S * 0.42), offset(inner, -0.3)), z: t + 0.8, h: r })
+  // The word stands on the inner panel only (past its edge it would hang over
+  // the rim): shrink it until it fits, keeping its centre.
+  if (wf.art.length) {
+    let word = centreAt(rotate(puffUp(wf.art, 0.4), 0.12), 0, hb.maxY - S * 0.42)
+    const room = offset(inner, -0.3)
+    for (let i = 0; i < 24 && regionArea(diff(word, room)) > 0.05; i++) {
+      const wb = bounds(word)
+      word = translate(scale(translate(word, -wb.cx, -wb.cy), 0.95), wb.cx, wb.cy - wb.h * 0.01)
+    }
+    layers.push({ colour: 'word', region: intersect(word, room), z: t + 0.8, h: r })
+  }
   // The banner: a ribbon with folded tails, a white label and the name.
   const nf = fitText(fontOf(ctx, v, 'name'), name, S * 0.85, S * 0.26, S * 0.2, false)
   const bw = Math.max(S * 0.7, (nf.art.length ? bounds(nf.art).w : 0) + S * 0.2)

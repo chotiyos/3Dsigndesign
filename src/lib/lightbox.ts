@@ -330,7 +330,7 @@ export function buildLightbox(
     // front chamber through a hole in the divider. The notch goes in the bottom
     // wall, or in the right-hand wall when a desk base covers the bottom.
     const sideways = o.rear.deskBase > 0
-    const room = o.rear.wire > 0 ? offset(window, -(wireD / 2 + 1)) : []
+    const room = o.rear.wire > 0 ? offset(window, -(wireD / 2 + 3)) : []
     let hole: Region = []
     let notch: Region = []
     // The hole goes as low (or as far right) as the window allows: a 1 mm strip
@@ -412,7 +412,7 @@ export function buildLightbox(
   }
   if (!placed.some((region) => region.length) && o.face === 'layers') notes.push('ขอบรอบรูปกว้างจนไม่เหลือที่ให้รูป ลดขอบรอบรูปหรือความหนาผนัง หรือเพิ่มความกว้าง')
   // Wire and wall fixings belong to a back plate; a double-sided box has none.
-  const built = applyRear(parts.done(), double ? { ...o.rear, wire: 0, mount: 0 } : { ...o.rear })
+  const built = applyRear(parts.done(), double ? { ...o.rear, wire: 0, mount: 0 } : { ...o.rear }, parts.issued())
   if (notes.length && built[0]) built[0] = { ...built[0], warning: [built[0].warning, ...notes].filter(Boolean).join(' · ') }
   // Preview colour per part letter, for the viewer.
   const tints: Record<string, string> = {}

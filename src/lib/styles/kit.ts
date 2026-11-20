@@ -113,6 +113,11 @@ export class Parts {
     return this
   }
 
+  /** How many letters have been handed out (or left free) so far. */
+  issued() {
+    return this.nextCode
+  }
+
   /** Leaves a letter unused, so the parts after it keep their codes. */
   skip() {
     this.nextCode++
