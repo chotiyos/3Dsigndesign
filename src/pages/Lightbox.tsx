@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEven
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
 import { buildZip, downloadBlob, PICKABLE_MATERIALS, printableStl, safeName, type PartOutput } from '../lib/exportModel'
+import { build3mf } from '../lib/export3mf'
 import { effectiveDpi, faceFiles, faceReadme, MIN_DPI } from '../lib/facePrint'
 import { lightboxReadme } from '../lib/lightboxReadme'
 import {
@@ -197,7 +198,7 @@ export default function Lightbox() {
   // One download at a time: a second click while print files are being made must not charge twice.
   const exporting = useRef(false)
   const [saving, setSaving] = useState(false)
-  async function download(kind: 'zip' | 'stl') {
+  async function download(kind: 'zip' | 'stl' | '3mf') {
     if (busy || parts.length === 0 || exporting.current) return
     exporting.current = true
     setSaving(true)
@@ -208,7 +209,7 @@ export default function Lightbox() {
       setSaving(false)
     }
   }
-  async function downloadOnce(kind: 'zip' | 'stl') {
+  async function downloadOnce(kind: 'zip' | 'stl' | '3mf') {
     const cost = EXPORT_COST[kind]
     try {
       const printed = printedFace && model?.art && photo ? { kind: printedFace, art: model.art, photo } : null
@@ -219,14 +220,14 @@ export default function Lightbox() {
         both.length ? `ชิ้นที่ได้ทั้ง 2 ไฟล์ (เลือกตัดหรือพิมพ์ทีหลัง): ${both.map((part) => `${part.code} ${part.label} — ตัด ${MATERIAL_NAMES[part.material]} หรือพิมพ์ ${MATERIAL_NAMES[printOf(part)]}`).join(' · ')}` : '',
         printed ? faceReadme(printed.kind, printed.art, printed.photo.width).join('\n') : '',
       ].filter(Boolean).join('\n\n')
-      const data = kind === 'stl'
+      const data = kind === '3mf' ? build3mf(parts, (model?.colours ?? {}), 'กล่องไฟ') : kind === 'stl'
         ? printableStl(parts)
         : buildZip({ baseName, parts, readme, output: outputOf, stlMaterial: printOf, extra })
       if (!spend(cost, `${kind.toUpperCase()} กล่องไฟ ${baseName}`)) {
         setMessage({ tone: 'error', text: `เครดิตทดลองไม่พอ ต้องใช้ ${cost} เครดิต เหลือ ${credits(demo)} เครดิต` })
         return
       }
-      downloadBlob(data, `${baseName}-กล่องไฟ.${kind}`, kind === 'zip' ? 'application/zip' : 'model/stl')
+      downloadBlob(data, `${baseName}-กล่องไฟ.${kind}`, kind === 'zip' ? 'application/zip' : kind === '3mf' ? 'model/3mf' : 'model/stl')
       setMessage({ tone: 'ok', text: `ดาวน์โหลดแล้ว หัก ${cost} เครดิตทดลอง` })
     } catch (err) {
       setMessage({ tone: 'error', text: `ส่งออกไฟล์ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` })
@@ -441,6 +442,9 @@ export default function Lightbox() {
             </button>
             <button type="button" className="btn btn-ghost btn-block" disabled={busy || saving || parts.length === 0} onClick={() => download('stl')}>
               STL รวมชิ้นเดียว <span className="cost">{EXPORT_COST.stl} เครดิต</span>
+            </button>
+            <button type="button" className="btn btn-ghost btn-block" disabled={busy || saving || parts.length === 0} onClick={() => download('3mf')}>
+              3MF หลายสี (เปิดใน Bambu/Orca สีมาครบ) <span className="cost">{EXPORT_COST['3mf']} เครดิต</span>
             </button>
             {message && <p className={`form-${message.tone === 'ok' ? 'ok' : 'error'}`} role="status">{message.text}</p>}
           </section>

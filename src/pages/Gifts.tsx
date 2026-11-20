@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState, type JSX } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { buildZip, downloadBlob, partsList, partStats, printableStl, safeName } from '../lib/exportModel'
+import { build3mf } from '../lib/export3mf'
 import { GIFT_FONTS } from '../lib/fonts'
 import {
   cleanText, cleanValues, DEFAULT_GIFT_FONT, defaults, findGift, fontKey, neededFonts, GIFT_GROUPS, GIFTS, graphemeCount, parseGiftStorage, toModel, topView,
@@ -288,7 +289,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
 
   const firstText = String(values[design.params.find((p) => p.kind === 'text')?.key ?? ''] ?? '')
   const baseName = safeName(`${design.name}-${firstText}`.trim())
-  function download(kind: 'zip' | 'stl') {
+  function download(kind: 'zip' | 'stl' | '3mf') {
     if (busy || !model || parts.length === 0) return
     const cost = EXPORT_COST[kind]
     try {
@@ -316,12 +317,12 @@ function GiftEditor({ design }: { design: GiftDesign }) {
         'ไฟล์ทุกไฟล์หน่วยมิลลิเมตร แกน Z ชี้ขึ้น',
         '',
       ].filter((line, i, all) => line !== '' || all[i - 1] !== '').join('\n')
-      const data = kind === 'stl' ? printableStl(parts) : buildZip({ baseName, parts, readme })
+      const data = kind === '3mf' ? build3mf(parts, tints, design.name) : kind === 'stl' ? printableStl(parts) : buildZip({ baseName, parts, readme })
       if (!spend(cost, `${kind.toUpperCase()} ${design.name}`)) {
         setMessage({ tone: 'error', text: `เครดิตทดลองไม่พอ ต้องใช้ ${cost} เครดิต เหลือ ${credits(demo)} เครดิต` })
         return
       }
-      downloadBlob(data, `${baseName}.${kind}`, kind === 'zip' ? 'application/zip' : 'model/stl')
+      downloadBlob(data, `${baseName}.${kind}`, kind === 'zip' ? 'application/zip' : kind === '3mf' ? 'model/3mf' : 'model/stl')
       setMessage({ tone: 'ok', text: `ดาวน์โหลดแล้ว หัก ${cost} เครดิตทดลอง` })
     } catch (err) {
       setMessage({ tone: 'error', text: `ส่งออกไฟล์ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` })
@@ -405,6 +406,9 @@ function GiftEditor({ design }: { design: GiftDesign }) {
             </button>
             <button type="button" className="btn btn-ghost btn-block" disabled={busy || parts.length === 0} onClick={() => download('stl')}>
               STL รวมชิ้นเดียว (พิมพ์สีเดียว) <span className="cost">{EXPORT_COST.stl} เครดิต</span>
+            </button>
+            <button type="button" className="btn btn-ghost btn-block" disabled={busy || parts.length === 0} onClick={() => download('3mf')}>
+              3MF หลายสี (เปิดใน Bambu/Orca สีมาครบ) <span className="cost">{EXPORT_COST['3mf']} เครดิต</span>
             </button>
             {message && <p className={`form-${message.tone === 'ok' ? 'ok' : 'error'}`} role="status">{message.text}</p>}
           </section>

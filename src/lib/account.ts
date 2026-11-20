@@ -156,4 +156,4 @@ export function clearCart() {
   save({ ...state, cart: [] })
 }
 
-export const EXPORT_COST = { stl: 10, dxf: 10, zip: 20, file: 15 }
+export const EXPORT_COST = { stl: 10, dxf: 10, zip: 20, file: 15, '3mf': 15 }

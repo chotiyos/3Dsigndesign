@@ -3,6 +3,7 @@ import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { cleanText, MAX_CHARS } from '../lib/bubbleKeychain'
 import { charmPath, charmViewBox, CHARM_GROUPS, CHARMS } from '../lib/charms'
 import { buildZip, downloadBlob, partsList, partStats, printableStl, safeName } from '../lib/exportModel'
+import { build3mf } from '../lib/export3mf'
 import { FONT_OPTIONS } from '../lib/fonts'
 import { loadFont, type LoadedFont } from '../lib/hb'
 import {
@@ -115,18 +116,18 @@ export default function TwoTone() {
   const words = options.text.trim().split(/\s+/).filter(Boolean).length
 
   const baseName = safeName(options.text.trim() || 'พวงกุญแจ')
-  function download(kind: 'zip' | 'stl') {
+  function download(kind: 'zip' | 'stl' | '3mf') {
     if (busy || !model || parts.length === 0) return
     const cost = EXPORT_COST[kind]
     try {
-      const data = kind === 'stl'
+      const data = kind === '3mf' ? build3mf(parts, tints, 'พวงกุญแจสองสี') : kind === 'stl'
         ? printableStl(parts)
         : buildZip({ baseName, parts, readme: twoToneReadme(model, options, colours, partsList(partStats(parts))) })
       if (!spend(cost, `${kind.toUpperCase()} พวงกุญแจสองสี ${baseName}`)) {
         setMessage({ tone: 'error', text: `เครดิตทดลองไม่พอ ต้องใช้ ${cost} เครดิต เหลือ ${credits(demo)} เครดิต` })
         return
       }
-      downloadBlob(data, `${baseName}-พวงกุญแจสองสี.${kind}`, kind === 'zip' ? 'application/zip' : 'model/stl')
+      downloadBlob(data, `${baseName}-พวงกุญแจสองสี.${kind}`, kind === 'zip' ? 'application/zip' : kind === '3mf' ? 'model/3mf' : 'model/stl')
       setMessage({ tone: 'ok', text: `ดาวน์โหลดแล้ว หัก ${cost} เครดิตทดลอง` })
     } catch (err) {
       setMessage({ tone: 'error', text: `ส่งออกไฟล์ไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` })
@@ -273,6 +274,9 @@ export default function TwoTone() {
             </button>
             <button type="button" className="btn btn-ghost btn-block" disabled={busy || parts.length === 0} onClick={() => download('stl')}>
               STL รวมชิ้นเดียว (พิมพ์สีเดียว) <span className="cost">{EXPORT_COST.stl} เครดิต</span>
+            </button>
+            <button type="button" className="btn btn-ghost btn-block" disabled={busy || parts.length === 0} onClick={() => download('3mf')}>
+              3MF หลายสี (เปิดใน Bambu/Orca สีมาครบ) <span className="cost">{EXPORT_COST['3mf']} เครดิต</span>
             </button>
             <p className="note">ไม่มีระบบหลายสีก็พิมพ์ได้ หยุดเปลี่ยนเส้นพลาสติกที่ความสูง {options.base.toFixed(1)} มม. วิธีทำอยู่ในไฟล์ ZIP</p>
             {message && <p className={`form-${message.tone === 'ok' ? 'ok' : 'error'}`} role="status">{message.text}</p>}
