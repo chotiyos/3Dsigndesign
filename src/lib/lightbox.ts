@@ -321,17 +321,36 @@ export function buildLightbox(
   const plug = Math.min(3, o.depth - 2)
   const stripH = Math.min(10, o.depth - 2 - plug)
   const parts = new Parts()
+  const notes: string[] = []
   if (double) {
     const frame = ring(shape, o.wall)
     const sb = bounds(shape)
     const wireD = o.rear.wireD ?? 6
-    // The wire enters through a notch in the bottom wall beside the divider,
-    // and reaches the front chamber through a hole in the divider.
-    const wire = o.rear.wire > 0
-    const hole = wire ? circle(0, sb.minY + o.wall + wireD / 2 + 3, wireD / 2, 32) : []
+    // The wire passes a notch in the wall beside the divider, and reaches the
+    // front chamber through a hole in the divider. The notch goes in the bottom
+    // wall, or in the right-hand wall when a desk base covers the bottom.
+    const sideways = o.rear.deskBase > 0
+    const room = o.rear.wire > 0 ? offset(window, -(wireD / 2 + 1)) : []
+    let hole: Region = []
+    let notch: Region = []
+    // The hole goes as low (or as far right) as the window allows: a 1 mm strip
+    // along that edge of the room, at the middle of its piece nearest the centre.
+    let spot: [number, number] | null = null
+    if (room.length) {
+      const rb = bounds(room)
+      const strip = sideways ? rect(rb.maxX - 0.5, rb.cy, 1, rb.h + 2) : rect(rb.cx, rb.minY + 0.5, rb.w + 2, 1)
+      const pieces = islands(intersect(room, strip)).map(bounds)
+      const best = pieces.sort((a, c) => (sideways ? a.cy - c.cy : Math.abs(a.cx - rb.cx) - Math.abs(c.cx - rb.cx)))[0]
+      if (best) spot = [best.cx, best.cy]
+    }
+    if (spot) {
+      hole = circle(spot[0], spot[1], wireD / 2, 32)
+      notch = sideways
+        ? rect((spot[0] + sb.maxX + 2) / 2, spot[1], sb.maxX + 2 - spot[0], wireD)
+        : rect(spot[0], (spot[1] + sb.minY - 2) / 2, wireD, spot[1] - sb.minY + 2)
+    } else if (o.rear.wire > 0) notes.push('ช่องแสงแคบเกินกว่าจะเจาะรูสายไฟ ลดขนาดรูสายไฟ หรือเจาะเองหลังพิมพ์')
+    const notchH = hole.length ? Math.min(wireD, o.depth - plug - 1) : 0
     const floor = diff(shape, hole)
-    const notchH = wire ? Math.min(wireD, o.depth - plug - 1) : 0
-    const notch = rect(0, sb.minY + o.wall / 2, wireD, o.wall * 4)
     // One piece: the side frame with the divider across its middle. It prints
     // standing on its bottom edge, so the divider is a wall, not a bridge.
     const body = merge([
@@ -354,10 +373,14 @@ export function buildLightbox(
   const face = picks[DIFFUSER_CODE]
   const addFace = (label: string, at: number, back: boolean) => {
     const explode = back ? -1.5 : 1
-    // The back face is the front face turned over, its plug pointing into the back tray.
+    // The back face is the front face turned over, its plug pointing into the frame.
     const turn = (g: BufferGeometry) => (back ? mirrorZ(g) : g)
-    if (face && isCuttable(face, o.diffuser) && faceKeepsPlug) parts.solid(label, face, turn(diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, at)), explode, shape)
-    else if (face && isCuttable(face, o.diffuser)) parts.slab(label, face, shape, o.diffuser, back ? -o.diffuser : at, explode)
+    if (face && isCuttable(face, o.diffuser) && faceKeepsPlug) {
+      parts.solid(label, face, turn(diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, at)), explode, shape)
+      // The sheet to cut is the diffuser's thickness; the printed STL also has the plug ring.
+      const made = parts.done().at(-1)
+      if (made?.label === label) made.profile = { region: shape, depth: o.diffuser }
+    } else if (face && isCuttable(face, o.diffuser)) parts.slab(label, face, shape, o.diffuser, back ? -o.diffuser : at, explode)
     else parts.solid(label, 'opalprint', turn(diffuserSolid(shape, ring(inner, 1.6), o.diffuser, plug, at)), explode)
   }
   addFace(double ? 'แผ่นกระจายแสงหน้า' : 'แผ่นกระจายแสง', z, false)
@@ -370,32 +393,37 @@ export function buildLightbox(
       .slab('ไฟเส้น LED หน้า', 'led', strip, stripH, o.depth + o.back * 2, -0.4)
       .slab('ไฟเส้น LED หลัง', 'led', strip, stripH, o.depth - stripH, -0.4)
   } else parts.slab('ไฟเส้น LED', 'led', strip, stripH, o.back + 2, -0.4)
-  const order: number[] = []
+  // Colour layers. Every colour keeps its own letter even when switched off, so
+  // turning one off never moves the letters (and material picks) of the others.
+  const layerOf: Record<string, number> = {}
+  const addLayer = (label: string, region: Region, j: number, at: number, explode: number) => {
+    const before = parts.done().length
+    if (region.length) parts.slab(label, 'accent', region, layers[j].thick, at, explode)
+    else parts.skip()
+    const made = parts.done()
+    if (made.length > before) layerOf[made[made.length - 1].code] = j
+  }
   // Printed artwork (UV or sticker) replaces the colour layers.
   if (o.face === 'layers') {
-    placed.forEach((region, j) => {
-      if (!region.length) return
-      order.push(j)
-      parts.slab('สี ' + (j + 1) + ' ' + layers[j].colour + (double ? ' หน้า' : ''), 'accent', region, layers[j].thick, z + o.diffuser, 1.5 + j * 0.15)
-    })
+    placed.forEach((region, j) => addLayer('สี ' + (j + 1) + ' ' + layers[j].colour + (double ? ' หน้า' : ''), region, j, z + o.diffuser, 1.5 + j * 0.15))
     // The back reads the right way round from behind: the picture mirrored left to right.
     // A contour box is not symmetric, so there the back keeps the outline and shows the picture reversed.
-    if (double) placed.forEach((region, j) => {
-      if (!region.length) return
-      order.push(j)
-      parts.slab('สี ' + (j + 1) + ' ' + layers[j].colour + ' หลัง', 'accent', o.shape === 'contour' ? region : mirrorX(region), layers[j].thick, -o.diffuser - layers[j].thick, -2 - j * 0.15)
-    })
+    if (double) placed.forEach((region, j) => addLayer('สี ' + (j + 1) + ' ' + layers[j].colour + ' หลัง', o.shape === 'contour' ? region : mirrorX(region), j, -o.diffuser - layers[j].thick, -2 - j * 0.15))
   }
+  if (!placed.some((region) => region.length) && o.face === 'layers') notes.push('ขอบรอบรูปกว้างจนไม่เหลือที่ให้รูป ลดขอบรอบรูปหรือความหนาผนัง หรือเพิ่มความกว้าง')
   // Wire and wall fixings belong to a back plate; a double-sided box has none.
   const built = applyRear(parts.done(), double ? { ...o.rear, wire: 0, mount: 0 } : { ...o.rear })
+  if (notes.length && built[0]) built[0] = { ...built[0], warning: [built[0].warning, ...notes].filter(Boolean).join(' · ') }
   // Preview colour per part letter, for the viewer.
   const tints: Record<string, string> = {}
-  built.filter((part) => part.material === 'accent').forEach((part, i) => {
-    const { colour, thick } = layers[order[i]]
+  for (const part of built) {
+    const j = layerOf[part.code]
+    if (j === undefined) continue
+    const { colour, thick } = layers[j]
     tints[part.code] = colour
     // Thin layers pass more light; at 0.4 mm about full strength.
     part.backlit = Math.min(1, Math.max(0.15, Math.exp(-(thick - 0.4) / 1.2)))
-  })
+  }
   const b = bounds(shape)
   // Where the whole picture sits on the face, in mm, for print files and the preview.
   const art: FaceArt = {

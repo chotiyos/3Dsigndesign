@@ -1,6 +1,6 @@
 import { initialOf, puffUp } from '../bubbleKeychain'
 import { charmArt } from '../charms'
-import { bounds, diff, offset, roundRect, rotate, scale, translate, union, type Region } from '../geo2d'
+import { bounds, diff, intersect, offset, roundRect, rotate, scale, translate, union, type Region } from '../geo2d'
 import { silhouette } from '../styles/kit'
 import {
   connectedLetter, filled, fitText, fontOf, missingGlyphs, num, str, textArt,
@@ -65,8 +65,9 @@ function loveBanner(ctx: GiftContext, v: GiftValues) {
     { colour: 'panel', region: inner, z: t, h: 0.8 },
   ]
   const hb = bounds(heart)
-  const wf = fitText(fontOf(ctx, v, 'word'), word, hb.w * 0.72, S * 0.4, S * 0.32, false)
-  if (wf.art.length) layers.push({ colour: 'word', region: centreAt(rotate(puffUp(wf.art, 0.4), 0.12), 0, hb.maxY - S * 0.42), z: t + 0.8, h: r })
+  const wf = fitText(fontOf(ctx, v, 'word'), word, hb.w * 0.64, S * 0.4, S * 0.3, false)
+  // The word stands on the inner panel only: anything past its edge would hang over the rim.
+  if (wf.art.length) layers.push({ colour: 'word', region: intersect(centreAt(rotate(puffUp(wf.art, 0.4), 0.12), 0, hb.maxY - S * 0.42), offset(inner, -0.3)), z: t + 0.8, h: r })
   // The banner: a ribbon with folded tails, a white label and the name.
   const nf = fitText(fontOf(ctx, v, 'name'), name, S * 0.85, S * 0.26, S * 0.2, false)
   const bw = Math.max(S * 0.7, (nf.art.length ? bounds(nf.art).w : 0) + S * 0.2)

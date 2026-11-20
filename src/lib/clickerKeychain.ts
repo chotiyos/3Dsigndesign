@@ -246,16 +246,22 @@ export function frameCells(n: number, o: ClickerOptions): Region[] {
   })
 }
 
+/**
+ * The key-ring hole radius as drawn. Decorative keys are drawn at 20 mm and
+ * scaled afterwards, so the hole is drawn larger to come out 3.5 mm at any size.
+ */
+const holeR = (o: ClickerOptions) => TAB.hole / (o.build === 'solid' ? o.keySize / KEY : 1)
+
 /** The key-ring tab past the first key, its hole clear of the frame. */
 function tab(o: ClickerOptions): { solid: Region; hole: Region } {
   const shape = frameShape(o.edge)
   const b = bounds(shape)
   if (o.layout === 'column') {
     const cy = b.maxY + TAB.reach
-    return { solid: circle(0, cy, TAB.r, 48), hole: circle(0, cy, TAB.hole, 32) }
+    return { solid: circle(0, cy, TAB.r, 48), hole: circle(0, cy, holeR(o), 32) }
   }
   const cx = b.minX - TAB.reach
-  return { solid: circle(cx, 0, TAB.r, 48), hole: circle(cx, 0, TAB.hole, 32) }
+  return { solid: circle(cx, 0, TAB.r, 48), hole: circle(cx, 0, holeR(o), 32) }
 }
 
 /** Glyphs for one key, fitted into LETTER_BOX and centred on the origin. */
@@ -476,7 +482,7 @@ export function pencilEnds(n: number, o: ClickerOptions): { label: string; colou
   const wood = diff(coneBody, lead)
   if (o.loop) {
     const cx = start - 13 - TAB.reach + 2
-    eraser = diff(union(eraser, circle(cx, 0, TAB.r, 48)), circle(cx, 0, TAB.hole, 32))
+    eraser = diff(union(eraser, circle(cx, 0, TAB.r, 48)), circle(cx, 0, holeR(o), 32))
   }
   // Rows run along +x; columns turn so the eraser is at the top.
   const place = (r: Region): Region => (o.layout === 'row' ? r : r.map((poly) => poly.map(([x, y]) => [y, -x] as [number, number])))

@@ -20,6 +20,15 @@ export function SiteShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => setOpen(false), [path])
+  // Escape closes the menu.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+  // Tapping the page already shown does not change the path, so close on every tap.
+  const close = () => setOpen(false)
 
   return (
     <div className="site">
@@ -31,11 +40,16 @@ export function SiteShell({ children }: { children: ReactNode }) {
           </Link>
           <nav className="masthead-nav" data-open={open || undefined} aria-label="เมนูหลัก">
             {NAV.map((item) => (
-              <Link key={item.href} href={item.href} aria-current={path.startsWith(item.href) || ('also' in item && item.also?.some((p) => path.startsWith(p))) ? 'page' : undefined}>
+              <Link key={item.href} href={item.href} onClick={close} aria-current={path.startsWith(item.href) || ('also' in item && item.also?.some((p) => path.startsWith(p))) ? 'page' : undefined}>
                 {item.label}
               </Link>
             ))}
-            <Link href="/plugin" className="masthead-minor" aria-current={path === '/plugin' ? 'page' : undefined}>ปลั๊กอิน</Link>
+            <Link href="/plugin" className="masthead-minor" onClick={close} aria-current={path === '/plugin' ? 'page' : undefined}>ปลั๊กอิน</Link>
+            {/* On phones the account and editor buttons are hidden from the bar; they live in the menu. */}
+            <Link href={demo.account ? '/account' : '/login'} className="masthead-phone" onClick={close}>
+              {demo.account ? <><span className="tabular">{credits(demo)}</span> เครดิต · บัญชี</> : 'เข้าสู่ระบบ'}
+            </Link>
+            <Link href="/app" className="masthead-phone" onClick={close}>เปิดตัวออกแบบ</Link>
           </nav>
           <div className="masthead-end">
             <Link href={demo.account ? '/account' : '/login'} className="masthead-account">

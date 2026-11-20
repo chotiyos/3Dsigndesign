@@ -64,6 +64,7 @@ export default function Keychain() {
   const demo = useDemo()
   const [saved] = useState(load)
   const [options, setOptions] = useState<BubbleOptions>(saved.options)
+  const keychainShape = useRef(options.shape)
   const [colours, setColours] = useState<BubbleColours>(saved.colours)
   const [fontId, setFontId] = useState(saved.fontId)
   const [draft, setDraft] = useState(saved.options.text)
@@ -240,7 +241,12 @@ export default function Keychain() {
               {PURPOSES.map((pp) => (
                 <button key={pp.id} type="button" aria-pressed={options.purpose === pp.id} onClick={() => {
                   setMessage(null)
-                  setOptions((o) => o.purpose === pp.id ? o : cleanBubble({ ...o, purpose: pp.id, size: pp.id === 'grip' ? 40 : 50 }))
+                  setOptions((o) => {
+                    if (o.purpose === pp.id) return o
+                    // A grip disc is always round; the keychain gets its own shape back.
+                    if (pp.id === 'grip') keychainShape.current = o.shape
+                    return cleanBubble({ ...o, purpose: pp.id, size: pp.id === 'grip' ? 40 : 50, shape: pp.id === 'grip' ? o.shape : keychainShape.current })
+                  })
                 }}>{pp.label}</button>
               ))}
             </div>

@@ -90,6 +90,24 @@ function glyphCommandsToShapes(
     ),
   )
 
+  // A contour inside another is only a hole when it winds the other way from
+  // the outlines. Many fonts draw overlapping strokes as separate outlines that
+  // all wind the same way (TrueType's non-zero rule): those stay filled.
+  const signed = (poly: [number, number][]) => {
+    let area = 0
+    for (let k = 0; k < poly.length; k++) {
+      const [x1, y1] = poly[k]
+      const [x2, y2] = poly[(k + 1) % poly.length]
+      area += x1 * y2 - x2 * y1
+    }
+    return area / 2
+  }
+  const areas = subPaths.map((sp) => signed(sp.polygon))
+  const outer = areas.reduce((best, a) => (Math.abs(a) > Math.abs(best) ? a : best), 0)
+  subPaths.forEach((_, i) => {
+    if (containment[i] % 2 !== 0 && Math.sign(areas[i]) === Math.sign(outer)) containment[i] = 0
+  })
+
   const shapes: THREE.Shape[] = []
   const shapeForIndex = new Map<number, THREE.Shape>()
 

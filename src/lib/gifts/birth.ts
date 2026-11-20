@@ -139,8 +139,10 @@ function birth(ctx: GiftContext, v: GiftValues, theme: Theme) {
   })
   // White outer backing and a coloured border inside it.
   const all = union(...pieces)
-  const outer = silhouette(all, num(v, 'margin') + 2.4)
-  layers.unshift({ colour: 'border', region: silhouette(all, num(v, 'margin')), z: t, h: 1 })
+  // One silhouette, grown for the white backing, so the border can never reach past it.
+  const border = silhouette(all, num(v, 'margin'))
+  const outer = offset(border, 2.4)
+  layers.unshift({ colour: 'border', region: border, z: t, h: 1 })
   layers.unshift({ colour: 'outer', region: outer, z: 0, h: t })
   if (v.stand) layers.unshift(standingFoot(outer, 'outer', t))
   return { layers }

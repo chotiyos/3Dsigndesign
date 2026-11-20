@@ -29,6 +29,8 @@ export function printTip({ part, size }: Pick<PartStat, 'part' | 'size'>): strin
     case 'plaswood':
       return `หนา ${thick.toFixed(1)} มม. เกินกว่าจะตัดจากแผ่นเดียว ซ้อนแผ่นหลายชั้นแล้วติดกาว หรือเปลี่ยนเป็นวัสดุพิมพ์`
     default:
+      // A frame with a divider across it: lying down, the divider would be one huge bridge.
+      if (part.label.includes('แผ่นกั้นกลาง')) return 'ชั้น 0.2 มม. ผนัง 3 เส้น เติม 15% ตั้งบนขอบล่าง แผ่นกั้นจะตั้งเป็นผนัง ไม่ต้องใช้ซัพพอร์ต'
       return thick >= 20 && /ผนัง|กรอบ/.test(part.label)
         ? 'ชั้น 0.2 มม. ผนัง 3 เส้น เติม 15% ตั้งด้านหลังติดฐานพิมพ์ ไม่ต้องใช้ซัพพอร์ต'
         : 'ชั้น 0.2 มม. ผนัง 3 เส้น เติม 15–20% วางด้านแบนที่ใหญ่ที่สุดติดฐานพิมพ์'

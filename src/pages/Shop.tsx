@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { READY_FILES, type ReadyFile } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { textToRegion } from '../lib/artwork'
@@ -15,8 +15,23 @@ export function Files() {
   useTitle('ไฟล์ 3D สำเร็จรูป')
   const demo = useDemo()
   const [note, setNote] = useState<string | null>(null)
+  // One download at a time: a double click must not charge twice.
+  const pending = useRef(false)
+  const [working, setWorking] = useState(false)
 
   async function download(file: ReadyFile) {
+    if (pending.current) return
+    pending.current = true
+    setWorking(true)
+    try {
+      await downloadOnce(file)
+    } finally {
+      pending.current = false
+      setWorking(false)
+    }
+  }
+
+  async function downloadOnce(file: ReadyFile) {
     const style = findStyle(file.styleId)
     if (credits(demo) < EXPORT_COST.file) {
       setNote(`เครดิตทดลองไม่พอ ต้องใช้ ${EXPORT_COST.file} เครดิต`)
@@ -64,7 +79,7 @@ export function Files() {
                 <p>{file.note}</p>
               </div>
               <div className="shelf-actions">
-                <button type="button" className="btn btn-primary" onClick={() => download(file)}>
+                <button type="button" className="btn btn-primary" disabled={working} onClick={() => download(file)}>
                   <Icon name="download" size={16} /> STL <span className="cost">{EXPORT_COST.file}</span>
                 </button>
                 <Link href={`/app?style=${style.id}&file=${encodeURIComponent(file.id)}`} className="btn btn-ghost">

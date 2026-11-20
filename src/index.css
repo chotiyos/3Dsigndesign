@@ -386,10 +386,18 @@ input[type='range'] {
   }
 }
 
+/* Account and editor links inside the menu, for phones only. */
+.masthead-nav .masthead-phone {
+  display: none;
+}
+
 @media (max-width: 560px) {
   .masthead-end .btn-signal,
   .masthead-account {
     display: none;
+  }
+  .masthead-nav .masthead-phone {
+    display: block;
   }
   .masthead-inner {
     gap: 8px;
@@ -1991,6 +1999,8 @@ input[type='range'] {
 }
 
 .ed-msg {
+  min-width: 0;
+  overflow-wrap: anywhere;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -3468,4 +3478,11 @@ input[type='range'] {
 .gift-font {
   margin-top: 6px;
   font-size: 0.85rem;
+}
+
+/* User-supplied names and e-mails (account page) wrap instead of widening the page. */
+.page h1,
+.page p,
+.page td {
+  overflow-wrap: anywhere;
 }

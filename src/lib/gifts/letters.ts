@@ -53,6 +53,8 @@ function build(ctx: GiftContext, v: GiftValues, spec: Spec) {
   const rim = num(v, 'rim')
   const recess = Math.min(3, t * 0.3)
   const cell = num(v, 'cell')
+  // The chosen inside pattern (each sign starts on its own).
+  const pattern = (str(v, 'pattern') || spec.pattern) as PatternKind
   const layers: GiftLayer[] = []
   let body: Region
   if (spec.look === 'circle') {
@@ -61,7 +63,7 @@ function build(ctx: GiftContext, v: GiftValues, spec: Spec) {
     const inner = offset(body, -rim)
     const letter = letterOf(ctx, v, H * 0.6)
     layers.push({ colour: 'panel', region: body, z: 0, h: 1.6 })
-    layers.push({ colour: 'pattern', region: patternWeb(spec.pattern, inner, cell), z: 1.6, h: t - recess - 1.6 })
+    layers.push({ colour: 'pattern', region: patternWeb(pattern, inner, cell), z: 1.6, h: t - recess - 1.6 })
     layers.push({ colour: 'frame', region: diff(body, inner), z: 0, h: t })
     layers.push({ colour: 'deco', region: diff(offset(letter, 2.2), letter), z: 0, h: t + 0.4 })
     layers.push({ colour: 'frame', region: letter, z: 0, h: t + 0.4 })
@@ -72,10 +74,10 @@ function build(ctx: GiftContext, v: GiftValues, spec: Spec) {
     if (spec.look === 'rattan') {
       // A wide woven border round slats.
       const band = offset(body, -rim * 2.6)
-      layers.push({ colour: 'pattern', region: patternWeb('slats', band, cell * 0.8), z: 1.6, h: t - recess - 1.6 })
+      layers.push({ colour: 'pattern', region: patternWeb(pattern, band, cell * 0.8), z: 1.6, h: t - recess - 1.6 })
       layers.push({ colour: 'frame', region: patternWeb('rattan', diff(body, band), Math.max(4, rim * 1.1), 1), z: 0, h: t })
     } else {
-      layers.push({ colour: 'pattern', region: patternWeb(spec.pattern, inner, cell), z: 1.6, h: t - recess - 1.6 })
+      layers.push({ colour: 'pattern', region: patternWeb(pattern, inner, cell), z: 1.6, h: t - recess - 1.6 })
       layers.push({ colour: 'frame', region: diff(body, inner), z: 0, h: t })
     }
   }
@@ -158,7 +160,10 @@ function daisyLetter(ctx: GiftContext, v: GiftValues) {
   const centre = circle(0, 0, S * 0.24, 96)
   const ring = diff(centre, offset(centre, -S * 0.03))
   const art = textArt(fontOf(ctx, v, 'letter'), [ch], 100)
-  const letter = art.length ? puffUp(sized(art, S * 0.26), 0.4) : []
+  // Two letters must still fit inside the round centre.
+  const fitted = art.length ? sized(art, S * 0.26) : []
+  const wide = fitted.length ? bounds(fitted).w : 0
+  const letter = fitted.length ? puffUp(wide > S * 0.38 ? scale(fitted, (S * 0.38) / wide) : fitted, 0.4) : []
   const layers: GiftLayer[] = [
     { colour: 'petal', region: union(...petals, centre), z: 0, h: t },
     { colour: 'centre', region: centre, z: t, h: 1.2 },

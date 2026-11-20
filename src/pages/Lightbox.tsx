@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
 import { readImage } from '../lib/artwork'
 import { buildZip, downloadBlob, PICKABLE_MATERIALS, printableStl, safeName, type PartOutput } from '../lib/exportModel'
@@ -123,6 +123,7 @@ export default function Lightbox() {
     const keep = ([code]: [string, unknown]) => ['A', 'B', DIFFUSER_CODE].includes(code)
     setPicks((p) => Object.fromEntries(Object.entries(p).filter(keep)))
     setOutputs((p) => Object.fromEntries(Object.entries(p).filter(keep)))
+    setPrintPicks((p) => Object.fromEntries(Object.entries(p).filter(keep)))
   }
 
   const deferredPicks = useDeferredValue(picks)
@@ -141,8 +142,28 @@ export default function Lightbox() {
   const parts = useMemo(() => model?.parts ?? [], [model])
   useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
 
-  const busy = deferredOptions !== options || deferredLayers !== layers || deferredCount !== count || deferredPicks !== picks
+  const busy = deferredOptions !== options || deferredLayers !== layers || deferredCount !== count || deferredPicks !== picks ||
+    faceKeepsPlug !== (outputs[DIFFUSER_CODE] !== 'dxf')
   const set = <K extends keyof LightboxOptions>(key: K, value: LightboxOptions[K]) => setOptions((o) => ({ ...o, [key]: value }))
+  /**
+   * One- and two-sided boxes letter their frame differently (B: frame beside a
+   * back plate A; A: frame with divider), so the frame's choices move with it.
+   */
+  function setSides(sides: 1 | 2) {
+    if (sides === options.sides) return
+    const [from, to] = sides === 2 ? ['B', 'A'] : ['A', 'B']
+    const move = <T,>(all: Record<string, T>) => {
+      const next = { ...all }
+      delete next.A
+      delete next.B
+      if (all[from] !== undefined) next[to] = all[from]
+      return next
+    }
+    setPicks(move)
+    setOutputs(move)
+    setPrintPicks(move)
+    set('sides', sides)
+  }
   const setRear = (key: string, value: number) => setOptions((o) => ({ ...o, rear: { ...o.rear, [key]: value } }))
   const setLayer = (j: number, change: Partial<LayerSetting>) => setLayers((all) => all.map((layer, i) => (i === j ? { ...layer, ...change } : layer)))
 
@@ -151,12 +172,20 @@ export default function Lightbox() {
     e.target.value = ''
     if (!file) return
     try {
-      setImage(await readImage(file, TRACE_SIDE))
-      setImageName(file.name)
+      // Read both the trace and the full picture before changing anything, so a
+      // picture that fails half way leaves the previous one in place.
+      const traced = await readImage(file, TRACE_SIDE)
       const url = URL.createObjectURL(file)
       const img = new Image()
       img.src = url
-      await img.decode()
+      try {
+        await img.decode()
+      } catch (err) {
+        URL.revokeObjectURL(url)
+        throw err
+      }
+      setImage(traced)
+      setImageName(file.name)
       setPhoto({ url, width: img.naturalWidth })
       setMessage(null)
     } catch {
@@ -165,15 +194,28 @@ export default function Lightbox() {
   }
 
   const baseName = safeName(imageName ? imageName.replace(/\.[^.]+$/, '') : 'กล่องไฟ')
+  // One download at a time: a second click while print files are being made must not charge twice.
+  const exporting = useRef(false)
+  const [saving, setSaving] = useState(false)
   async function download(kind: 'zip' | 'stl') {
-    if (busy || parts.length === 0) return
+    if (busy || parts.length === 0 || exporting.current) return
+    exporting.current = true
+    setSaving(true)
+    try {
+      await downloadOnce(kind)
+    } finally {
+      exporting.current = false
+      setSaving(false)
+    }
+  }
+  async function downloadOnce(kind: 'zip' | 'stl') {
     const cost = EXPORT_COST[kind]
     try {
       const printed = printedFace && model?.art && photo ? { kind: printedFace, art: model.art, photo } : null
       const extra = kind === 'zip' && printed ? await faceFiles(printed.photo.url, printed.art, printed.kind) : undefined
       const both = parts.filter((part) => outputOf(part) === 'both')
       const readme = [
-        lightboxReadme(parts),
+        lightboxReadme(parts, options),
         both.length ? `ชิ้นที่ได้ทั้ง 2 ไฟล์ (เลือกตัดหรือพิมพ์ทีหลัง): ${both.map((part) => `${part.code} ${part.label} — ตัด ${MATERIAL_NAMES[part.material]} หรือพิมพ์ ${MATERIAL_NAMES[printOf(part)]}`).join(' · ')}` : '',
         printed ? faceReadme(printed.kind, printed.art, printed.photo.width).join('\n') : '',
       ].filter(Boolean).join('\n\n')
@@ -278,8 +320,8 @@ export default function Lightbox() {
           <section className="lbx-step" aria-labelledby="lbx-3">
             <h2 id="lbx-3"><span>3</span> รูปทรงและขนาดกล่อง</h2>
             <div className="seg seg-small" role="group" aria-label="ด้านที่ไฟออก">
-              <button type="button" aria-pressed={options.sides === 1} onClick={() => set('sides', 1)}>ไฟออกด้านหน้า</button>
-              <button type="button" aria-pressed={options.sides === 2} onClick={() => set('sides', 2)}>ไฟออกหน้า-หลัง</button>
+              <button type="button" aria-pressed={options.sides === 1} onClick={() => setSides(1)}>ไฟออกด้านหน้า</button>
+              <button type="button" aria-pressed={options.sides === 2} onClick={() => setSides(2)}>ไฟออกหน้า-หลัง</button>
             </div>
             {options.sides === 2 && <p className="note">กรอบกับแผ่นกั้นกลางเป็นชิ้นเดียว แบ่งเป็น 2 ช่อง ไฟเส้นแยกแต่ละฝั่ง พิมพ์กรอบตั้งบนขอบล่าง รูปด้านหลังกลับซ้าย-ขวาให้อ่านถูกเมื่อมองจากด้านหลัง (ทรงตามรูปจะเห็นรูปกลับด้าน)</p>}
             <div className="seg seg-small" role="group" aria-label="รูปทรงกล่อง">
@@ -394,10 +436,10 @@ export default function Lightbox() {
 
           <section className="lbx-step" aria-labelledby="lbx-6">
             <h2 id="lbx-6"><span>6</span> ส่งออกไฟล์</h2>
-            <button type="button" className="btn btn-primary btn-block" disabled={busy || parts.length === 0} onClick={() => download('zip')}>
+            <button type="button" className="btn btn-primary btn-block" disabled={busy || saving || parts.length === 0} onClick={() => download('zip')}>
               <Icon name="download" size={16} /> ZIP แยกไฟล์ทุกชิ้นและทุกสี <span className="cost">{EXPORT_COST.zip} เครดิต</span>
             </button>
-            <button type="button" className="btn btn-ghost btn-block" disabled={busy || parts.length === 0} onClick={() => download('stl')}>
+            <button type="button" className="btn btn-ghost btn-block" disabled={busy || saving || parts.length === 0} onClick={() => download('stl')}>
               STL รวมชิ้นเดียว <span className="cost">{EXPORT_COST.stl} เครดิต</span>
             </button>
             {message && <p className={`form-${message.tone === 'ok' ? 'ok' : 'error'}`} role="status">{message.text}</p>}
@@ -405,7 +447,7 @@ export default function Lightbox() {
         </div>
 
         <div className="gen-view lbx-view">
-          <Viewer parts={viewParts} colors={model?.colours} explodeMM={explode} night={night} frameKey={`${options.shape}-${imageName ?? 'sample'}`} className="sheet-viewer" label="ตัวอย่างกล่องไฟ 3 มิติ" />
+          <Viewer parts={viewParts} colors={model?.colours} explodeMM={explode} night={night} frameKey={`${options.shape}-${options.sides}-${imageName ?? 'sample'}`} className="sheet-viewer" label="ตัวอย่างกล่องไฟ 3 มิติ" />
           <p className="gen-tag">
             {model && model.width > 0 ? `${model.width.toFixed(0)} × ${model.height.toFixed(0)} มม. · ${parts.length} ชิ้น` : 'ยังไม่มีสีที่พิมพ์'}
             {busy && ' · กำลังคำนวณ'}

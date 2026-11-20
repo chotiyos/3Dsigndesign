@@ -352,14 +352,15 @@ function GiftEditor({ design }: { design: GiftDesign }) {
                   onChange={(e) => { setMessage(null); const val = e.target.value; const isComposing = composing || (e.nativeEvent as InputEvent).isComposing; setDrafts((d) => ({ ...d, [p.key]: isComposing ? val : cleanText(val, p.maxChars) })) }}
                 />
                 {p.hint && <small className="note">{p.hint}</small>}
-                <select
+                {/* A link only becomes a QR code: its font is never drawn. */}
+                {p.key !== 'link' && <select
                   className="gift-font"
                   aria-label={`ฟอนต์ของ${p.label}`}
                   value={String(values[fontKey(p.key)] ?? DEFAULT_GIFT_FONT)}
                   onChange={(e) => set(fontKey(p.key), e.target.value)}
                 >
                   {GIFT_FONTS.map((f) => <option key={f.id} value={f.id}>ฟอนต์ {f.label} · {f.note}</option>)}
-                </select>
+                </select>}
               </label>
             ))}
             <p className="note">ฟอนต์อังกฤษตัวอ้วนใช้กับภาษาอังกฤษและตัวเลขเท่านั้น ชื่อภาษาไทยเลือก Kanit Prompt Mitr หรือ Itim</p>
@@ -377,6 +378,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
             <button type="button" className="btn btn-ghost" onClick={() => {
               const d = defaults(design)
               setValues(d)
+              setColours(defaultColours(design))
               setDrafts(Object.fromEntries(design.params.filter((p) => p.kind === 'text').map((p) => [p.key, String(d[p.key])])))
             }}>
               <Icon name="reset" size={16} /> ค่าเริ่มต้นของแบบนี้
@@ -409,7 +411,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
         </div>
 
         <div className="gen-view lbx-view">
-          <Viewer parts={viewParts} colors={tints} explodeMM={explode} frameKey={design.id} className="sheet-viewer" label={`ตัวอย่าง ${design.name} 3 มิติ`} />
+          <Viewer parts={viewParts} colors={tints} explodeMM={explode} frameKey={`${design.id}|${Math.round(Math.log2(Math.max(model?.width ?? 1, model?.height ?? 1, 1)) * 2)}`} className="sheet-viewer" label={`ตัวอย่าง ${design.name} 3 มิติ`} />
           <p className="gen-tag" role="status">
             {model && parts.length
               ? design.upright

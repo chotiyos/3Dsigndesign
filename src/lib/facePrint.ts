@@ -32,6 +32,15 @@ export async function faceFiles(src: string, art: FaceArt, kind: Exclude<Lightbo
     [`${folder}/เส้นตัด-${size}.svg`]: strToU8(cutSvg(art)),
   }
   if (kind === 'uv') files[`${folder}/ลายหน้าแผ่น-กลับด้าน-${size}-${Math.round(dpi)}dpi.png`] = await facePng(image, art, dpi, true)
+  // A double-sided contour box: from behind, its outline is mirrored, so the back
+  // gets its own mirrored picture and cut lines. Symmetric boxes reuse the front files.
+  if (art.back && !art.back.mirror) {
+    const flip = (region: Region): Region => region.map((poly) => poly.map(([x, y]) => [-x, y] as [number, number]).reverse())
+    const back = { ...art, window: flip(art.window), face: flip(art.face) }
+    files[`${folder}/ด้านหลัง/ลายแผ่นหลัง-${size}-${Math.round(dpi)}dpi.png`] = await facePng(image, art, dpi, true)
+    files[`${folder}/ด้านหลัง/เส้นตัดแผ่นหลัง-${size}.dxf`] = strToU8(buildDxf([{ layer: 'CUT', region: back.window }, { layer: 'PANEL', region: back.face }]))
+    files[`${folder}/ด้านหลัง/เส้นตัดแผ่นหลัง-${size}.svg`] = strToU8(cutSvg(back))
+  }
   return files
 }
 

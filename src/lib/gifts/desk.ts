@@ -55,8 +55,12 @@ function bee(ctx: GiftContext, v: GiftValues) {
   const name = text(ctx, v, 'name', W * 0.66, ph * 0.38)
   const face = centreAt(name, -W * 0.04, ph * 0.42)
   const outline = diff(silhouette(face, 1.8), face)
-  const b = centreAt(sized(charmArt('bee'), ph * 0.42), W * 0.36, ph * 0.78)
-  const d = daisy(-W * 0.4, ph * 0.72, ph * 0.2)
+  // The bee and the daisy keep 3 mm inside the plate's sides at any size.
+  const beeArt = sized(charmArt('bee'), ph * 0.42)
+  const half = (W * 0.96) / 2
+  const b = centreAt(beeArt, half - bounds(beeArt).w / 2 - 3, ph * 0.78)
+  const dr = Math.min(ph * 0.2, half * 0.3)
+  const d = daisy(-half + dr * 0.97 + 3, ph * 0.72, dr)
   return {
     layers: [
       ...box(shape, H, num(v, 'wall'), 'box'),
@@ -134,6 +138,14 @@ function nameplateBox(ctx: GiftContext, v: GiftValues) {
     art.push({ region: diff(silhouette(face, 1.6), face), colour: 'outline' }, { region: face, colour })
     y -= b.h + H * 0.04
   }
+  if (!art.length) return { layers: [], warning: 'ใส่ชื่ออย่างน้อย 1 บรรทัด' }
+  // Tall lines (stacked Thai marks) may not fit the box's height: shrink the
+  // plate to fit, and keep its lattice margin 5 mm above the bed.
+  const ab = bounds(union(...art.map((p) => p.region)))
+  const k = Math.min(1, (H - 12) / Math.max(ab.h, 1))
+  const lift = Math.max(0, 5 - (ab.maxY - (ab.maxY - ab.minY) * k))
+  const fit = (region: Region) => translate(scale(translate(region, 0, -ab.maxY), k), 0, ab.maxY + lift)
+  for (const p of art) p.region = fit(p.region)
   const all = union(...art.map((p) => p.region))
   const backing = silhouette(all, 3)
   const lattice = patternWeb('lattice', diff(roundRect(0, (bounds(all).minY + bounds(all).maxY) / 2, W * 0.95, bounds(all).h + 10, 6), backing), 8, 1.4)
@@ -182,7 +194,8 @@ function bookends(ctx: GiftContext, v: GiftValues) {
   const layers: GiftLayer[] = []
   const pw = H * 0.42
   ;(['left', 'right'] as const).forEach((key, i) => {
-    const cx = (i ? 1 : -1) * (pw + 25)
+    // Side by side, 8 mm apart: close enough for one print bed.
+    const cx = (i ? 1 : -1) * ((pw + 30) / 2 + 4)
     const panel = union(roundRect(cx, H / 2, pw, H, 8), rect(cx, 6, pw + 30, 12))
     const inner = offset(roundRect(cx, H / 2 + 6, pw - 10, H - 22, 5), 0)
     const word = text(ctx, v, key, H * 0.85, pw * 0.42)

@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('react', async (original) => ({
   ...await original<typeof import('react')>(),
   useState: (value: unknown) => [value, vi.fn()],
+  useRef: (value: unknown) => ({ current: value }),
 }))
 vi.mock('../router', () => ({ useTitle() {}, Link: 'a' }))
 vi.mock('../ui/StyleThumb', () => ({ StyleThumb: () => null }))

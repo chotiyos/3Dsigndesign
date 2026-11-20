@@ -6,12 +6,15 @@ import { fontFromArrayBuffer } from '../hb'
 import { bounds, diff, islands, offset, rect, regionArea, union } from '../geo2d'
 import { cleanText, cleanValues, connectedLetter, defaults, GIFT_GROUPS, GIFTS, parseGiftStorage, resolve, standingFoot, toModel, topView } from './index'
 import { solidCount } from './connect'
+import { GIFT_FONTS } from '../fonts'
 
 function font(file: string) {
   const bytes = readFileSync(`public/fonts/${file}`)
   return fontFromArrayBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
 }
 const kanit = font('Kanit-Bold.ttf')
+// Every gift font, as the page loads them, so designs are tested in the fonts they really use.
+const allFonts = Object.fromEntries(GIFT_FONTS.map((f) => [f.id, font(f.url.replace('/fonts/', ''))]))
 const mitr = font('Mitr-SemiBold.ttf')
 
 describe('gift catalogue', () => {
@@ -134,7 +137,7 @@ describe('gift catalogue', () => {
   it('supports every raised layer at defaults', () => {
     const failures: string[] = []
     for (const g of GIFTS) {
-      const layers = resolve(g.build({ font: kanit }, defaults(g)).layers)
+      const layers = resolve(g.build({ font: kanit, fonts: allFonts }, defaults(g)).layers)
       for (const l of layers) {
         // Wrapped lettering sits on a curved wall, which this flat check cannot see.
         // The magnet's dog bridges the round magnet pocket, which prints as a bridge.
@@ -154,7 +157,7 @@ describe('gift catalogue', () => {
     const failures: string[] = []
     for (const g of GIFTS) {
       for (const f of [kanit, mitr]) {
-        const { count, loose } = solidCount(g.build({ font: f }, defaults(g)).layers)
+        const { count, loose } = solidCount(g.build({ font: f, fonts: f === kanit ? allFonts : undefined }, defaults(g)).layers)
         if (count !== (expected[g.id] ?? 1)) failures.push(`${g.id}: ${count} :: ${loose.slice(0, 3).join(' | ')}`)
       }
     }

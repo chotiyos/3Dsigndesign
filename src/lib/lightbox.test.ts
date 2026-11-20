@@ -3,6 +3,7 @@ import { analyse } from './solid'
 import { describe, expect, it } from 'vitest'
 import { buildZip } from './exportModel'
 import { bounds, diff, offset, rect, regionArea } from './geo2d'
+import { lightboxReadme } from './lightboxReadme'
 import { borderColour, buildLightbox, DEFAULT_LIGHTBOX, faceDecal, quantize, stripLength, toHex, traceColours, type LightboxShape } from './lightbox'
 
 /** 60×40 navy picture with a large green field and a small yellow square, plus a few anti-aliased edge pixels. */
@@ -250,5 +251,74 @@ describe('double-sided lightbox', () => {
     } finally {
       parts.forEach((p) => p.geometry.dispose())
     }
+  })
+})
+
+describe('lightbox fixes from the audit', () => {
+  const q = quantize(picture(), 3)
+  const colours = traceColours(q)
+  const background = borderColour(q)
+  const layers = q.palette.map((c, j) => ({ on: j !== background, colour: toHex(c), thick: 0.6 }))
+  const dispose = (parts: { geometry: { dispose(): void } }[]) => parts.forEach((p) => p.geometry.dispose())
+
+  it('keeps every colour on its own letter when another colour is switched off', () => {
+    const on = buildLightbox(q, colours, layers, DEFAULT_LIGHTBOX)
+    const lit = layers.map((l, j) => ({ j, l })).filter(({ l }) => l.on)
+    const off = layers.map((l, j) => (j === lit[0].j ? { ...l, on: false } : l))
+    const less = buildLightbox(q, colours, off, DEFAULT_LIGHTBOX)
+    try {
+      const codeOf = (parts: typeof on.parts, j: number) => parts.find((p) => p.label.startsWith(`สี ${j + 1} `))?.code
+      const kept = lit[1].j
+      expect(codeOf(less.parts, kept)).toBe(codeOf(on.parts, kept))
+      expect(less.colours[codeOf(less.parts, kept)!]).toBe(layers[kept].colour)
+    } finally { dispose(on.parts); dispose(less.parts) }
+  })
+
+  it('lists a sheet face kept with its plug at the sheet thickness', () => {
+    const { parts } = buildLightbox(q, colours, layers, DEFAULT_LIGHTBOX, { C: 'opal' }, true)
+    try {
+      const face = parts.find((p) => p.code === 'C')!
+      expect(face.cut).toBeTruthy()
+      expect(face.profile!.depth).toBeCloseTo(DEFAULT_LIGHTBOX.diffuser, 6)
+      expect(lightboxReadme(parts, DEFAULT_LIGHTBOX)).toContain(`หนา ${DEFAULT_LIGHTBOX.diffuser.toFixed(1)} มม.`)
+    } finally { dispose(parts) }
+  })
+
+  it('finds a wire path for a double-sided contour box, and moves it to the side over a desk base', () => {
+    const arch = { width: 200, height: 80 }
+    const shape = [rect(15, -40, 30, 80), rect(185, -40, 30, 80), rect(100, -15, 200, 30)].flat()
+    const lit = [{ on: true, colour: '#ff0000', thick: 0.6 }]
+    const contour = buildLightbox(arch, [shape], lit, { ...DEFAULT_LIGHTBOX, shape: 'contour', sides: 2 })
+    const side = buildLightbox(q, colours, layers, { ...DEFAULT_LIGHTBOX, sides: 2, rear: { ...DEFAULT_LIGHTBOX.rear, deskBase: 1 } })
+    try {
+      for (const model of [contour, side]) {
+        const frame = model.parts.find((p) => p.label === 'กรอบพร้อมแผ่นกั้นกลาง')!
+        expect(frame.warning ?? '').not.toContain('สายไฟ')
+        // The divider has a hole: its cross-section at the divider is smaller than the full outline.
+        frame.geometry.computeBoundingBox()
+      }
+      expect(lightboxReadme(contour.parts, { ...DEFAULT_LIGHTBOX, shape: 'contour', sides: 2 })).toContain('กลับด้าน')
+    } finally { dispose(contour.parts); dispose(side.parts) }
+  })
+
+  it('writes a double-sided UV readme without colour-layer or wire steps that do not apply', () => {
+    const o = { ...DEFAULT_LIGHTBOX, sides: 2 as const, face: 'uv' as const, rear: { ...DEFAULT_LIGHTBOX.rear, wire: 0 } }
+    const { parts } = buildLightbox(q, colours, layers, o)
+    try {
+      const text = lightboxReadme(parts, o)
+      expect(text).not.toContain('ไฟล์สีทุกสี')
+      expect(text).not.toContain('รูแผ่นกั้น')
+      expect(text).not.toContain('ชั้นสีด้านหลัง')
+      expect(text).toContain('ลายพิมพ์ทำ 2 ชุด')
+      expect(text).toContain('ตั้งบนขอบล่าง')
+      expect(text).not.toContain('ตั้งด้านหลังติดฐานพิมพ์')
+    } finally { dispose(parts) }
+  })
+
+  it('warns when the margin leaves no room for the picture', () => {
+    const { parts } = buildLightbox(q, colours, layers, { ...DEFAULT_LIGHTBOX, width: 60, margin: 30, wall: 6 })
+    try {
+      expect(parts.some((p) => (p.warning ?? '').includes('ขอบรอบรูปกว้าง'))).toBe(true)
+    } finally { dispose(parts) }
   })
 })

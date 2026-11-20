@@ -40,7 +40,8 @@ interface Spec {
 
 /** The digits side by side, the second overlapping the first a little. */
 function digits(ctx: GiftContext, v: GiftValues, H: number) {
-  const chars = Array.from(str(v, 'number').trim() || '1').slice(0, 2)
+  // Whole characters (a Thai consonant with its marks is one), not code points.
+  const chars = [...new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(str(v, 'number').trim() || '1')].map((g) => g.segment).slice(0, 2)
   const font = fontOf(ctx, v, 'number')
   const out: Region[] = []
   let x = 0

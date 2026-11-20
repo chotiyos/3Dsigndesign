@@ -274,13 +274,13 @@ export default function TwoTone() {
             <button type="button" className="btn btn-ghost btn-block" disabled={busy || parts.length === 0} onClick={() => download('stl')}>
               STL รวมชิ้นเดียว (พิมพ์สีเดียว) <span className="cost">{EXPORT_COST.stl} เครดิต</span>
             </button>
-            <p className="note">ไม่มีระบบหลายสีก็พิมพ์ได้ หยุดเปลี่ยนเส้นพลาสติกที่ความสูง 4.8 มม. วิธีทำอยู่ในไฟล์ ZIP</p>
+            <p className="note">ไม่มีระบบหลายสีก็พิมพ์ได้ หยุดเปลี่ยนเส้นพลาสติกที่ความสูง {options.base.toFixed(1)} มม. วิธีทำอยู่ในไฟล์ ZIP</p>
             {message && <p className={`form-${message.tone === 'ok' ? 'ok' : 'error'}`} role="status">{message.text}</p>}
           </section>
         </div>
 
         <div className="gen-view lbx-view">
-          <Viewer parts={parts} colors={tints} explodeMM={explode} frameKey={JSON.stringify([deferred, fontId])} className="sheet-viewer" label="ตัวอย่างพวงกุญแจสองสี 3 มิติ" />
+          <Viewer parts={parts} colors={tints} explodeMM={explode} frameKey={`${deferred.mode}|${Math.round(Math.log2(Math.max(model?.width ?? 1, model?.height ?? 1, 1)) * 2)}`} className="sheet-viewer" label="ตัวอย่างพวงกุญแจสองสี 3 มิติ" />
           <p className="gen-tag" role="status">
             {model && parts.length
               ? `${(model.width / 10).toFixed(1)} × ${(model.height / 10).toFixed(1)} ซม. · ตัวอักษรสูง ${model.letterHeight.toFixed(1)} มม. · ${model.rows.length} แถว`

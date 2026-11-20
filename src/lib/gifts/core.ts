@@ -382,6 +382,9 @@ export function toModel(design: GiftDesign, result: GiftResult, colours: Record<
   const warning = [result.warning,
     thinText ? 'ตัวอักษรบางส่วนเล็กกว่า 1 มม. ลองเพิ่มขนาดหรือลดข้อความ' : undefined,
     layers.some((l) => l.z < 0) ? 'ฐานตั้งยื่นสองด้าน เปิดซัพพอร์ตใต้แผ่นป้ายและตรวจทิศทางก่อนพิมพ์' : undefined,
+    some && Math.max(box.maxX - box.minX, box.maxY - box.minY, box.maxZ - box.minZ) > 256
+      ? 'ชิ้นงานใหญ่กว่าฐานพิมพ์ทั่วไป (256 มม.) ลดขนาด หรือตัดแบ่งใน slicer แล้วต่อด้วยกาว' : undefined,
+    some && box.minZ < -0.01 && !layers.some((l) => l.z < 0) ? 'บางส่วนต่ำกว่าฐานพิมพ์ ลดขนาดตัวอักษรหรือข้อความ' : undefined,
   ].filter(Boolean).join('\n') || undefined
   return {
     parts: list, tints, layers, warning,

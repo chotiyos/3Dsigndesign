@@ -135,7 +135,7 @@ function frame(ctx: GiftContext, v: GiftValues) {
 function magnet(ctx: GiftContext, v: GiftValues) {
   if (missing(ctx, v, ['name'])) return { layers: [], warning: NO_GLYPH }
   const S = num(v, 'size')
-  const t = Math.max(num(v, 'base'), 3.4)
+  const t = num(v, 'base')
   const r = num(v, 'raise')
   const arch = union(circle(0, S * 0.12, S * 0.4, 96), rect(0, -S * 0.12, S * 0.8, S * 0.48))
   const inner = offset(arch, -S * 0.06)
@@ -183,7 +183,8 @@ function glasses(ctx: GiftContext, v: GiftValues) {
       { colour: 'frame', region: union(diff(frameOutline, lenses), temples, silhouette(face, 2)), z: 0, h: t },
       { colour: 'lens', region: lenses, z: 0, h: 1.2 },
       { colour: 'stripe', region: stripes, z: 1.2, h: 0.8 },
-      { colour: 'digitOutline', region: silhouette(digits, 1.4), z: 1.2, h: t - 0.4 },
+      // Each lens digit gets its own outline: one shared outline would bridge the open nose gap.
+      { colour: 'digitOutline', region: offset(digits, 1.4), z: 1.2, h: t - 0.4 },
       { colour: 'digit', region: digits, z: t + 0.8, h: r },
       { colour: 'text', region: face, z: t, h: r },
     ],
@@ -191,6 +192,11 @@ function glasses(ctx: GiftContext, v: GiftValues) {
 }
 
 const NAME = (d: string, font: string, max = 12): GiftParam => ({ key: 'name', label: 'ชื่อ', kind: 'text', default: d, maxChars: max, font })
+/** Base thickness and raise; `minBase` where a design needs more depth (a magnet pocket, a lattice). */
+const thick = (minBase = 2): GiftParam[] => [
+  { key: 'base', label: 'ความหนา', kind: 'number', default: 5, min: minBase, max: 14, step: 0.2, unit: 'มม.' },
+  { key: 'raise', label: 'ตัวอักษรนูน', kind: 'number', default: 1.6, min: 0.4, max: 4, step: 0.2, unit: 'มม.' },
+]
 const THICK: GiftParam[] = [
   { key: 'base', label: 'ความหนา', kind: 'number', default: 5, min: 2, max: 14, step: 0.2, unit: 'มม.' },
   { key: 'raise', label: 'ตัวอักษรนูน', kind: 'number', default: 1.6, min: 0.4, max: 4, step: 0.2, unit: 'มม.' },
@@ -234,7 +240,7 @@ export const HOME: GiftDesign[] = [
       { key: 'photoW', label: 'ความกว้างรูป', kind: 'number', default: 89, min: 50, max: 180, step: 1, unit: 'มม.', hint: 'รูป 3.5 × 5 นิ้ว = 89 × 127 มม.' },
       { key: 'photoH', label: 'ความสูงรูป', kind: 'number', default: 127, min: 50, max: 220, step: 1, unit: 'มม.' },
       { key: 'border', label: 'ความกว้างขอบ', kind: 'number', default: 18, min: 8, max: 40, step: 1, unit: 'มม.' },
-      ...THICK,
+      ...thick(2.8),
     ],
     colours: colours([['frame', 'กรอบ', '#c4b5fd'], ['lattice', 'ลายตาข่าย', '#ffffff'], ['window', 'พื้นหลังรูป', '#111827'], ['outline', 'ขอบชื่อ', '#7c3aed'], ['text', 'ชื่อ', '#ffffff']]),
     howTo: ['ใส่รูปจากด้านหน้า ติดเทปกาวสองหน้าที่มุมรูป ขอบในเล็กกว่ารูป 3 มม. รองรูปไว้'],
@@ -246,7 +252,7 @@ export const HOME: GiftDesign[] = [
       NAME('Lassie', 'cherry-bomb'),
       { key: 'size', label: 'ขนาด', kind: 'number', default: 70, min: 40, max: 120, step: 1, unit: 'มม.' },
       { key: 'magnet', label: 'ขนาดแม่เหล็ก', kind: 'number', default: 12, min: 6, max: 20, step: 1, unit: 'มม.', hint: 'แม่เหล็กกลมหนา 2 มม.' },
-      ...THICK,
+      ...thick(3.4),
     ],
     colours: colours([['rim', 'ขอบและพื้น', '#facc15'], ['lattice', 'ลายตาข่าย', '#ffffff'], ['dog', 'น้องหมา', '#fdba74'], ['mark', 'เส้นลาย', '#1f2937'], ['text', 'ชื่อ', '#f472b6']]),
     howTo: ['พิมพ์ด้านหลังติดแผ่นพิมพ์ ช่องแม่เหล็กลึก 2.2 มม. กดแม่เหล็กลงแล้วหยดกาว'],
@@ -262,7 +268,7 @@ export const HOME: GiftDesign[] = [
       ...THICK.map((p) => (p.key === 'base' ? { ...p, default: 3.4, max: 6 } : p)),
     ],
     colours: colours([['frame', 'กรอบ', '#3b82f6'], ['lens', 'เลนส์', '#e0f2fe'], ['stripe', 'ลายทาง', '#ffffff'], ['digitOutline', 'ขอบตัวเลข', '#ef4444'], ['digit', 'ตัวเลข', '#ffffff'], ['text', 'ชื่อ', '#1f2937']]),
-    howTo: ['พิมพ์คว่ำด้านหน้าลง ขาแว่นพิมพ์ติดกับกรอบเป็นชิ้นเดียว ใส่เล่นในงานปาร์ตี้ ไม่ใช่แว่นกันแดด'],
+    howTo: ['พิมพ์ด้านหลังติดแผ่นพิมพ์ ตัวเลขและชื่อนูนอยู่ด้านบน ขาแว่นพิมพ์ติดกับกรอบเป็นชิ้นเดียว ใส่เล่นในงานปาร์ตี้ ไม่ใช่แว่นกันแดด'],
     build: glasses,
   },
 ]

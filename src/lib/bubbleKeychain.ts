@@ -262,6 +262,10 @@ export function buildBubble(font: LoadedFont, o: BubbleOptions, colours: BubbleC
   hb.shape(font.hbFont, buffer)
   const missing = buffer.getGlyphInfos().some((g) => g.codepoint === 0)
   if (missing) return { ...empty, warning: 'ฟอนต์นี้ไม่มีตัวอักษรบางตัว ลองเปลี่ยนฟอนต์หรือลบอักขระที่ไม่รองรับ' }
+  // Punctuation or a lone tone mark alone would be blown up to the whole piece.
+  if (o.text.trim() && !/[\p{L}\p{N}]/u.test(o.text.replace(/[ัิ-ฺ็-๎]/g, ''))) {
+    return { ...empty, warning: 'ใส่ตัวอักษรหรือตัวเลขอย่างน้อย 1 ตัว (เครื่องหมายหรือวรรณยุกต์อย่างเดียวทำไม่ได้)' }
+  }
   const cache = new Map<string, Region>()
   const layout = chooseRows(font, o, cache)
   if (!layout.rows.length || layout.height <= 0) return empty
@@ -547,7 +551,7 @@ function buildInitial(font: LoadedFont, o: BubbleOptions, colours: BubbleColours
   }
   if (h <= 0) return empty
   const nameArt = translate(scaleRegion(nameUnit, h), 0, cy)
-  const face = puffUp(nameArt, FAT * h)
+  let face = puffUp(nameArt, FAT * h)
   const fb = bounds(face)
   const bh = fb.h + 2 * pad
   let banner = roundRect((fb.minX + fb.maxX) / 2, (fb.minY + fb.maxY) / 2, fb.w + 2 * pad, bh, bh / 2)
@@ -560,6 +564,17 @@ function buildInitial(font: LoadedFont, o: BubbleOptions, colours: BubbleColours
     base = circle(0, 0, o.size / 2, 160)
   } else {
     base = silhouette(union(big, banner), o.rim)
+    // The fit above leaves room for full puffing that the big letter never gets:
+    // grow everything so the piece comes out at the chosen size.
+    const pb = bounds(base)
+    const k = o.size / Math.max(pb.w, pb.h, 1)
+    if (k > 1.001 && k < 1.5) {
+      base = scaleRegion(base, k)
+      banner = scaleRegion(banner, k)
+      letter = scaleRegion(letter, k)
+      face = scaleRegion(face, k)
+      h *= k
+    }
   }
   if (hasTab(o)) base = withTab(base)
   const parts = new Parts()

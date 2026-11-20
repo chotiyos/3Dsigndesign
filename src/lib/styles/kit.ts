@@ -113,6 +113,12 @@ export class Parts {
     return this
   }
 
+  /** Leaves a letter unused, so the parts after it keep their codes. */
+  skip() {
+    this.nextCode++
+    return this
+  }
+
   done() {
     return this.list
   }

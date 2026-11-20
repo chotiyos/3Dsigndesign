@@ -29,12 +29,22 @@ export function textToRegion(
   const widths = rows.map((r) => (r.length ? bounds(r).w : 0))
   const widest = Math.max(0, ...widths)
   const placed: Region[] = []
+  // Each line sits a line-gap below the last, or lower when stacked Thai marks
+  // (tone marks above, lower vowels below) would otherwise touch the line above.
+  let baseline = 0
+  let bottom = Infinity
   rows.forEach((row, i) => {
-    if (row.length === 0) return
+    const step = i === 0 ? 0 : heightMM * lineGap
+    if (row.length === 0) {
+      baseline -= step
+      return
+    }
     const b = bounds(row)
+    baseline = Math.min(baseline - step, bottom - b.maxY - heightMM * 0.05)
+    bottom = baseline + b.minY
     const x =
       align === 'left' ? -b.minX : align === 'right' ? widest - b.maxX : (widest - b.w) / 2 - b.minX
-    placed.push(translate(row, x, -i * heightMM * lineGap))
+    placed.push(translate(row, x, baseline))
   })
   return union(...placed)
 }

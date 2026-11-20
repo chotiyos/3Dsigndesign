@@ -13,11 +13,25 @@ let restoring = false
 let restorePosition: Position | undefined
 
 function savePosition() {
-  if (!restoring) history.replaceState({ ...history.state, jjScroll: { x: window.scrollX, y: window.scrollY } }, '')
+  if (restoring) return
+  try {
+    history.replaceState({ ...history.state, jjScroll: { x: window.scrollX, y: window.scrollY } }, '')
+  } catch {
+    // Browsers limit how often history may change; a missed save only loses a scroll position.
+  }
+}
+
+// Saving on every scroll event floods the history API: browsers then throttle
+// it, and the next link click silently does nothing. Save once scrolling pauses.
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+function saveSoon() {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(savePosition, 150)
 }
 
 history.scrollRestoration = 'manual'
-window.addEventListener('scroll', savePosition, { passive: true })
+window.addEventListener('scroll', saveSoon, { passive: true })
+window.addEventListener('pagehide', savePosition)
 window.addEventListener('popstate', () => {
   restorePosition = history.state?.jjScroll
   restoring = true
@@ -35,11 +49,20 @@ export function navigate(to: string, replace = false) {
     if (location.hash === '#content') target?.focus({ preventScroll: true })
     return
   }
+  clearTimeout(saveTimer)
   savePosition()
   restoring = true
   restorePosition = undefined
-  if (replace) history.replaceState(null, '', to)
-  else history.pushState(null, '', to)
+  try {
+    if (replace) history.replaceState(null, '', to)
+    else history.pushState(null, '', to)
+  } catch {
+    // History calls throttled or refused: load the page the ordinary way.
+    restoring = false
+    if (replace) location.replace(to)
+    else location.assign(to)
+    return
+  }
   notify()
 }
 

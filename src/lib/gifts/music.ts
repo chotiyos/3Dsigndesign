@@ -41,6 +41,18 @@ export function qrRegion(link: string, size: number, x: number, y: number): Regi
   return union(...runs)
 }
 
+/**
+ * How big the code itself is inside a square of side `box`: the spec's
+ * 4-module white margin all round, and a warning when the modules come out
+ * finer than a 0.4 mm nozzle can print cleanly.
+ */
+export function qrFit(link: string, box: number) {
+  const n = encodeQr(link || ' ').size
+  const m = box / (n + 8)
+  const warning = m < 0.8 ? `จุด QR เล็ก ${m.toFixed(2)} มม. หัวพิมพ์ 0.4 มม. อาจพิมพ์ไม่คม ใช้ลิงก์สั้นลงหรือเพิ่มขนาด` : undefined
+  return { size: n * m, warning }
+}
+
 /** Play controls: back, play (in a ring), forward, and a progress bar above them. */
 function controls(w: number, y: number): Region {
   const s = w * 0.07
@@ -68,10 +80,18 @@ function music(ctx: GiftContext, v: GiftValues, heart: boolean) {
   const layers: GiftLayer[] = []
   // The block, with a groove-free top: the card is joined to it.
   layers.push({ colour: 'block', region: roundRect(0, 0, W * 1.05, D, 6), z: 0, h: blockH })
-  const qrSize = Math.min(D * 0.55, W * 0.5)
-  layers.push({ colour: 'qrBack', region: roundRect(0, -D * 0.12, qrSize + 6, qrSize + 6, 2), z: blockH, h: 0.8 })
+  // The QR sits on the block in front of the card, clear of it (the card stands
+  // from y = back - t to back), with its white margin.
+  const front = -D / 2 + 2
+  const behind = back - t - 1
+  const box = Math.min(behind - front, W - 4)
+  const qy = (front + behind) / 2
+  let qrWarning: string | undefined
   try {
-    layers.push({ colour: 'qr', region: qrRegion(str(v, 'link'), qrSize, 0, -D * 0.12), z: blockH + 0.8, h: 0.8 })
+    const fit = qrFit(str(v, 'link'), box)
+    qrWarning = fit.warning
+    layers.push({ colour: 'qrBack', region: roundRect(0, qy, box, box, 2), z: blockH, h: 0.8 })
+    layers.push({ colour: 'qr', region: qrRegion(str(v, 'link'), fit.size, 0, qy), z: blockH + 0.8, h: 0.8 })
   } catch (err) {
     return { layers: [], warning: err instanceof Error ? err.message : 'สร้าง QR ไม่สำเร็จ' }
   }
@@ -91,7 +111,7 @@ function music(ctx: GiftContext, v: GiftValues, heart: boolean) {
   const names = text(ctx, v, 'names', W * 0.84, W * 0.12)
   if (names.length) layers.push({ colour: 'accent', region: centreAt(names, 0, blockH + H * 0.3), z: t, h: r, stand: back })
   layers.push({ colour: 'accent', region: controls(W, blockH + H * 0.12), z: t, h: r, stand: back })
-  return { layers }
+  return { layers, warning: qrWarning }
 }
 
 /** A social sign: an Instagram-style camera icon, the handle, and a QR code, on a deep slab. */
@@ -114,8 +134,11 @@ function connect(ctx: GiftContext, v: GiftValues) {
   const face = handle.length ? translate(handle, x0 + iconS + gap - hb.minX, -(hb.minY + hb.maxY) / 2) : []
   const qx = x0 + total - qrS / 2
   let qr: Region
+  let qrWarning: string | undefined
   try {
-    qr = qrRegion(str(v, 'link'), qrS - 4, qx, 0)
+    const fit = qrFit(str(v, 'link'), qrS)
+    qrWarning = fit.warning
+    qr = qrRegion(str(v, 'link'), fit.size, qx, 0)
   } catch (err) {
     return { layers: [], warning: err instanceof Error ? err.message : 'สร้าง QR ไม่สำเร็จ' }
   }
@@ -129,7 +152,7 @@ function connect(ctx: GiftContext, v: GiftValues) {
     { colour: 'slab', region: qr, z: t + 0.8, h: 0.8 },
   ]
   if (v.stand) layers.unshift(standingFoot(slab, 'slab', t))
-  return { layers }
+  return { layers, warning: qrWarning }
 }
 
 const QR_HINT = 'ลิงก์เพลง (Spotify YouTube) หรือหน้าโปรไฟล์ สแกนทดสอบด้วยมือถือก่อนพิมพ์'

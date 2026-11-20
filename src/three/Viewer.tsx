@@ -281,7 +281,8 @@ export function Viewer(props: ViewerProps) {
       camera.far = dist * 20
       camera.updateProjectionMatrix()
       controls.target.set(0, 0, 0)
-      controls.minDistance = dist * 0.15
+      // Never close enough to put the camera inside a deep model.
+      controls.minDistance = Math.max(dist * 0.15, Math.hypot(size.x, size.y, size.z) * 0.6)
       controls.maxDistance = dist * 6
       controls.update()
     }
