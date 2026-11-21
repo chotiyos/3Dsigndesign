@@ -123,6 +123,8 @@ export interface GiftDesign {
    * a bridge in this orientation: support is checked the other way up.
    */
   printFlipped?: boolean
+  /** Has overhangs by nature (an ambigram): printed with supports, so not checked for them. */
+  needsSupport?: boolean
   build(ctx: GiftContext, v: GiftValues): GiftResult
 }
 
@@ -425,7 +427,10 @@ export function topView(layers: GiftLayer[], colours: Record<string, string>, up
 function frontView(layers: GiftLayer[]): GiftLayer[] {
   const flat = layers.filter((l) => l.stand === undefined && l.wrap === undefined && l.region.length).map((l) => {
     const b = bounds(l.region)
-    const region: Region = [[[b.minX, l.z], [b.maxX, l.z], [b.maxX, l.z + l.h], [b.minX, l.z + l.h]]]
+    const region: Region = union(...islands(l.region).map((piece) => {
+      const p = bounds(piece)
+      return [[[p.minX, l.z], [p.maxX, l.z], [p.maxX, l.z + l.h], [p.minX, l.z + l.h]]] as Region
+    }))
     return { ...l, region, z: -b.minY, h: 0 }
   })
   const standing = layers.filter((l) => l.stand !== undefined).map((l) => ({ ...l, z: 1e6 - (l.stand ?? 0) + l.z, h: 0 }))

@@ -141,7 +141,7 @@ describe('gift catalogue', () => {
 
   it('supports every raised layer at defaults', () => {
     const failures: string[] = []
-    for (const g of GIFTS) {
+    for (const g of GIFTS.filter((d) => !d.needsSupport)) {
       let layers = resolve(g.build({ font: kanit, fonts: allFonts }, defaults(g)).layers)
       // Designs printed face down are checked the way up they print.
       if (g.printFlipped) {

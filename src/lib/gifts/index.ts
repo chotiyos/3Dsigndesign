@@ -1,4 +1,5 @@
 import type { GiftDesign } from './core'
+import { AMBIGRAMS } from './ambigram'
 import { AWARDS } from './awards'
 import { BIRTH } from './birth'
 import { DESK } from './desk'
@@ -27,6 +28,7 @@ export const GIFTS: GiftDesign[] = [
   ...MUSIC,
   CONNECT,
   ...SEASONAL,
+  ...AMBIGRAMS,
 ]
 
 export const findGift = (id: string) => GIFTS.find((g) => g.id === id)
