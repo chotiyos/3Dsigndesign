@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { textToRegion } from './artwork'
+import { lacksGlyphs, textToRegion } from './artwork'
 import { buildBubble, DEFAULT_BUBBLE, PALETTES } from './bubbleKeychain'
 import { buildClicker, DEFAULT_CLICKER } from './clickerKeychain'
 import { bounds, islands, regionArea } from './geo2d'
@@ -74,5 +74,13 @@ describe('fixes from the full audit', () => {
     // Bundled fonts keep their letter counters: 'O' still has its hole.
     const o = textToRegion(kanit, 'O', 100, 0)
     expect(o.some((poly) => regionArea([poly]) < 0)).toBe(true)
+  })
+
+  it('knows when a font cannot write the text, so no boxes are printed in place of letters', () => {
+    const bebas = font('BebasNeue-Regular.ttf')
+    expect(lacksGlyphs(kanit, 'ร้านของฉัน')).toBe(false)
+    expect(lacksGlyphs(bebas, 'ร้านของฉัน')).toBe(true)
+    expect(lacksGlyphs(bebas, 'SHOP 24')).toBe(false)
+    expect(lacksGlyphs(kanit, '   ')).toBe(false)
   })
 })

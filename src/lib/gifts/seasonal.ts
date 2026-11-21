@@ -7,6 +7,7 @@ import {
   connectedLetter, fitText, fontOf, missingGlyphs, num, str, textArt,
   type GiftContext, type GiftDesign, type GiftLayer, type GiftValues,
 } from './core'
+import { spans } from './ambigram'
 import { patternWeb, PATTERNS, type PatternKind } from './patterns'
 
 const NO_GLYPH = 'ฟอนต์นี้ไม่มีตัวอักษรบางตัว ลองเปลี่ยนฟอนต์ (ฟอนต์อังกฤษใช้กับภาษาไทยไม่ได้)'
@@ -70,22 +71,31 @@ function santaOrnament(ctx: GiftContext, v: GiftValues) {
   // until its 3.5 mm hole is at least 1 mm clear of the hat, name and outline.
   const outline = silhouette(name, 1.4)
   const busy = offset(union(outline, red, white), 1 + 1.75)
-  const dir: [number, number] = [0.18 * Math.cos(turn) - 0.16 * Math.sin(turn), 0.18 * Math.sin(turn) + 0.16 * Math.cos(turn)]
-  const len = Math.hypot(dir[0], dir[1])
-  let cx = px + dir[0] * hs
-  let cy = py + dir[1] * hs
-  for (let i = 0; i < 80 && regionArea(intersect(circle(cx, cy, 0.2, 12), busy)) > 0; i++) {
-    cx += (dir[0] / len) * 0.5
-    cy += (dir[1] / len) * 0.5
+  // Search rays from the pompom, upward first so the ornament hangs straight,
+  // for the nearest point clear of everything.
+  const clear = (x: number, y: number) => regionArea(intersect(circle(x, y, 0.2, 12), busy)) === 0
+  let spot: [number, number] | null = null
+  for (const deg of [90, 70, 110, 50, 130, 30, 150, 10, 170]) {
+    const a = (deg * Math.PI) / 180
+    for (let d = hs * 0.2; d < hs * 0.2 + 60; d += 0.5) {
+      const x = px + Math.cos(a) * d
+      const y = py + Math.sin(a) * d
+      if (clear(x, y)) { if (!spot || d < Math.hypot(spot[0] - px, spot[1] - py)) spot = [x, y]; break }
+    }
+    if (spot && deg <= 110) break
   }
+  if (!spot) return { layers: [], warning: 'ไม่มีที่ว่างพอทำห่วงแขวน ลองเลื่อนหรือหมุนหมวก' }
+  const [cx, cy] = spot
   const hole = circle(cx, cy, 1.75, 32)
   // The loop's ring reaches back to the hat so it stays attached.
   const loop = union(circle(cx, cy, 4.2, 40), stroke([[cx, cy], [px, py]], 6))
   // One shape grown from everything on top, so the outline can never pass the backing.
-  const backing = diff(union(offset(union(outline, red, white), num(v, 'margin')), loop), hole)
+  // (A silhouette also bridges the gap between the name and a hat moved away, and fills pinholes.)
+  const backing = diff(union(silhouette(union(outline, red, white), num(v, 'margin')), loop), hole)
   // The pattern's openings become the white candy marks on red letters.
   const inside = offset(name, -0.8)
-  const pattern = opening(diff(inside, patternWeb(str(v, 'pattern') as PatternKind, inside, num(v, 'cell'))), 0.6)
+  const cell = Math.max(num(v, 'cell'), H / 12)
+  const pattern = opening(diff(inside, patternWeb(str(v, 'pattern') as PatternKind, inside, cell)), 0.6)
   const layers: GiftLayer[] = [
     { colour: 'backing', region: backing, z: 0, h: t },
     { colour: 'outline', region: diff(outline, union(red, white)), z: t, h: 0.8 },
@@ -179,21 +189,30 @@ function christmasLed(ctx: GiftContext, v: GiftValues) {
   const fits = (shape: Region) => regionArea(diff(shape, room)) < 0.01
   const find = (make: (x: number, y: number) => Region, fromTop: boolean) => {
     if (!rb) return null
-    const xs = Array.from({ length: Math.ceil(rb.w / 2) + 1 }, (_, i) => rb.minX + i * 2).sort((p, q) => Math.abs(p - rb.cx) - Math.abs(q - rb.cx)).slice(0, 30)
-    for (let k = 0; k <= Math.min(rb.h / 2, 30); k++) {
-      const y = fromTop ? rb.maxY - k * 2 : rb.minY + k * 2
-      for (const x of xs) {
-        const shape = make(x, y)
-        if (fits(shape)) return shape
+    // Candidates scored by distance from the centre line and from the wanted edge.
+    // Only points with 4 mm of room round them are worth trying (a cheap scanline test).
+    const core = offset(room, -4)
+    const spots: [number, number, number][] = []
+    for (let y = rb.minY; y <= rb.maxY; y += 3) {
+      const runs = spans(core, y)
+      for (let x = rb.minX; x <= rb.maxX; x += 3) {
+        if (runs.some(([p, q]) => x > p && x < q)) spots.push([x, y, Math.abs(x - rb.cx) * 2 + (fromTop ? rb.maxY - y : y - rb.minY)])
       }
+    }
+    spots.sort((p, q) => p[2] - q[2])
+    for (const [x, y] of spots.slice(0, 300)) {
+      const shape = make(x, y)
+      if (fits(shape)) return shape
     }
     return null
   }
   const key = find((x, y) => keyhole(x, y - 10, 4), true)
-  const wireHole = find((x, y) => circle(x, y, 3.5, 32), false)
-  const holes = [key, wireHole].filter((h): h is Region => Boolean(h))
-  // Keep the two apart: a wire hole that touches the keyhole is dropped.
-  const usable = key && wireHole && regionArea(intersect(offset(key, 3), wireHole)) > 0 ? [key] : holes
+  // The wire hole keeps 3 mm from the keyhole.
+  const wireHole = find((x, y) => {
+    const c = circle(x, y, 3.5, 32)
+    return key && regionArea(intersect(offset(key, 3), c)) > 0 ? translate(c, 1e6, 0) : c
+  }, false)
+  const usable = [key, wireHole].filter((h): h is Region => Boolean(h))
   layers.push({ colour: 'grey', region: diff(coverShape, union(...usable)), z: z0 - 2, h: 2 })
   const warning = usable.length < 2 ? 'ฝาหลังเล็กเกินจะเจาะรูแขวนและรูสายไฟครบ เพิ่มขนาดตัวอักษร หรือเจาะเองหลังพิมพ์' : undefined
   return { layers, warning }

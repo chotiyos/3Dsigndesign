@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { textToRegion } from '../lib/artwork'
+import { textToRegion, lacksGlyphs, MISSING_GLYPHS } from '../lib/artwork'
 import { partMethod } from '../lib/exportModel'
 import { buildStyle, defaultValues, GROUPS, STYLES, type StyleGroup } from '../lib/styles'
 import { useFont } from '../lib/useFont'
@@ -76,14 +76,15 @@ export function StyleDetail({ id }: { id: string }) {
   const [text, setText] = useState('JJ ป้าย')
   const [explode, setExplode] = useState(30)
   const [night, setNight] = useState(false)
+  const missing = Boolean(font && lacksGlyphs(font, text.trim() || 'ก'))
   const parts = useMemo(() => {
-    if (!style || !font) return []
+    if (!style || !font || missing) return []
     try {
       return buildStyle(style, textToRegion(font, text.trim() || 'ก', 150, 0), defaultValues(style))
     } catch {
       return []
     }
-  }, [style, font, text])
+  }, [style, font, text, missing])
   useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
   if (!style) return <NotFoundBody />
   const group = GROUPS.find((g) => g.id === style.group)!
@@ -126,7 +127,8 @@ export function StyleDetail({ id }: { id: string }) {
               </select>
             </label>
           )}
-          <Link href={`/app?style=${style.id}${style.usesArt ? `&text=${encodeURIComponent(text)}&font=${encodeURIComponent(fontId)}` : ''}`} className="btn btn-signal btn-lg">
+          {missing && <p className="form-error" role="status">{MISSING_GLYPHS}</p>}
+          <Link href={`/app?style=${style.id}${style.usesArt ? `&text=${encodeURIComponent(text)}${fontId !== 'kanit-bold' ? `&font=${encodeURIComponent(fontId)}` : ''}` : ''}`} className="btn btn-signal btn-lg">
             ออกแบบด้วยแบบนี้ <Icon name="arrow" />
           </Link>
           <h2>ชิ้นส่วน</h2>

@@ -25,6 +25,7 @@ vi.mock('../lib/artwork', () => ({
     return [[[0, 0], [width, 0], [width, height * (text.includes('\n') ? 2 : 1)], [0, height * (text.includes('\n') ? 2 : 1)]]]
   }),
   svgToRegion: () => [], imageToRegion: () => [], readImage: vi.fn(),
+  lacksGlyphs: () => false, MISSING_GLYPHS: 'missing glyphs',
 }))
 vi.mock('../three/Viewer', () => ({ Viewer: 'viewer' }))
 import Editor, { cleanDraft, portableDraft, Range, switchDraftStyle } from './Editor'

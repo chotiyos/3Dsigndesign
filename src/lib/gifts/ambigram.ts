@@ -44,7 +44,7 @@ function ambigram(ctx: GiftContext, v: GiftValues) {
   if (![...a, ...b].every((ch) => /^[A-Z0-9]$/.test(ch))) return { layers: [], warning: 'ใช้ได้เฉพาะตัวอักษรอังกฤษ A–Z และตัวเลข 0–9' }
   if (a.length !== b.length) return { layers: [], warning: `สองคำต้องมีจำนวนตัวอักษรเท่ากัน (ตอนนี้ ${a.length} กับ ${b.length} ตัว)` }
   if (missingGlyphs(fontOf(ctx, v, 'front'), a.join('')) || missingGlyphs(fontOf(ctx, v, 'side'), b.join(''))) {
-    return { layers: [], warning: 'ใช้ตัวอักษรอังกฤษหรือตัวเลขเท่านั้น' }
+    return { layers: [], warning: 'ฟอนต์นี้ไม่มีตัวอักษรอังกฤษหรือตัวเลขบางตัว ลองฟอนต์อื่น' }
   }
   const H = num(v, 'size')
   const gap = num(v, 'gap')

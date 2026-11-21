@@ -1,7 +1,21 @@
 import { regionFromShapes, translate, union, bounds, type Region } from './geo2d'
-import type { LoadedFont } from './hb'
+import { hb, type LoadedFont } from './hb'
 import { parseSvgToShapes } from './svgToShapes'
 import { shapeTextToShapes } from './textToShapes'
+
+/** The message shown when the chosen font cannot draw some of the text. */
+export const MISSING_GLYPHS = 'ฟอนต์นี้ไม่มีตัวอักษรบางตัวในข้อความ ภาษาไทยเลือกฟอนต์ในกลุ่ม "ไทยและอังกฤษ"'
+
+/** True when `font` has no glyph for some character of `text` (it would print as a box or vanish). */
+export function lacksGlyphs(font: LoadedFont, text: string) {
+  const plain = text.replace(/\s+/g, '')
+  if (!plain) return false
+  const buffer = new hb.Buffer()
+  buffer.addText(plain)
+  buffer.guessSegmentProperties()
+  hb.shape(font.hbFont, buffer)
+  return buffer.getGlyphInfos().some((g) => g.codepoint === 0)
+}
 
 /**
  * Lays out multi-line text. `heightMM` is the em height, the same convention the

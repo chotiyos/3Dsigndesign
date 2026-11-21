@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { textToRegion } from '../lib/artwork'
+import { textToRegion, lacksGlyphs, MISSING_GLYPHS } from '../lib/artwork'
 import { buildStyle, defaultValues, findStyle, GROUPS, STYLES } from '../lib/styles'
 import { useFont } from '../lib/useFont'
 import { FontOptions } from '../ui/FontOptions'
@@ -37,14 +37,15 @@ function HeroPlate() {
   const style = findStyle(styleId)
   const svgRef = useRef<SVGSVGElement>(null)
 
+  const missing = Boolean(font && lacksGlyphs(font, deferredText.slice(0, 40)))
   const parts = useMemo(() => {
-    if (!font || !deferredText.trim()) return []
+    if (!font || !deferredText.trim() || missing) return []
     try {
       return buildStyle(style, textToRegion(font, deferredText.slice(0, 40), 200, 0), defaultValues(style))
     } catch {
       return []
     }
-  }, [font, deferredText, style])
+  }, [font, deferredText, style, missing])
   useEffect(() => () => { parts.forEach((part) => part.geometry.dispose()) }, [parts])
 
   const size = useMemo(() => {
@@ -110,7 +111,7 @@ function HeroPlate() {
 
   const go = (e: FormEvent) => {
     e.preventDefault()
-    navigate(`/app?style=${encodeURIComponent(styleId)}&text=${encodeURIComponent(text.trim() || 'ร้านของฉัน')}&font=${encodeURIComponent(fontId)}`)
+    navigate(`/app?style=${encodeURIComponent(styleId)}&text=${encodeURIComponent(text.trim() || 'ร้านของฉัน')}${fontId !== 'kanit-bold' ? `&font=${encodeURIComponent(fontId)}` : ''}`)
   }
 
   return (
@@ -138,6 +139,7 @@ function HeroPlate() {
               <FontOptions />
             </select>
           </label>
+          {missing && <p className="form-error" role="status">{MISSING_GLYPHS}</p>}
           <fieldset className="cover-styles">
             <legend>แบบป้าย</legend>
             {HERO_STYLES.map((id) => {

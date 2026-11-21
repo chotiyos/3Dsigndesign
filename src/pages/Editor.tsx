@@ -3,7 +3,7 @@ import { FontOptions } from '../ui/FontOptions'
 import { containModalFocus } from '../ui/modalFocus'
 import { READY_FILES } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
-import { imageToRegion, readImage, svgToRegion, textToRegion } from '../lib/artwork'
+import { imageToRegion, readImage, svgToRegion, textToRegion, lacksGlyphs, MISSING_GLYPHS } from '../lib/artwork'
 import { belowOffset, cleanBlocks, MAX_BLOCKS, placeBlock, type TextBlock } from '../lib/blocks'
 import { bridgeArt, floatingCount, type BridgeMode } from '../lib/bridges'
 import { artMeasures, baht, cleanRates, costSheet, type Rates } from '../lib/estimate'
@@ -291,6 +291,8 @@ export default function Editor() {
       if (deferred.source === 'text') {
         if (!font) return { art: [], artError: null }
         if (!deferred.text.trim()) return { art: [], artError: 'พิมพ์ข้อความอย่างน้อยหนึ่งตัวอักษร' }
+        // No boxes in place of letters the font lacks: refuse, so nothing wrong is exported.
+        if (lacksGlyphs(font, deferred.text)) return { art: [], artError: MISSING_GLYPHS }
         const region = textToRegion(font, deferred.text, deferred.heightMM, deferred.spacingMM, deferred.lineGap, deferred.align)
         return { art: region, artError: region.length ? null : 'ไม่พบรูปทรงตัวอักษร ลองเปลี่ยนข้อความหรือฟอนต์' }
       }
@@ -385,7 +387,7 @@ export default function Editor() {
   const blockShapeKey = JSON.stringify(deferred.blocks.map(({ text, fontId, heightMM, spacingMM }) => [text, fontId, heightMM, spacingMM]))
   const blockShapes = useMemo(() => deferred.blocks.map((b): Region => {
     const f = b.fontId === CUSTOM_FONT_ID ? customFont?.font : blockFonts[b.fontId]
-    if (!f || !b.text.trim()) return []
+    if (!f || !b.text.trim() || lacksGlyphs(f, b.text)) return []
     try {
       return textToRegion(f, b.text, b.heightMM, b.spacingMM, 1.15, 'center')
     } catch {

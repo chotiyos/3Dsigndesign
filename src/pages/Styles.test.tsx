@@ -6,7 +6,7 @@ vi.mock('react', async (original) => ({
 }))
 vi.mock('../router', () => ({ useTitle() {}, Link: 'a' }))
 vi.mock('../lib/useFont', () => ({ useFont: () => ({ font: {} }) }))
-vi.mock('../lib/artwork', () => ({ textToRegion: () => [[[0, 0], [120, 0], [120, 100], [0, 100]]] }))
+vi.mock('../lib/artwork', () => ({ textToRegion: () => [[[0, 0], [120, 0], [120, 100], [0, 100]]], lacksGlyphs: () => false, MISSING_GLYPHS: 'missing' }))
 vi.mock('../three/Viewer', () => ({ Viewer: 'viewer' }))
 import { StyleDetail } from './Styles'
 

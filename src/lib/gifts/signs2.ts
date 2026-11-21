@@ -38,50 +38,57 @@ function leaning(ctx: GiftContext, v: GiftValues) {
   const slab = roundRect((b.minX + b.maxX) / 2, b.minY + 3, b.w * 1.2, 10, 3)
   const layers: GiftLayer[] = [
     { colour: 'panel', region: letter, z: 0, h: 1.6 },
-    { colour: 'pattern', region: patternWeb(str(v, 'pattern') as PatternKind, inner, num(v, 'cell')), z: 1.6, h: t - 3 },
+    { colour: 'pattern', region: patternWeb(str(v, 'pattern') as PatternKind, inner, Math.max(num(v, 'cell'), H / 30)), z: 1.6, h: t - 3 },
     { colour: 'frame', region: diff(letter, inner), z: 0, h: t },
     { colour: 'slab', region: diff(slab, letter), z: 0, h: t },
   ]
-  // The name runs along the letter's longest stroke, reading downwards where
-  // the letter allows (a W's first stroke, an I's stem) or across it.
-  const band = H * 0.2
+  // The name goes where it can be biggest while its plate stays on the letter:
+  // along the letter's longest stroke, reading downwards where the letter
+  // allows (a W's first stroke, an I's stem), or level across it. Each candidate
+  // band is checked at a dozen rows across its height, not just its edges.
   const room = offset(letter, -1)
-  let best = { length: 0, angle: 0, at: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2] as [number, number] }
-  for (const deg of [-90, -85, -80, -75, -70, -65, -60, -55, -50, -45, 0]) {
-    const a = (deg * Math.PI) / 180
-    // Turn the letter so this direction lies along x, then find the longest run
-    // that stays inside it across the whole band's height.
-    const turned = rotate(room, -a)
-    const tb = bounds(turned)
-    for (let y = tb.minY + band / 2; y <= tb.maxY - band / 2; y += 2) {
-      const rows = [y - band / 2, y, y + band / 2].map((yy) => spans(turned, yy))
-      for (const [x1, x2] of rows[1]) {
-        let lo = x1
-        let hi = x2
-        for (const row of [rows[0], rows[2]]) {
-          const hit = row.find(([p, q]) => p < (lo + hi) / 2 && q > (lo + hi) / 2)
-          if (!hit) { hi = lo; break }
-          lo = Math.max(lo, hit[0])
-          hi = Math.min(hi, hit[1])
-        }
-        // A diagonal stroke is the look; a level run must be clearly longer to win.
-        const score = (hi - lo) * (deg === 0 ? 0.8 : 1)
-        if (score > best.length) {
-          const mx = (lo + hi) / 2
-          best = { length: score, angle: a, at: [mx * Math.cos(a) - y * Math.sin(a), mx * Math.sin(a) + y * Math.cos(a)] }
+  const probe = fitText(fontOf(ctx, v, 'name'), name, 1e5, 100, 100, false)
+  const pb = probe.art.length ? bounds(probe.art) : { w: 1, h: 1 }
+  const aspect = pb.w / Math.max(pb.h, 1e-6)
+  let best = { size: 0, length: 0, band: 0, angle: 0, at: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2] as [number, number] }
+  for (const band of [0.22, 0.17, 0.13, 0.1].map((k) => H * k)) {
+    const rowsAcross = Array.from({ length: 12 }, (_, i) => -band / 2 + (band * i) / 11)
+    for (const deg of [-90, -85, -80, -75, -70, -65, -60, -55, -50, -45, 0]) {
+      const a = (deg * Math.PI) / 180
+      // Turn the letter so this direction lies along x.
+      const turned = rotate(room, -a)
+      const tb = bounds(turned)
+      for (let y = tb.minY + band / 2; y <= tb.maxY - band / 2; y += 3) {
+        for (const [x1, x2] of spans(turned, y)) {
+          let lo = x1
+          let hi = x2
+          for (const dy of rowsAcross) {
+            const hit = spans(turned, y + dy).find(([p, q]) => p < (lo + hi) / 2 && q > (lo + hi) / 2)
+            if (!hit) { hi = lo; break }
+            lo = Math.max(lo, hit[0])
+            hi = Math.min(hi, hit[1])
+          }
+          // Text height this run allows (its plate adds about 2 mm all round);
+          // a diagonal stroke is the look, so a level run must be clearly better.
+          const size = Math.min(band - 5, (hi - lo - 8) / aspect) * (deg === 0 ? 0.85 : 1)
+          if (size > best.size) {
+            const mx = (lo + hi) / 2
+            best = { size, length: hi - lo, band, angle: a, at: [mx * Math.cos(a) - y * Math.sin(a), mx * Math.sin(a) + y * Math.cos(a)] }
+          }
         }
       }
     }
   }
-  const along = best.angle
-  const length = best.length / (best.angle === 0 ? 0.8 : 1)
-  const fit = fitText(fontOf(ctx, v, 'name'), name, Math.max(10, length - 6), band * 0.85, band * 0.7, false)
+  if (best.size <= 0) return { layers, warning: 'ตัวอักษรนี้แคบเกินจะวางชื่อ ลองตัวอักษรอื่นหรือฟอนต์ที่หนากว่า' }
+  const textH = best.size / (best.angle === 0 ? 0.85 : 1)
+  const fit = fitText(fontOf(ctx, v, 'name'), name, best.length - 8, textH * 1.25, textH, false)
   if (fit.art.length) {
-    const face = centreAt(rotate(puffUp(fit.art, 0.4), along), best.at[0], best.at[1])
+    const face = centreAt(rotate(puffUp(fit.art, 0.4), best.angle), best.at[0], best.at[1])
     layers.push({ colour: 'plate', region: silhouette(face, 2), z: 0, h: t + 0.8 })
     layers.push({ colour: 'name', region: face, z: t + 0.8, h: r })
   }
-  return { layers }
+  const warning = textH < 5 ? 'ชื่อยาวจนตัวอักษรเล็กกว่า 5 มม. ลดจำนวนตัวอักษรหรือเพิ่มขนาดป้าย' : undefined
+  return { layers, warning }
 }
 
 /** A deep red heart with "Love" written on it, and a banner with the name below. */
