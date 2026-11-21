@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent 
 import { textToRegion } from '../lib/artwork'
 import { buildStyle, defaultValues, findStyle, GROUPS, STYLES } from '../lib/styles'
 import { useFont } from '../lib/useFont'
+import { FontOptions } from '../ui/FontOptions'
 import { Link, navigate, useTitle } from '../router'
 import { Viewer, type Callout } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
@@ -26,7 +27,8 @@ export default function Home() {
 }
 
 function HeroPlate() {
-  const { font } = useFont('kanit-bold')
+  const [fontId, setFontId] = useState('kanit-bold')
+  const { font } = useFont(fontId)
   const [text, setText] = useState('ร้านของฉัน')
   const [styleId, setStyleId] = useState(HERO_STYLES[0])
   const [night, setNight] = useState(false)
@@ -108,7 +110,7 @@ function HeroPlate() {
 
   const go = (e: FormEvent) => {
     e.preventDefault()
-    navigate(`/app?style=${encodeURIComponent(styleId)}&text=${encodeURIComponent(text.trim() || 'ร้านของฉัน')}`)
+    navigate(`/app?style=${encodeURIComponent(styleId)}&text=${encodeURIComponent(text.trim() || 'ร้านของฉัน')}&font=${encodeURIComponent(fontId)}`)
   }
 
   return (
@@ -129,6 +131,12 @@ function HeroPlate() {
           <label className="cover-field">
             <span>ชื่อร้านหรือข้อความ</span>
             <input value={text} maxLength={40} onChange={(e) => setText(e.target.value)} placeholder="พิมพ์ชื่อร้านของคุณ" />
+          </label>
+          <label className="cover-field">
+            <span>ฟอนต์</span>
+            <select value={fontId} onChange={(e) => setFontId(e.target.value)}>
+              <FontOptions />
+            </select>
           </label>
           <fieldset className="cover-styles">
             <legend>แบบป้าย</legend>

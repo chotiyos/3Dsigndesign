@@ -39,6 +39,9 @@ function ambigram(ctx: GiftContext, v: GiftValues) {
   const a = [...str(v, 'front').toUpperCase().replace(/\s+/g, '')]
   const b = [...str(v, 'side').toUpperCase().replace(/\s+/g, '')]
   if (!a.length || !b.length) return { layers: [] }
+  // Only solid letters and digits: accents, punctuation and Thai marks would
+  // become loose floating pieces or be stretched to a full letter's height.
+  if (![...a, ...b].every((ch) => /^[A-Z0-9]$/.test(ch))) return { layers: [], warning: 'ใช้ได้เฉพาะตัวอักษรอังกฤษ A–Z และตัวเลข 0–9' }
   if (a.length !== b.length) return { layers: [], warning: `สองคำต้องมีจำนวนตัวอักษรเท่ากัน (ตอนนี้ ${a.length} กับ ${b.length} ตัว)` }
   if (missingGlyphs(fontOf(ctx, v, 'front'), a.join('')) || missingGlyphs(fontOf(ctx, v, 'side'), b.join(''))) {
     return { layers: [], warning: 'ใช้ตัวอักษรอังกฤษหรือตัวเลขเท่านั้น' }

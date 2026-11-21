@@ -3,6 +3,7 @@ import { textToRegion } from '../lib/artwork'
 import { partMethod } from '../lib/exportModel'
 import { buildStyle, defaultValues, GROUPS, STYLES, type StyleGroup } from '../lib/styles'
 import { useFont } from '../lib/useFont'
+import { FontOptions } from '../ui/FontOptions'
 import { MATERIAL_NAMES } from '../three/materials'
 import { Viewer } from '../three/Viewer'
 import { Link, useTitle } from '../router'
@@ -70,7 +71,8 @@ export function StylesIndex() {
 export function StyleDetail({ id }: { id: string }) {
   const style = STYLES.find((s) => s.id === id)
   useTitle(style ? `${style.code} ${style.name}` : 'ไม่พบแบบป้าย')
-  const { font } = useFont('kanit-bold')
+  const [fontId, setFontId] = useState('kanit-bold')
+  const { font } = useFont(fontId)
   const [text, setText] = useState('JJ ป้าย')
   const [explode, setExplode] = useState(30)
   const [night, setNight] = useState(false)
@@ -116,7 +118,15 @@ export function StyleDetail({ id }: { id: string }) {
               <input value={text} maxLength={24} onChange={(e) => setText(e.target.value)} />
             </label>
           )}
-          <Link href={`/app?style=${style.id}${style.usesArt ? `&text=${encodeURIComponent(text)}` : ''}`} className="btn btn-signal btn-lg">
+          {style.usesArt && (
+            <label className="field">
+              <span className="field-label">ฟอนต์</span>
+              <select value={fontId} onChange={(e) => setFontId(e.target.value)}>
+                <FontOptions />
+              </select>
+            </label>
+          )}
+          <Link href={`/app?style=${style.id}${style.usesArt ? `&text=${encodeURIComponent(text)}&font=${encodeURIComponent(fontId)}` : ''}`} className="btn btn-signal btn-lg">
             ออกแบบด้วยแบบนี้ <Icon name="arrow" />
           </Link>
           <h2>ชิ้นส่วน</h2>

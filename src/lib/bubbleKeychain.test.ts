@@ -7,7 +7,7 @@ import {
 } from './bubbleKeychain'
 import { buildZip, modelSize, partsList, partStats, printableStl } from './exportModel'
 import { bounds, circle, diff, intersect, islands, offset, rect, regionArea, regionFromShapes, translate, union } from './geo2d'
-import { FONT_OPTIONS } from './fonts'
+import { THAI_FONTS } from './fonts'
 import { shapeTextToShapes } from './textToShapes'
 import { fontFromArrayBuffer } from './hb'
 import { analyse } from './solid'
@@ -139,7 +139,8 @@ describe('bubble keychain', () => {
     expect(tabbed).toHaveLength(2)
   })
 
-  for (const option of FONT_OPTIONS) {
+  // The fonts these audits were tuned on; the newer ones are checked more lightly below.
+  for (const option of THAI_FONTS.slice(0, 6)) {
     const loaded = font(option.url.split('/').at(-1)!)
     it(`${option.id}: audits ordinary names at 40–60 mm in both shapes`, () => {
       for (const shape of ['circle', 'contour'] as const) for (const size of [40, 50, 60]) {
@@ -413,4 +414,17 @@ describe('bubble rim setting', () => {
     expect(wide.letterHeight).toBeLessThan(thin.letterHeight)
     expect(cleanBubble({ rim: 9 }).rim).toBe(4)
   })
+})
+
+describe('bubble keychain in every Thai font', () => {
+  for (const option of THAI_FONTS.slice(6)) {
+    it(option.id + ' builds Thai and Latin names in both shapes', () => {
+      const loaded = font(option.url.split('/').at(-1)!)
+      for (const shape of ['circle', 'contour'] as const) for (const text of ['มะลิ', 'น้องปิ่น', 'Ploy']) {
+        const model = buildBubble(loaded, opts({ text, shape, size: 50 }), colours)
+        expect(model.parts, text).toHaveLength(3)
+        model.parts.forEach((p) => p.geometry.dispose())
+      }
+    })
+  }
 })

@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { FontOptions } from '../ui/FontOptions'
 import { containModalFocus } from '../ui/modalFocus'
 import { READY_FILES } from '../data/shop'
 import { credits, EXPORT_COST, spend, useDemo } from '../lib/account'
@@ -187,10 +188,13 @@ function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = nu
   }
   const text = query.get('text')
   const style = query.get('style')
+  const font = query.get('font')
   if (text !== null) {
     base.text = text.slice(0, 200)
     base.source = 'text'
   }
+  // The font picked on the home or catalogue page carries over.
+  if (font && FONT_OPTIONS.some((f) => f.id === font)) base.fontId = font
   if (style && STYLES.some((s) => s.id === style)) return switchDraftStyle(base, style)
   return base
 }
@@ -949,9 +953,7 @@ export default function Editor() {
                   <label className="field">
                     <span className="field-label">แบบอักษร</span>
                     <select value={draft.fontId} onChange={(e) => update({ fontId: e.target.value })}>
-                      {FONT_OPTIONS.map((f) => (
-                        <option key={f.id} value={f.id}>{f.label} — {f.note}</option>
-                      ))}
+                      <FontOptions />
                       {customFont && <option value={CUSTOM_FONT_ID}>ฟอนต์ของคุณ: {customFont.name}</option>}
                     </select>
                   </label>
@@ -1029,7 +1031,7 @@ export default function Editor() {
                       <label className="field">
                         <span className="field-label">แบบอักษร</span>
                         <select value={b.fontId} onChange={(e) => updateBlock(b.id, { fontId: e.target.value })}>
-                          {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label} — {f.note}</option>)}
+                          <FontOptions />
                           {customFont && <option value={CUSTOM_FONT_ID}>ฟอนต์ของคุณ: {customFont.name}</option>}
                         </select>
                       </label>

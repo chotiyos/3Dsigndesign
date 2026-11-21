@@ -11,6 +11,7 @@ import {
   type TwoToneColours, type TwoToneOptions, type TwoToneSize,
 } from '../lib/twoTone'
 import { useTitle } from '../router'
+import { FontOptions } from '../ui/FontOptions'
 import { Viewer } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
 import { Range } from '../ui/Range'
@@ -182,7 +183,7 @@ export default function TwoTone() {
             <label className="field">
               <span className="field-label">ฟอนต์</span>
               <select value={fontId} onChange={(e) => { setMessage(null); setFontId(e.target.value) }}>
-                {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label} · {f.note}</option>)}
+                <FontOptions />
               </select>
             </label>
             {fontError && <p className="form-error" role="alert">{fontError}</p>}

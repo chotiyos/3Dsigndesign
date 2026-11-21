@@ -6,6 +6,7 @@ import {
   connectedLetter, filled, fitText, fontOf, missingGlyphs, num, str, textArt,
   type GiftContext, type GiftDesign, type GiftLayer, type GiftValues,
 } from './core'
+import { spans } from './ambigram'
 import { patternWeb, PATTERNS, type PatternKind } from './patterns'
 
 const NO_GLYPH = 'ฟอนต์นี้ไม่มีตัวอักษรบางตัว ลองเปลี่ยนฟอนต์ (ฟอนต์อังกฤษใช้กับภาษาไทยไม่ได้)'
@@ -41,15 +42,42 @@ function leaning(ctx: GiftContext, v: GiftValues) {
     { colour: 'frame', region: diff(letter, inner), z: 0, h: t },
     { colour: 'slab', region: diff(slab, letter), z: 0, h: t },
   ]
-  // The name runs down the letter's first stroke: from its top-left corner
-  // towards the bottom, reading downwards along the stroke.
-  const top: [number, number] = [b.minX + b.w * 0.13, b.maxY - H * 0.08]
-  const foot: [number, number] = [b.minX + b.w * 0.3, b.minY + H * 0.12]
-  const along = Math.atan2(foot[1] - top[1], foot[0] - top[0])
-  const length = Math.hypot(foot[0] - top[0], foot[1] - top[1])
-  const fit = fitText(fontOf(ctx, v, 'name'), name, length * 0.95, H * 0.22, H * 0.17, false)
+  // The name runs along the letter's longest stroke, reading downwards where
+  // the letter allows (a W's first stroke, an I's stem) or across it.
+  const band = H * 0.2
+  const room = offset(letter, -1)
+  let best = { length: 0, angle: 0, at: [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2] as [number, number] }
+  for (const deg of [-90, -85, -80, -75, -70, -65, -60, -55, -50, -45, 0]) {
+    const a = (deg * Math.PI) / 180
+    // Turn the letter so this direction lies along x, then find the longest run
+    // that stays inside it across the whole band's height.
+    const turned = rotate(room, -a)
+    const tb = bounds(turned)
+    for (let y = tb.minY + band / 2; y <= tb.maxY - band / 2; y += 2) {
+      const rows = [y - band / 2, y, y + band / 2].map((yy) => spans(turned, yy))
+      for (const [x1, x2] of rows[1]) {
+        let lo = x1
+        let hi = x2
+        for (const row of [rows[0], rows[2]]) {
+          const hit = row.find(([p, q]) => p < (lo + hi) / 2 && q > (lo + hi) / 2)
+          if (!hit) { hi = lo; break }
+          lo = Math.max(lo, hit[0])
+          hi = Math.min(hi, hit[1])
+        }
+        // A diagonal stroke is the look; a level run must be clearly longer to win.
+        const score = (hi - lo) * (deg === 0 ? 0.8 : 1)
+        if (score > best.length) {
+          const mx = (lo + hi) / 2
+          best = { length: score, angle: a, at: [mx * Math.cos(a) - y * Math.sin(a), mx * Math.sin(a) + y * Math.cos(a)] }
+        }
+      }
+    }
+  }
+  const along = best.angle
+  const length = best.length / (best.angle === 0 ? 0.8 : 1)
+  const fit = fitText(fontOf(ctx, v, 'name'), name, Math.max(10, length - 6), band * 0.85, band * 0.7, false)
   if (fit.art.length) {
-    const face = centreAt(rotate(puffUp(fit.art, 0.4), along), (top[0] + foot[0]) / 2, (top[1] + foot[1]) / 2)
+    const face = centreAt(rotate(puffUp(fit.art, 0.4), along), best.at[0], best.at[1])
     layers.push({ colour: 'plate', region: silhouette(face, 2), z: 0, h: t + 0.8 })
     layers.push({ colour: 'name', region: face, z: t + 0.8, h: r })
   }

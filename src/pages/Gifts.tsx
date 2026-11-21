@@ -9,6 +9,7 @@ import {
 } from '../lib/gifts'
 import { loadFont, type LoadedFont } from '../lib/hb'
 import { Link, useTitle } from '../router'
+import { FontOptions } from '../ui/FontOptions'
 import { Viewer } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
 import { Range } from '../ui/Range'
@@ -360,7 +361,7 @@ function GiftEditor({ design }: { design: GiftDesign }) {
                   value={String(values[fontKey(p.key)] ?? DEFAULT_GIFT_FONT)}
                   onChange={(e) => set(fontKey(p.key), e.target.value)}
                 >
-                  {GIFT_FONTS.map((f) => <option key={f.id} value={f.id}>ฟอนต์ {f.label} · {f.note}</option>)}
+                  <FontOptions prefix="ฟอนต์ " />
                 </select>}
               </label>
             ))}

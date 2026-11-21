@@ -1,5 +1,5 @@
 import { puffUp } from '../bubbleKeychain'
-import { bounds, circle, diff, intersect, offset, rect, rotate, roundRect, scale, translate, union, type Region } from '../geo2d'
+import { bounds, circle, diff, intersect, offset, rect, regionArea, rotate, roundRect, scale, stroke, translate, union, type Region } from '../geo2d'
 import { keyhole } from '../styles/rear'
 import { silhouette } from '../styles/kit'
 import { factIcon } from './birth'
@@ -53,7 +53,7 @@ function santaOrnament(ctx: GiftContext, v: GiftValues) {
   const t = num(v, 'base')
   const r = num(v, 'raise')
   const fit = fitText(fontOf(ctx, v, 'name'), str(v, 'name'), H * 8, H * 1.6, H, false)
-  if (!fit.art.length) return { layers: [] }
+  if (!fit.art.length) return { layers: [], warning: 'ใส่ชื่อก่อน' }
   const name = slant(puffUp(fit.art, Math.min(0.6, fit.height * 0.03)), 0.18)
   const nb = bounds(name)
   // The hat sits on the first letter, tipped by the chosen angle.
@@ -66,11 +66,23 @@ function santaOrnament(ctx: GiftContext, v: GiftValues) {
   const red = place(hat.red)
   const white = place(hat.white)
   const [px, py] = [hat.pompom[0] * Math.cos(turn) - hat.pompom[1] * Math.sin(turn) + hx, hat.pompom[0] * Math.sin(turn) + hat.pompom[1] * Math.cos(turn) + hy]
-  // The loop: a ring past the pompom, its 3.5 mm hole clear of everything.
-  const loop = circle(px + hs * 0.18, py + hs * 0.16, 4.2, 40)
-  const hole = circle(px + hs * 0.18, py + hs * 0.16, 1.75, 32)
+  // The loop: a ring past the pompom, turning with the hat, pushed further out
+  // until its 3.5 mm hole is at least 1 mm clear of the hat, name and outline.
   const outline = silhouette(name, 1.4)
-  const backing = diff(union(silhouette(union(name, red, white), num(v, 'margin') + 1.4), loop), hole)
+  const busy = offset(union(outline, red, white), 1 + 1.75)
+  const dir: [number, number] = [0.18 * Math.cos(turn) - 0.16 * Math.sin(turn), 0.18 * Math.sin(turn) + 0.16 * Math.cos(turn)]
+  const len = Math.hypot(dir[0], dir[1])
+  let cx = px + dir[0] * hs
+  let cy = py + dir[1] * hs
+  for (let i = 0; i < 80 && regionArea(intersect(circle(cx, cy, 0.2, 12), busy)) > 0; i++) {
+    cx += (dir[0] / len) * 0.5
+    cy += (dir[1] / len) * 0.5
+  }
+  const hole = circle(cx, cy, 1.75, 32)
+  // The loop's ring reaches back to the hat so it stays attached.
+  const loop = union(circle(cx, cy, 4.2, 40), stroke([[cx, cy], [px, py]], 6))
+  // One shape grown from everything on top, so the outline can never pass the backing.
+  const backing = diff(union(offset(union(outline, red, white), num(v, 'margin')), loop), hole)
   // The pattern's openings become the white candy marks on red letters.
   const inside = offset(name, -0.8)
   const pattern = opening(diff(inside, patternWeb(str(v, 'pattern') as PatternKind, inside, num(v, 'cell'))), 0.6)
@@ -160,10 +172,31 @@ function christmasLed(ctx: GiftContext, v: GiftValues) {
   // A back cover below it, printed flat, with a keyhole and a wire hole.
   const sb = bounds(shape)
   const coverShape = translate(offset(shape, -wall - 0.3), 0, -(sb.h + 12))
-  const cb = bounds(coverShape)
-  const cover = diff(coverShape, union(keyhole(cb.cx, cb.maxY - 18, 4), circle(cb.cx, cb.minY + 12, 3.5, 32)))
-  layers.push({ colour: 'grey', region: cover, z: z0 - 2, h: 2 })
-  return { layers }
+  // The keyhole goes high and the wire hole low, both where the cover is at
+  // least 6 mm wide all round them (searched on a 2 mm grid near the middle).
+  const room = offset(coverShape, -6)
+  const rb = room.length ? bounds(room) : null
+  const fits = (shape: Region) => regionArea(diff(shape, room)) < 0.01
+  const find = (make: (x: number, y: number) => Region, fromTop: boolean) => {
+    if (!rb) return null
+    const xs = Array.from({ length: Math.ceil(rb.w / 2) + 1 }, (_, i) => rb.minX + i * 2).sort((p, q) => Math.abs(p - rb.cx) - Math.abs(q - rb.cx)).slice(0, 30)
+    for (let k = 0; k <= Math.min(rb.h / 2, 30); k++) {
+      const y = fromTop ? rb.maxY - k * 2 : rb.minY + k * 2
+      for (const x of xs) {
+        const shape = make(x, y)
+        if (fits(shape)) return shape
+      }
+    }
+    return null
+  }
+  const key = find((x, y) => keyhole(x, y - 10, 4), true)
+  const wireHole = find((x, y) => circle(x, y, 3.5, 32), false)
+  const holes = [key, wireHole].filter((h): h is Region => Boolean(h))
+  // Keep the two apart: a wire hole that touches the keyhole is dropped.
+  const usable = key && wireHole && regionArea(intersect(offset(key, 3), wireHole)) > 0 ? [key] : holes
+  layers.push({ colour: 'grey', region: diff(coverShape, union(...usable)), z: z0 - 2, h: 2 })
+  const warning = usable.length < 2 ? 'ฝาหลังเล็กเกินจะเจาะรูแขวนและรูสายไฟครบ เพิ่มขนาดตัวอักษร หรือเจาะเองหลังพิมพ์' : undefined
+  return { layers, warning }
 }
 
 /**

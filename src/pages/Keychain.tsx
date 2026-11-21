@@ -10,6 +10,7 @@ import { charmPath, charmViewBox, CHARM_GROUPS, CHARMS } from '../lib/charms'
 import { FONT_OPTIONS } from '../lib/fonts'
 import { loadFont, type LoadedFont } from '../lib/hb'
 import { useTitle } from '../router'
+import { FontOptions } from '../ui/FontOptions'
 import { Viewer } from '../three/Viewer'
 import { Icon } from '../ui/Icon'
 import { Range } from '../ui/Range'
@@ -230,7 +231,7 @@ export default function Keychain() {
             <label className="field">
               <span className="field-label">ฟอนต์</span>
               <select value={fontId} onChange={(e) => { setMessage(null); setFontId(e.target.value) }}>
-                {FONT_OPTIONS.map((f) => <option key={f.id} value={f.id}>{f.label} · {f.note}</option>)}
+                <FontOptions />
               </select>
             </label>
             {fontError && <p className="form-error" role="alert">{fontError}</p>}
