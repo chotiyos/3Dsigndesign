@@ -199,6 +199,9 @@ function initialDraft(query: URLSearchParams, shared: Partial<Draft> | null = nu
   return base
 }
 
+/** Starting text for an added block: the first of these the font can write. */
+const SECOND_TEXT = ['ข้อความรอง', 'TEXT', 'ຂໍ້ຄວາມ', 'စာသား', 'អត្ថបទ']
+
 const STEPS: { n: Step; label: string }[] = [
   { n: 1, label: 'ข้อความหรือรูป' },
   { n: 2, label: 'เลือกแบบป้าย' },
@@ -724,7 +727,7 @@ export default function Editor() {
     const heightMM = Math.max(5, Math.round(draft.heightMM * 0.4))
     const id = `b${Date.now().toString(36).slice(-7)}`
     const fontId = draft.fontId
-    setDraft((d) => ({ ...d, blocks: [...d.blocks, { id, text: font && lacksGlyphs(font, 'ข้อความรอง') ? 'TEXT' : 'ข้อความรอง', fontId, heightMM, spacingMM: 0, ...belowOffset(artBox, bounds(layout), heightMM) }] }))
+    setDraft((d) => ({ ...d, blocks: [...d.blocks, { id, text: SECOND_TEXT.find((t) => !font || !lacksGlyphs(font, t)) ?? 'TEXT', fontId, heightMM, spacingMM: 0, ...belowOffset(artBox, bounds(layout), heightMM) }] }))
     setSelectedBlock(id)
   }
   const scenePanel = useRef<HTMLElement>(null)

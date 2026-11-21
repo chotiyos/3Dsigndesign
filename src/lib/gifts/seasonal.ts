@@ -73,7 +73,9 @@ function santaOrnament(ctx: GiftContext, v: GiftValues) {
   const busy = offset(union(outline, red, white), 1 + 1.75)
   // Search rays from the pompom, upward first so the ornament hangs straight,
   // for the nearest point clear of everything.
-  const near = intersect(busy, rect(px, py, 140, 140))
+  // A window as wide as the rays reach, so no tested point lies outside it.
+  const reach = hs * 0.2 + 62
+  const near = intersect(busy, rect(px, py, reach * 2, reach * 2))
   const clear = (x: number, y: number) => !spans(near, y).some(([p, q]) => x >= p - 0.2 && x <= q + 0.2)
   let spot: [number, number] | null = null
   for (const deg of [90, 70, 110, 50, 130, 30, 150, 10, 170]) {
@@ -218,7 +220,10 @@ function christmasLed(ctx: GiftContext, v: GiftValues) {
   }, false)
   const usable = [key, wireHole].filter((h): h is Region => Boolean(h))
   layers.push({ colour: 'grey', region: diff(coverShape, union(...usable)), z: z0 - 2, h: 2 })
-  const warning = usable.length < 2 ? 'ฝาหลังเล็กเกินจะเจาะรูแขวนและรูสายไฟครบ เพิ่มขนาดตัวอักษร หรือเจาะเองหลังพิมพ์' : undefined
+  // Say which hole is missing and why.
+  const warning = !key
+    ? 'ไม่มีที่เจาะรูแขวนตรงกลางครึ่งบนของฝาหลัง (ต้นไม้หรือตุ๊กตาหิมะสูงกว่าตัวป้าย) เจาะรูแขวนเองตรงกลางหลังพิมพ์ หรือเพิ่มขนาดชื่อ'
+    : !wireHole ? 'ฝาหลังเล็กเกินจะเจาะรูสายไฟด้วย เจาะเองหลังพิมพ์' : undefined
   return { layers, warning }
 }
 
