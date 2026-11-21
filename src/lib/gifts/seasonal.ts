@@ -73,7 +73,8 @@ function santaOrnament(ctx: GiftContext, v: GiftValues) {
   const busy = offset(union(outline, red, white), 1 + 1.75)
   // Search rays from the pompom, upward first so the ornament hangs straight,
   // for the nearest point clear of everything.
-  const clear = (x: number, y: number) => regionArea(intersect(circle(x, y, 0.2, 12), busy)) === 0
+  const near = intersect(busy, rect(px, py, 140, 140))
+  const clear = (x: number, y: number) => !spans(near, y).some(([p, q]) => x >= p - 0.2 && x <= q + 0.2)
   let spot: [number, number] | null = null
   for (const deg of [90, 70, 110, 50, 130, 30, 150, 10, 170]) {
     const a = (deg * Math.PI) / 180
@@ -184,6 +185,7 @@ function christmasLed(ctx: GiftContext, v: GiftValues) {
   const coverShape = translate(offset(shape, -wall - 0.3), 0, -(sb.h + 12))
   // The keyhole goes high and the wire hole low, both where the cover is at
   // least 6 mm wide all round them (searched on a 2 mm grid near the middle).
+  const cb = bounds(coverShape)
   const room = offset(coverShape, -6)
   const rb = room.length ? bounds(room) : null
   const fits = (shape: Region) => regionArea(diff(shape, room)) < 0.01
@@ -196,6 +198,8 @@ function christmasLed(ctx: GiftContext, v: GiftValues) {
     for (let y = rb.minY; y <= rb.maxY; y += 3) {
       const runs = spans(core, y)
       for (let x = rb.minX; x <= rb.maxX; x += 3) {
+        // A keyhole off-centre or below the middle would hang the sign crooked or tipping.
+        if (fromTop && (Math.abs(x - cb.cx) > cb.w * 0.12 || y < cb.cy)) continue
         if (runs.some(([p, q]) => x > p && x < q)) spots.push([x, y, Math.abs(x - rb.cx) * 2 + (fromTop ? rb.maxY - y : y - rb.minY)])
       }
     }

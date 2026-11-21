@@ -81,9 +81,11 @@ function leaning(ctx: GiftContext, v: GiftValues) {
   }
   if (best.size <= 0) return { layers, warning: 'ตัวอักษรนี้แคบเกินจะวางชื่อ ลองตัวอักษรอื่นหรือฟอนต์ที่หนากว่า' }
   const textH = best.size / (best.angle === 0 ? 0.85 : 1)
-  const fit = fitText(fontOf(ctx, v, 'name'), name, best.length - 8, textH * 1.25, textH, false)
+  // maxH limits the drawn height (stacked Thai marks can stand taller than an em).
+  const fit = fitText(fontOf(ctx, v, 'name'), name, best.length - 8, textH, textH * 2, false)
   if (fit.art.length) {
-    const face = centreAt(rotate(puffUp(fit.art, 0.4), best.angle), best.at[0], best.at[1])
+    // Centre first, then turn: the box of turned text is not centred on the text.
+    const face = translate(rotate(centreAt(puffUp(fit.art, 0.4), 0, 0), best.angle), best.at[0], best.at[1])
     layers.push({ colour: 'plate', region: silhouette(face, 2), z: 0, h: t + 0.8 })
     layers.push({ colour: 'name', region: face, z: t + 0.8, h: r })
   }

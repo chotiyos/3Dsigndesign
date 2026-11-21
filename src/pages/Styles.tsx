@@ -128,7 +128,7 @@ export function StyleDetail({ id }: { id: string }) {
             </label>
           )}
           {missing && <p className="form-error" role="status">{MISSING_GLYPHS}</p>}
-          <Link href={`/app?style=${style.id}${style.usesArt ? `&text=${encodeURIComponent(text)}${fontId !== 'kanit-bold' ? `&font=${encodeURIComponent(fontId)}` : ''}` : ''}`} className="btn btn-signal btn-lg">
+          <Link href={`/app?style=${style.id}${style.usesArt ? `&text=${encodeURIComponent(text)}&font=${encodeURIComponent(fontId)}` : ''}`} className="btn btn-signal btn-lg">
             ออกแบบด้วยแบบนี้ <Icon name="arrow" />
           </Link>
           <h2>ชิ้นส่วน</h2>

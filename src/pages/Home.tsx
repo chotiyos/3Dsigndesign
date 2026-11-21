@@ -111,7 +111,7 @@ function HeroPlate() {
 
   const go = (e: FormEvent) => {
     e.preventDefault()
-    navigate(`/app?style=${encodeURIComponent(styleId)}&text=${encodeURIComponent(text.trim() || 'ร้านของฉัน')}${fontId !== 'kanit-bold' ? `&font=${encodeURIComponent(fontId)}` : ''}`)
+    navigate(`/app?style=${encodeURIComponent(styleId)}&text=${encodeURIComponent(text.trim() || 'ร้านของฉัน')}&font=${encodeURIComponent(fontId)}`)
   }
 
   return (
